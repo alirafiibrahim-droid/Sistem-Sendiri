@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,17 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const members = [
-  { id: "1", name: "Andi Pratama", nim: "2406010001", email: "andi@email.com", role: "ADMIN", division: "Kestari", status: "AKTIF", phone: "081234567890" },
-  { id: "2", name: "Budi Santoso", nim: "2406010002", email: "budi@email.com", role: "PENGURUS_INTI", division: "Kewirausahaan", status: "AKTIF", phone: "081234567891" },
-  { id: "3", name: "Rina Wulandari", nim: "2406010003", email: "rina@email.com", role: "KABID", division: "Olahraga", status: "AKTIF", phone: "081234567892" },
-  { id: "4", name: "Dewi Lestari", nim: "2406010004", email: "dewi@email.com", role: "ANGGOTA", division: "Seni dan Budaya", status: "AKTIF", phone: "081234567893" },
-  { id: "5", name: "Eko Prasetyo", nim: "2406010005", email: "eko@email.com", role: "ANGGOTA", division: "Sosial Masyarakat", status: "AKTIF", phone: "081234567894" },
-  { id: "6", name: "Fitri Handayani", nim: "2306010006", email: "fitri@email.com", role: "ANGGOTA", division: "Keagamaan", status: "CUTI", phone: "081234567895" },
-  { id: "7", name: "Gilang Ramadhan", nim: "2306010007", email: "gilang@email.com", role: "ANGGOTA", division: "Hubungan Masyarakat", status: "ALUMNI", phone: "081234567896" },
-  { id: "8", name: "Hana Permata", nim: "2406010008", email: "hana@email.com", role: "ANGGOTA", division: "Kestari", status: "AKTIF", phone: "081234567897" },
-];
+import type { ProfileWithDivision } from "@/lib/types/database";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
@@ -49,16 +41,34 @@ const statusVariant: Record<string, "success" | "warning" | "secondary" | "destr
 };
 
 export default function MembersPage() {
+  const supabase = createSupabaseClient();
+  const [members, setMembers] = useState<ProfileWithDivision[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
 
-  const filtered = members.filter((m) => {
-    const matchSearch =
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.nim.includes(search);
-    const matchRole = roleFilter === "ALL" || m.role === roleFilter;
-    return matchSearch && matchRole;
-  });
+  const fetchMembers = useCallback(async () => {
+    setLoading(true);
+    let query = supabase
+      .from("profiles")
+      .select("*, divisions(id, name)", { count: "exact" })
+      .order("full_name", { ascending: true });
+
+    if (search) {
+      query = query.or(`full_name.ilike.%${search}%,nim.ilike.%${search}%`);
+    }
+    if (roleFilter !== "ALL") {
+      query = query.eq("role", roleFilter);
+    }
+
+    const { data } = await query;
+    if (data) setMembers(data as ProfileWithDivision[]);
+    setLoading(false);
+  }, [supabase, search, roleFilter]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
 
   return (
     <div className="space-y-6">
@@ -67,7 +77,9 @@ export default function MembersPage() {
           <h2 className="text-2xl font-bold tracking-tight">Anggota</h2>
           <p className="text-muted-foreground">Manajemen data anggota organisasi</p>
         </div>
-        <Button>+ Tambah Anggota</Button>
+        <Link href="/members/new">
+          <Button>+ Tambah Anggota</Button>
+        </Link>
       </div>
 
       <div className="flex gap-3">
@@ -101,36 +113,52 @@ export default function MembersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar
-                        fallback={m.name.split(" ").map((n) => n[0]).join("")}
-                        className="h-8 w-8"
-                      />
-                      <div>
-                        <p className="font-medium">{m.name}</p>
-                        <p className="text-xs text-muted-foreground">{m.email}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">{m.nim}</TableCell>
-                  <TableCell>
-                    <Badge variant={roleBadgeVariant[m.role]}>
-                      {roleLabels[m.role]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{m.division}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant[m.status]}>{m.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{m.phone}</TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon">...</Button>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    Memuat data...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : members.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    Belum ada data anggota.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                members.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          fallback={m.full_name.split(" ").map((n) => n[0]).join("")}
+                          className="h-8 w-8"
+                        />
+                        <div>
+                          <p className="font-medium">{m.full_name}</p>
+                          <p className="text-xs text-muted-foreground">{m.email}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">{m.nim}</TableCell>
+                    <TableCell>
+                      <Badge variant={roleBadgeVariant[m.role]}>
+                        {roleLabels[m.role]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{m.divisions?.name ?? "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant[m.status]}>{m.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{m.phone_number ?? "-"}</TableCell>
+                    <TableCell>
+                      <Link href={`/members/${m.id}`}>
+                        <Button variant="ghost" size="icon">...</Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
