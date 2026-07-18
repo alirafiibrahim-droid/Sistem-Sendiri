@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,14 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const programs = [
-  { id: "1", name: "Seminar Kewirausahaan", division: "Kewirausahaan", status: "ONGOING", start: "2026-08-01", end: "2026-08-15", budget: 5000000, progress: 65 },
-  { id: "2", name: "Turnamen Futsal Antar Divisi", division: "Olahraga", status: "PLANNED", start: "2026-09-01", end: "2026-09-10", budget: 3000000, progress: 0 },
-  { id: "3", name: "Bakti Sosial", division: "Sosial Masyarakat", status: "COMPLETED", start: "2026-06-01", end: "2026-06-15", budget: 2000000, progress: 100 },
-  { id: "4", name: "Training Atletik Bulanan", division: "Olahraga", status: "ONGOING", start: "2026-07-01", end: "2026-07-31", budget: 1500000, progress: 40 },
-  { id: "5", name: "Kajian Keagamaan", division: "Keagamaan", status: "ONGOING", start: "2026-07-01", end: "2026-12-31", budget: 800000, progress: 30 },
-];
+import type { ProgramWithDetails } from "@/lib/types/database";
 
 const statusVariant: Record<string, "success" | "warning" | "secondary" | "destructive"> = {
   ONGOING: "warning",
@@ -40,14 +34,34 @@ function formatCurrency(amount: number) {
 }
 
 export default function ProgramsPage() {
+  const supabase = createSupabaseClient();
+  const [programs, setPrograms] = useState<ProgramWithDetails[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  const filtered = programs.filter((p) => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "ALL" || p.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const fetchPrograms = useCallback(async () => {
+    setLoading(true);
+    let query = supabase
+      .from("programs")
+      .select("*, divisions(id, name)", { count: "exact" })
+      .order("created_at", { ascending: false });
+
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
+    }
+    if (statusFilter !== "ALL") {
+      query = query.eq("status", statusFilter);
+    }
+
+    const { data } = await query;
+    if (data) setPrograms(data as ProgramWithDetails[]);
+    setLoading(false);
+  }, [supabase, search, statusFilter]);
+
+  useEffect(() => {
+    fetchPrograms();
+  }, [fetchPrograms]);
 
   return (
     <div className="space-y-6">
@@ -85,42 +99,44 @@ export default function ProgramsPage() {
                 <TableHead>Nama Program</TableHead>
                 <TableHead>Divisi</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Progress</TableHead>
                 <TableHead>Anggaran</TableHead>
                 <TableHead>Tanggal</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell>{p.division}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant[p.status]}>{p.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-20 rounded-full bg-secondary overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${p.progress}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-muted-foreground">{p.progress}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{formatCurrency(p.budget)}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {p.start} s/d {p.end}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon">
-                      ...
-                    </Button>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    Memuat data...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : programs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    Belum ada program kerja.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                programs.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell>{p.divisions?.name ?? "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant[p.status]}>{p.status}</Badge>
+                    </TableCell>
+                    <TableCell>{formatCurrency(p.budget_estimate)}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {p.start_date} s/d {p.end_date}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon">
+                        ...
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
