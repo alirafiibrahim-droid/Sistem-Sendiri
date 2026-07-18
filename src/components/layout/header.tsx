@@ -22,6 +22,7 @@ export function Header({ user }: HeaderProps) {
       members: "Anggota",
       athletics: "Keatletan",
       achievements: "Prestasi",
+      inventory: "Inventaris",
       letters: "Persuratan",
       handovers: "Sertijab",
       projects: "Proyek Insidental",

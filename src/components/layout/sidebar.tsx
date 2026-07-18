@@ -17,6 +17,7 @@ const navItems: NavItem[] = [
   { label: "Anggota", href: "/members", icon: "👥" },
   { label: "Keatletan", href: "/athletics", icon: "🏃" },
   { label: "Prestasi", href: "/achievements", icon: "🏆" },
+  { label: "Inventaris", href: "/inventory", icon: "📦" },
   { label: "Persuratan", href: "/letters", icon: "✉️" },
   { label: "Sertijab", href: "/handovers", icon: "📝" },
   { label: "Proyek Insidental", href: "/projects", icon: "🔧" },
