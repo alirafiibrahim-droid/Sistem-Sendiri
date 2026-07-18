@@ -66,6 +66,12 @@ CREATE TYPE public.achievement_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED'
 -- A10: Status proyek insidental
 CREATE TYPE public.project_status AS ENUM ('PROPOSED', 'APPROVED', 'ONGOING', 'CLOSED');
 
+-- A12: Inventarisasi
+CREATE TYPE public.inventory_item_category AS ENUM ('ELECTRONICS', 'FURNITURE', 'STATIONERY', 'DOCUMENTS', 'OTHER');
+CREATE TYPE public.inventory_item_condition AS ENUM ('GOOD', 'DAMAGED_LIGHT', 'DAMAGED_HEAVY', 'LOST');
+CREATE TYPE public.inventory_loan_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'RETURNED', 'OVERDUE');
+CREATE TYPE public.inventory_damage_type AS ENUM ('DAMAGE', 'LOSS', 'MAINTENANCE');
+
 
 -- ============================================================================
 -- BAGIAN 2: TABEL INTI (SHARED / FOUNDATIONAL)
@@ -516,6 +522,72 @@ COMMENT ON TABLE public.project_milestones IS 'Milestone/titik pencapaian proyek
 
 
 -- ============================================================================
+-- BAGIAN 10B: MODUL INVENTARISASI (A12)
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- A12: INVENTORY ITEMS (Barang milik organisasi)
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.inventory_items (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code            VARCHAR(10) NOT NULL UNIQUE,
+    name            VARCHAR(100) NOT NULL,
+    category        public.inventory_item_category NOT NULL DEFAULT 'OTHER',
+    stock           INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
+    condition       public.inventory_item_condition NOT NULL DEFAULT 'GOOD',
+    location        VARCHAR(100) NOT NULL DEFAULT '',
+    description     TEXT NOT NULL DEFAULT '',
+    photo_url       TEXT,
+    is_active       BOOLEAN NOT NULL DEFAULT true,
+    created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.inventory_items IS 'Barang milik organisasi - inventarisasi (A12)';
+
+-- ----------------------------------------------------------------------------
+-- A12: INVENTORY LOANS (Peminjaman barang)
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.inventory_loans (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    item_id         UUID NOT NULL REFERENCES public.inventory_items(id) ON DELETE CASCADE,
+    borrower_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    quantity        INTEGER NOT NULL CHECK (quantity > 0),
+    borrow_date     DATE NOT NULL,
+    return_date     DATE NOT NULL,
+    actual_return   DATE,
+    purpose         TEXT NOT NULL DEFAULT '',
+    status          public.inventory_loan_status NOT NULL DEFAULT 'PENDING',
+    approved_by     UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    approved_at     TIMESTAMPTZ,
+    return_condition public.inventory_item_condition,
+    return_notes    TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_loan_dates CHECK (return_date >= borrow_date)
+);
+
+COMMENT ON TABLE public.inventory_loans IS 'Peminjaman barang inventaris (A12)';
+
+-- ----------------------------------------------------------------------------
+-- A12: INVENTORY DAMAGE LOGS (Log kerusakan/kehilangan/pemeliharaan)
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.inventory_damage_logs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    item_id         UUID NOT NULL REFERENCES public.inventory_items(id) ON DELETE CASCADE,
+    reported_by     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    incident_date   DATE NOT NULL,
+    type            public.inventory_damage_type NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    estimated_cost  NUMERIC(12,2) DEFAULT 0 CHECK (estimated_cost >= 0),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.inventory_damage_logs IS 'Log kerusakan/kehilangan/pemeliharaan barang inventaris (A12)';
+
+
+-- ============================================================================
 -- BAGIAN 11: INDEXES (Optimasi performa query)
 -- ============================================================================
 
@@ -569,6 +641,22 @@ CREATE INDEX idx_assessments_metric ON public.assessments(metric_id);
 -- Incidental Projects (A10)
 CREATE INDEX idx_incidental_projects_status ON public.incidental_projects(status);
 
+-- Inventory Items (A12)
+CREATE INDEX idx_inventory_items_code ON public.inventory_items(code);
+CREATE INDEX idx_inventory_items_category ON public.inventory_items(category);
+CREATE INDEX idx_inventory_items_condition ON public.inventory_items(condition);
+CREATE INDEX idx_inventory_items_is_active ON public.inventory_items(is_active);
+
+-- Inventory Loans (A12)
+CREATE INDEX idx_inventory_loans_item ON public.inventory_loans(item_id);
+CREATE INDEX idx_inventory_loans_borrower ON public.inventory_loans(borrower_id);
+CREATE INDEX idx_inventory_loans_status ON public.inventory_loans(status);
+CREATE INDEX idx_inventory_loans_return_date ON public.inventory_loans(return_date);
+
+-- Inventory Damage Logs (A12)
+CREATE INDEX idx_inventory_damage_logs_item ON public.inventory_damage_logs(item_id);
+CREATE INDEX idx_inventory_damage_logs_type ON public.inventory_damage_logs(type);
+
 -- Audit Logs (A6)
 CREATE INDEX idx_audit_logs_user ON public.audit_logs(user_id);
 CREATE INDEX idx_audit_logs_action ON public.audit_logs(action);
@@ -608,6 +696,9 @@ ALTER TABLE public.project_funds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_team ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_milestones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_loans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_damage_logs ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
 -- A5: RLS PROFILES
@@ -1040,6 +1131,74 @@ CREATE POLICY "audit_logs_select_admin"
         (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
     );
 
+-- ----------------------------------------------------------------------------
+-- A12: RLS INVENTORY ITEMS
+-- ----------------------------------------------------------------------------
+CREATE POLICY "inventory_items_select_all"
+    ON public.inventory_items FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "inventory_items_insert_core"
+    ON public.inventory_items FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID')
+    );
+
+CREATE POLICY "inventory_items_update_core"
+    ON public.inventory_items FOR UPDATE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI')
+    );
+
+CREATE POLICY "inventory_items_delete_admin"
+    ON public.inventory_items FOR DELETE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
+    );
+
+-- ----------------------------------------------------------------------------
+-- A12: RLS INVENTORY LOANS
+-- ----------------------------------------------------------------------------
+CREATE POLICY "inventory_loans_select_all"
+    ON public.inventory_loans FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "inventory_loans_insert_authenticated"
+    ON public.inventory_loans FOR INSERT
+    TO authenticated
+    WITH CHECK (auth.uid() = borrower_id);
+
+CREATE POLICY "inventory_loans_update_core"
+    ON public.inventory_loans FOR UPDATE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI')
+    );
+
+-- ----------------------------------------------------------------------------
+-- A12: RLS INVENTORY DAMAGE LOGS
+-- ----------------------------------------------------------------------------
+CREATE POLICY "inventory_damage_logs_select_all"
+    ON public.inventory_damage_logs FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "inventory_damage_logs_insert_core"
+    ON public.inventory_damage_logs FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI')
+    );
+
 
 -- ============================================================================
 -- BAGIAN 13: FUNCTIONS & TRIGGERS (Automation Engine)
@@ -1226,6 +1385,16 @@ CREATE TRIGGER set_updated_at_divisions
 
 CREATE TRIGGER set_updated_at_incidental_projects
     BEFORE UPDATE ON public.incidental_projects
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER set_updated_at_inventory_items
+    BEFORE UPDATE ON public.inventory_items
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER set_updated_at_inventory_loans
+    BEFORE UPDATE ON public.inventory_loans
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
 

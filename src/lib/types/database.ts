@@ -29,6 +29,11 @@ export type AchievementStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export type ProjectStatus = "PROPOSED" | "APPROVED" | "ONGOING" | "CLOSED";
 
+export type InventoryItemCategory = "ELECTRONICS" | "FURNITURE" | "STATIONERY" | "DOCUMENTS" | "OTHER";
+export type InventoryItemCondition = "GOOD" | "DAMAGED_LIGHT" | "DAMAGED_HEAVY" | "LOST";
+export type InventoryLoanStatus = "PENDING" | "APPROVED" | "REJECTED" | "RETURNED" | "OVERDUE";
+export type InventoryDamageType = "DAMAGE" | "LOSS" | "MAINTENANCE";
+
 // ----------------------------------------------------------------------------
 // Table Row Types
 // ----------------------------------------------------------------------------
@@ -382,4 +387,60 @@ export interface ProjectMilestone {
   is_completed: boolean;
   completed_at: string | null;
   created_at: string;
+}
+
+// A12: Inventarisasi
+export interface InventoryItem {
+  id: string;
+  code: string;
+  name: string;
+  category: InventoryItemCategory;
+  stock: number;
+  condition: InventoryItemCondition;
+  location: string;
+  description: string;
+  photo_url: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryLoan {
+  id: string;
+  item_id: string;
+  borrower_id: string;
+  quantity: number;
+  borrow_date: string;
+  return_date: string;
+  actual_return: string | null;
+  purpose: string;
+  status: InventoryLoanStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  return_condition: InventoryItemCondition | null;
+  return_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryLoanWithDetails extends InventoryLoan {
+  inventory_items: Pick<InventoryItem, "id" | "code" | "name" | "category">;
+  profiles: Pick<Profile, "id" | "full_name" | "nim">;
+}
+
+export interface InventoryDamageLog {
+  id: string;
+  item_id: string;
+  reported_by: string;
+  incident_date: string;
+  type: InventoryDamageType;
+  description: string;
+  estimated_cost: number;
+  created_at: string;
+}
+
+export interface InventoryDamageLogWithDetails extends InventoryDamageLog {
+  inventory_items: Pick<InventoryItem, "id" | "code" | "name">;
+  profiles: Pick<Profile, "id" | "full_name">;
 }
