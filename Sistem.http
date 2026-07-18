@@ -1,0 +1,30 @@
+### Variabel (Biar ga repot copas berulang kali)
+@baseUrl = https://nnwhxrytyxlzkfmellaj.supabase.co/rest/v1
+@anonKey = sb_publishable_y9M1Zl4GI2MZbWO5TL6qQQ_10yI9imJ
+@userToken = eyJhbGciOiJFUzI1NiIsImtpZCI6Ijk4ZDEyMjdmLTc2NDAtNGFhMS1hZDE4LWM3MzdlNWY2ZWFkZSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL292eGJxbml6b2xvZXdoeGFyYXBoLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIwNzczNjU5MC1kOTc2LTRhZGEtYTVlMS1lZjQ1ZTcwNWU3MmUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgzMTcwMjU4LCJpYXQiOjE3ODMxNjY2NTgsImVtYWlsIjoibGF0aWhhbi5ybHMuZmF1emFuM0BnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoibGF0aWhhbi5ybHMuZmF1emFuM0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiMDc3MzY1OTAtZDk3Ni00YWRhLWE1ZTEtZWY0NWU3MDVlNzJlIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3ODMxNjY2NTh9XSwic2Vzc2lvbl9pZCI6ImFjMzI3OWU3LTg1ZDEtNDY3Yy04Y2I5LTU0ODk0MGIzMTBlOSIsImlzX2Fub255bW91cyI6ZmFsc2V9.wnEAxtEIRIvYj_yYlxRKs7hytDsCsMgTrJHr5DmJR-8vW7m8Fv0GxBToytjg4P8C-yjWzHbQo0XoMIsS5rD26Q
+
+
+# =============================================================================
+# KATEGORI: CRUD OPERATIONS (PostgREST API)
+# =============================================================================
+
+### -------------------------------------------------------------------------
+### 1. TABLE: ITEMS (Master Items)
+### -------------------------------------------------------------------------
+
+### GET - Ambil Semua Items
+GET {{baseUrl}}/items?select=*
+apikey: {{anonKey}}
+# Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+### 1. calculate_item_cost
+### Menghitung total HPP/Cost dari suatu Item (secara rekursif jika memiliki resep)
+POST {{baseUrl}}/rpc/calculate_item_cost
+apikey: {{anonKey}}
+# Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+    "item_id_param": "PRD01"
+}
