@@ -1,55 +1,16 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { achievementFormSchema } from "@/lib/validations/achievement";
+import type { Achievement } from "@/lib/types/database";
+import type { ApiMeta } from "@/lib/types/api";
 
-const achievements = [
-  {
-    id: "1",
-    title: "Juara 1 Debat Nasional",
-    category: "Akademik",
-    level: "Nasional",
-    date: "2026-06-15",
-    organizer: "Kementerian Pendidikan",
-    type: "ORGANIZATION",
-    status: "APPROVED",
-    participants: ["Andi Pratama (Ketua Tim)", "Rina Wulandari (Anggota)"],
-  },
-  {
-    id: "2",
-    title: "Best Paper Award - Konferensi Teknologi",
-    category: "Penelitian",
-    level: "Internasional",
-    date: "2026-05-20",
-    organizer: "IEEE Indonesia",
-    type: "INDIVIDUAL",
-    status: "APPROVED",
-    participants: ["Budi Santoso"],
-  },
-  {
-    id: "3",
-    title: "Juara 2 Futsal Liga Mahasiswa",
-    category: "Olahraga",
-    level: "Provinsi",
-    date: "2026-04-10",
-    organizer: "KONI Provinsi",
-    type: "ORGANIZATION",
-    status: "APPROVED",
-    participants: ["Rina Wulandari (Kapten)", "Eko Prasetyo", "Gilang Ramadhan"],
-  },
-  {
-    id: "4",
-    title: "Harapan 1 Lomba Fotografi",
-    category: "Seni",
-    level: "Nasional",
-    date: "2026-03-25",
-    organizer: "Himpunan Mahasiswa Desain",
-    type: "INDIVIDUAL",
-    status: "PENDING",
-    participants: ["Dewi Lestari"],
-  },
-];
+type FormErrors = Record<string, string>;
 
 const statusVariant: Record<string, "success" | "warning" | "destructive"> = {
   APPROVED: "success",
@@ -68,59 +29,506 @@ const typeLabel: Record<string, string> = {
   INDIVIDUAL: "Individu",
 };
 
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default function AchievementsPage() {
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [meta, setMeta] = useState<ApiMeta>({});
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [levelFilter, setLevelFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 15;
+
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+
+  // Form state
+  const [formTitle, setFormTitle] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formType, setFormType] = useState<"ORGANIZATION" | "INDIVIDUAL">("ORGANIZATION");
+  const [formCategory, setFormCategory] = useState("");
+  const [formLevel, setFormLevel] = useState("");
+  const [formOrganizer, setFormOrganizer] = useState("");
+  const [formDate, setFormDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [formProofUrl, setFormProofUrl] = useState("");
+
+  const fetchAchievements = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (search) params.set("search", search);
+    if (typeFilter) params.set("type", typeFilter);
+    if (statusFilter) params.set("status", statusFilter);
+    if (levelFilter) params.set("level", levelFilter);
+
+    const res = await fetch(`/api/achievements?${params}`);
+    const json = await res.json();
+
+    if (json.success) {
+      setAchievements(json.data);
+      setMeta(json.meta);
+    }
+    setLoading(false);
+  }, [page, search, typeFilter, statusFilter, levelFilter]);
+
+  useEffect(() => {
+    fetchAchievements();
+  }, [fetchAchievements]);
+
+  const resetForm = () => {
+    setFormTitle("");
+    setFormDescription("");
+    setFormType("ORGANIZATION");
+    setFormCategory("");
+    setFormLevel("");
+    setFormOrganizer("");
+    setFormDate(new Date().toISOString().split("T")[0]);
+    setFormProofUrl("");
+    setErrors({});
+  };
+
+  const openModal = () => {
+    resetForm();
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const result = achievementFormSchema.safeParse({
+      title: formTitle,
+      description: formDescription || undefined,
+      type: formType,
+      category: formCategory,
+      level: formLevel,
+      organizer: formOrganizer || undefined,
+      achievement_date: formDate,
+      proof_url: formProofUrl || undefined,
+    });
+
+    if (!result.success) {
+      const fieldErrors: FormErrors = {};
+      for (const issue of result.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setErrors(fieldErrors);
+      return;
+    }
+
+    setErrors({});
+    setFormLoading(true);
+
+    const res = await fetch("/api/achievements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: formTitle,
+        description: formDescription || undefined,
+        type: formType,
+        category: formCategory,
+        level: formLevel,
+        organizer: formOrganizer || undefined,
+        achievement_date: formDate,
+        proof_url: formProofUrl || undefined,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      setErrors({ _form: json.error?.message || "Gagal menyimpan prestasi." });
+      setFormLoading(false);
+      return;
+    }
+
+    setShowModal(false);
+    setFormLoading(false);
+    fetchAchievements();
+  };
+
+  const totalPages = meta.totalPages || 1;
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Prestasi</h2>
           <p className="text-muted-foreground">Wall of Fame - Prestasi organisasi dan individu</p>
         </div>
-        <Button>+ Ajukan Prestasi</Button>
+        <Button onClick={openModal}>+ Ajukan Prestasi</Button>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <Input
+          placeholder="Cari prestasi..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          className="max-w-sm"
+        />
+        <Select
+          value={typeFilter}
+          onChange={(e) => {
+            setTypeFilter(e.target.value);
+            setPage(1);
+          }}
+          className="w-36"
+        >
+          <option value="">Semua Tipe</option>
+          <option value="ORGANIZATION">Organisasi</option>
+          <option value="INDIVIDUAL">Individu</option>
+        </Select>
+        <Select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          className="w-36"
+        >
+          <option value="">Semua Status</option>
+          <option value="APPROVED">Disetujui</option>
+          <option value="PENDING">Menunggu</option>
+          <option value="REJECTED">Ditolak</option>
+        </Select>
+        <Select
+          value={levelFilter}
+          onChange={(e) => {
+            setLevelFilter(e.target.value);
+            setPage(1);
+          }}
+          className="w-36"
+        >
+          <option value="">Semua Level</option>
+          <option value="Internasional">Internasional</option>
+          <option value="Nasional">Nasional</option>
+          <option value="Provinsi">Provinsi</option>
+          <option value="Kabupaten/Kota">Kabupaten/Kota</option>
+          <option value="Universitas">Universitas</option>
+          <option value="Fakultas">Fakultas</option>
+        </Select>
+      </div>
+
+      {/* Achievement Cards */}
       <div className="grid gap-6 md:grid-cols-2">
-        {achievements.map((a) => (
-          <Card key={a.id}>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="text-lg">{a.title}</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{a.category}</Badge>
-                    <Badge variant="outline">{a.level}</Badge>
-                    <Badge variant="outline">{typeLabel[a.type]}</Badge>
+        {loading ? (
+          <div className="col-span-2 text-center py-12 text-muted-foreground">
+            Memuat data...
+          </div>
+        ) : achievements.length === 0 ? (
+          <div className="col-span-2 text-center py-12 text-muted-foreground">
+            Belum ada prestasi.
+          </div>
+        ) : (
+          achievements.map((a) => (
+            <Card key={a.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg">{a.title}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{a.category}</Badge>
+                      <Badge variant="outline">{a.level}</Badge>
+                      <Badge variant="outline">{typeLabel[a.type] || a.type}</Badge>
+                    </div>
+                  </div>
+                  <Badge variant={statusVariant[a.status] || "secondary"}>
+                    {statusLabel[a.status] || a.status}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {a.description && (
+                  <p className="text-sm text-muted-foreground">{a.description}</p>
+                )}
+                <div className="text-sm text-muted-foreground">
+                  {a.organizer && <span>{a.organizer} &middot; </span>}
+                  {formatDate(a.achievement_date)}
+                </div>
+                {a.status === "REJECTED" && a.rejection_reason && (
+                  <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3">
+                    <span className="font-medium">Alasan ditolak:</span> {a.rejection_reason}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Pagination */}
+      {meta.total !== undefined && meta.total > limit && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Menampilkan {(page - 1) * limit + 1} -{" "}
+            {Math.min(page * limit, meta.total)} dari {meta.total} prestasi
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal "+ Ajukan Prestasi" */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowModal(false)}
+          />
+
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-bold">Ajukan Prestasi</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Catat prestasi organisasi atau individu
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="p-1 hover:bg-muted rounded-lg"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Tipe Prestasi */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Tipe Prestasi <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormType("ORGANIZATION")}
+                      className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
+                        formType === "ORGANIZATION"
+                          ? "bg-blue-50 border-blue-300 text-blue-700"
+                          : "bg-white border-border text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      Organisasi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormType("INDIVIDUAL")}
+                      className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
+                        formType === "INDIVIDUAL"
+                          ? "bg-purple-50 border-purple-300 text-purple-700"
+                          : "bg-white border-border text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      Individu
+                    </button>
+                  </div>
+                  {errors.type && (
+                    <p className="text-sm text-red-500">{errors.type}</p>
+                  )}
+                </div>
+
+                {/* Judul */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="title">
+                    Judul Prestasi <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    id="title"
+                    placeholder="Contoh: Juara 1 Debat Nasional"
+                    value={formTitle}
+                    onChange={(e) => setFormTitle(e.target.value)}
+                  />
+                  {errors.title && (
+                    <p className="text-sm text-red-500">{errors.title}</p>
+                  )}
+                </div>
+
+                {/* Deskripsi */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="description">
+                    Deskripsi <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    id="description"
+                    placeholder="Deskripsikan prestasi yang diraih..."
+                    value={formDescription}
+                    onChange={(e) => setFormDescription(e.target.value)}
+                    rows={3}
+                    className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  {errors.description && (
+                    <p className="text-sm text-red-500">{errors.description}</p>
+                  )}
+                </div>
+
+                {/* Kategori & Level */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="category">
+                      Kategori <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      id="category"
+                      value={formCategory}
+                      onChange={(e) => setFormCategory(e.target.value)}
+                    >
+                      <option value="">Pilih kategori</option>
+                      <option value="Akademik">Akademik</option>
+                      <option value="Olahraga">Olahraga</option>
+                      <option value="Seni">Seni</option>
+                      <option value="Penelitian">Penelitian</option>
+                      <option value="Teknologi">Teknologi</option>
+                      <option value="Sosial">Sosial</option>
+                      <option value="Lainnya">Lainnya</option>
+                    </Select>
+                    {errors.category && (
+                      <p className="text-sm text-red-500">{errors.category}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="level">
+                      Level <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      id="level"
+                      value={formLevel}
+                      onChange={(e) => setFormLevel(e.target.value)}
+                    >
+                      <option value="">Pilih level</option>
+                      <option value="Internasional">Internasional</option>
+                      <option value="Nasional">Nasional</option>
+                      <option value="Provinsi">Provinsi</option>
+                      <option value="Kabupaten/Kota">Kabupaten/Kota</option>
+                      <option value="Universitas">Universitas</option>
+                      <option value="Fakultas">Fakultas</option>
+                    </Select>
+                    {errors.level && (
+                      <p className="text-sm text-red-500">{errors.level}</p>
+                    )}
                   </div>
                 </div>
-                <Badge variant={statusVariant[a.status]}>
-                  {statusLabel[a.status]}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="text-sm text-muted-foreground">
-                {a.organizer} &middot; {a.date}
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Peserta:</p>
-                <div className="flex flex-wrap gap-1">
-                  {a.participants.map((p) => (
-                    <Badge key={p} variant="secondary" className="text-xs">
-                      {p}
-                    </Badge>
-                  ))}
+
+                {/* Penyelenggara & Tanggal */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="organizer">
+                      Penyelenggara
+                    </label>
+                    <Input
+                      id="organizer"
+                      placeholder="Contoh: Kementerian Pendidikan"
+                      value={formOrganizer}
+                      onChange={(e) => setFormOrganizer(e.target.value)}
+                    />
+                    {errors.organizer && (
+                      <p className="text-sm text-red-500">{errors.organizer}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="achievement_date">
+                      Tanggal <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      id="achievement_date"
+                      type="date"
+                      value={formDate}
+                      onChange={(e) => setFormDate(e.target.value)}
+                    />
+                    {errors.achievement_date && (
+                      <p className="text-sm text-red-500">{errors.achievement_date}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {a.status === "PENDING" && (
-                <div className="flex gap-2 pt-2">
-                  <Button size="sm" variant="default">Setujui</Button>
-                  <Button size="sm" variant="outline">Tolak</Button>
+
+                {/* URL Bukti */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="proof_url">
+                    URL Bukti (Opsional)
+                  </label>
+                  <Input
+                    id="proof_url"
+                    type="url"
+                    placeholder="https://..."
+                    value={formProofUrl}
+                    onChange={(e) => setFormProofUrl(e.target.value)}
+                  />
+                  {errors.proof_url && (
+                    <p className="text-sm text-red-500">{errors.proof_url}</p>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+
+                {errors._form && (
+                  <p className="text-sm text-red-500 text-center">
+                    {errors._form}
+                  </p>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <Button type="submit" disabled={formLoading} className="flex-1">
+                    {formLoading ? "Menyimpan..." : "Ajukan Prestasi"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowModal(false)}
+                  >
+                    Batal
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

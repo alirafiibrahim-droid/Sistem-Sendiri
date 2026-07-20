@@ -4,13 +4,13 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiNotFound,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
 import { requireRole } from "@/lib/authz";
+import { projectFormSchema } from "@/lib/validations/project";
 
 export async function GET(request: NextRequest) {
   try {
@@ -46,13 +46,17 @@ export async function GET(request: NextRequest) {
       .order(sort, { ascending: order })
       .range(from, to);
 
-    if (error) throw error;
+    if (error) {
+      console.error("PROJECTS GET ERROR:", error);
+      return apiInternalError();
+    }
 
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
 
     return apiOk(data, { total, page, limit, totalPages });
-  } catch {
+  } catch (e) {
+    console.error("PROJECTS GET ERROR:", e);
     return apiInternalError();
   }
 }
@@ -67,11 +71,14 @@ export async function POST(request: NextRequest) {
     if (forbidden) return forbidden;
 
     const body = await request.json();
-    const { name, description, urgency_level, start_date, end_date, budget_source } = body;
 
-    if (!name || !urgency_level || !start_date || !end_date) {
-      return apiBadRequest("Missing required fields");
+    const parsed = projectFormSchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
     }
+
+    const { name, description, urgency_level, start_date, end_date, budget_source } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
@@ -79,21 +86,25 @@ export async function POST(request: NextRequest) {
       .from("incidental_projects")
       .insert({
         name,
-        description,
+        description: description || null,
         urgency_level,
         start_date,
-        end_date,
-        budget_source,
+        end_date: end_date || null,
+        budget_source: budget_source || null,
         status: "PROPOSED",
         created_by: uid,
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("PROJECTS INSERT ERROR:", error);
+      return apiInternalError(error.message);
+    }
 
     return apiCreated(data);
-  } catch {
+  } catch (e) {
+    console.error("PROJECTS POST ERROR:", e);
     return apiInternalError();
   }
 }
