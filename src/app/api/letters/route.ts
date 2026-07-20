@@ -3,19 +3,44 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiNotFound,
-  apiBadRequest,
   apiInternalError,
+  apiBadRequest,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
 import { requireRole } from "@/lib/authz";
+import { letterFormSchema } from "@/lib/validations/letter";
 import { NextRequest } from "next/server";
+import type { LetterWithCreator, Profile } from "@/lib/types/database";
+
+async function attachProfiles(
+  letters: LetterWithCreator[],
+  supabase: Awaited<ReturnType<typeof createSupabaseServer>>
+): Promise<LetterWithCreator[]> {
+  const userIds = [
+    ...new Set(letters.map((l) => l.created_by).filter(Boolean) as string[]),
+  ];
+  if (userIds.length === 0) return letters;
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    (profiles || []).map((p: Pick<Profile, "id" | "full_name">) => [p.id, p])
+  );
+
+  return letters.map((l) => ({
+    ...l,
+    profiles: l.created_by ? profileMap.get(l.created_by) || null : null,
+  }));
+}
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createSupabaseServer();
-    const uid = await getUid(request);
+    const uid = getUid(request);
     if (!uid) return apiUnauthorized();
 
     const { searchParams } = new URL(request.url);
@@ -28,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("letters")
-      .select("*, profiles(id, full_name)", { count: "exact" });
+      .select("*", { count: "exact" });
 
     if (type) {
       query = query.eq("type", type);
@@ -47,13 +72,19 @@ export async function GET(request: NextRequest) {
       .order(sort, { ascending: order === "asc" })
       .range(from, to);
 
-    if (error) return apiInternalError();
+    if (error) {
+      console.error("LETTERS GET ERROR:", error);
+      return apiInternalError();
+    }
+
+    const result = await attachProfiles(data as LetterWithCreator[], supabase);
 
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
 
-    return apiOk(data, { total, page, limit, totalPages });
-  } catch {
+    return apiOk(result, { total, page, limit, totalPages });
+  } catch (e) {
+    console.error("LETTERS GET ERROR:", e);
     return apiInternalError();
   }
 }
@@ -61,21 +92,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createSupabaseServer();
-    const uid = await getUid(request);
+    const uid = getUid(request);
     if (!uid) return apiUnauthorized();
 
-    const role = await getUserRole(request);
+    const role = getUserRole(request);
     const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
     if (forbidden) return forbidden;
 
     const body = await request.json();
-    const { type, title, sender, date_received_sent, classification, document_url, reference_number } = body;
 
-    if (!type || !title || !sender || !date_received_sent) {
-      return apiBadRequest("Missing required fields: type, title, sender, date_received_sent");
+    const parsed = letterFormSchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
     }
 
-    const refNum = reference_number || `REF-${Date.now()}`;
+    const { type, title, sender, date_received_sent, classification, document_url } = parsed.data;
+
+    const refNum = `REF-${Date.now()}`;
 
     const { data, error } = await supabase
       .from("letters")
@@ -85,17 +119,23 @@ export async function POST(request: NextRequest) {
         sender,
         date_received_sent,
         classification: classification || "PUBLIC",
-        document_url: document_url || null,
+        document_url: document_url || "",
         reference_number: refNum,
         created_by: uid,
       })
-      .select("*, profiles(id, full_name)")
+      .select()
       .single();
 
-    if (error) return apiInternalError();
+    if (error) {
+      console.error("LETTERS INSERT ERROR:", error);
+      return apiInternalError(error.message);
+    }
 
-    return apiCreated(data);
-  } catch {
+    const result = (await attachProfiles([data as LetterWithCreator], supabase))[0];
+
+    return apiCreated(result);
+  } catch (e) {
+    console.error("LETTERS POST ERROR:", e);
     return apiInternalError();
   }
 }
