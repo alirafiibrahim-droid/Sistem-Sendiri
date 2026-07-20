@@ -9,7 +9,33 @@ import {
   getUserRole,
 } from "@/lib/api-response";
 import { requireRole } from "@/lib/authz";
+import { trainingSessionSchema } from "@/lib/validations/training";
 import { NextRequest } from "next/server";
+import type { Profile, TrainingSessionWithCoach } from "@/lib/types/database";
+
+async function attachProfiles(
+  sessions: TrainingSessionWithCoach[],
+  supabase: Awaited<ReturnType<typeof createSupabaseServer>>
+): Promise<TrainingSessionWithCoach[]> {
+  const userIds = [
+    ...new Set(sessions.map((s) => s.coach_id).filter(Boolean) as string[]),
+  ];
+  if (userIds.length === 0) return sessions;
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    (profiles || []).map((p: Pick<Profile, "id" | "full_name">) => [p.id, p])
+  );
+
+  return sessions.map((s) => ({
+    ...s,
+    profiles: s.coach_id ? profileMap.get(s.coach_id) || null : null,
+  }));
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,7 +54,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServer();
     let query = supabase
       .from("training_sessions")
-      .select("*, profiles(id, full_name)", { count: "exact" });
+      .select("*", { count: "exact" });
 
     if (start_date) query = query.gte("date", start_date);
     if (end_date) query = query.lte("date", end_date);
@@ -38,13 +64,19 @@ export async function GET(request: NextRequest) {
     query = query.range(from, to);
 
     const { data, error, count } = await query;
-    if (error) return apiInternalError();
+    if (error) {
+      console.error("TRAINING SESSIONS GET ERROR:", error);
+      return apiInternalError();
+    }
+
+    const result = await attachProfiles(data as TrainingSessionWithCoach[], supabase);
 
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
 
-    return apiOk(data, { total, page, limit, totalPages });
-  } catch {
+    return apiOk(result, { total, page, limit, totalPages });
+  } catch (e) {
+    console.error("TRAINING SESSIONS GET ERROR:", e);
     return apiInternalError();
   }
 }
@@ -54,26 +86,26 @@ export async function POST(request: NextRequest) {
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    if (role !== "coach") {
-      const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
-      if (forbidden) return forbidden;
-    }
+
+    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    if (forbidden) return forbidden;
 
     const body = await request.json();
-    const { date, session_type, duration_minutes, intensity, athlete_ids } = body;
 
-    if (!date || !session_type || !duration_minutes || !intensity) {
-      return apiBadRequest("date, session_type, duration_minutes, intensity are required");
+    const parsed = trainingSessionSchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
     }
 
-    const supabase = await createSupabaseServer();
+    const { date, session_type, duration_minutes, intensity, athlete_ids } = parsed.data;
 
-    const coach_id = uid;
+    const supabase = await createSupabaseServer();
 
     const { data: session, error: sessionError } = await supabase
       .from("training_sessions")
       .insert({
-        coach_id,
+        coach_id: uid,
         date,
         session_type,
         duration_minutes,
@@ -82,7 +114,10 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (sessionError) return apiInternalError();
+    if (sessionError) {
+      console.error("TRAINING SESSIONS INSERT ERROR:", sessionError);
+      return apiInternalError(sessionError.message);
+    }
 
     if (athlete_ids && athlete_ids.length > 0) {
       const attendants = athlete_ids.map((athlete_id: string) => ({
@@ -94,11 +129,14 @@ export async function POST(request: NextRequest) {
         .from("training_session_attendants")
         .insert(attendants);
 
-      if (attError) return apiInternalError();
+      if (attError) {
+        console.error("TRAINING SESSIONS ATTENDANTS INSERT ERROR:", attError);
+      }
     }
 
     return apiCreated(session);
-  } catch {
+  } catch (e) {
+    console.error("TRAINING SESSIONS POST ERROR:", e);
     return apiInternalError();
   }
 }
