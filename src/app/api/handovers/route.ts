@@ -4,19 +4,44 @@ import {
   apiCreated,
   apiUnauthorized,
   apiForbidden,
-  apiNotFound,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
 import { isAdmin } from "@/lib/authz";
+import { handoverSchema } from "@/lib/validations/handover";
 import { NextRequest } from "next/server";
+import type { Profile, HandoverWithCreator } from "@/lib/types/database";
+
+async function attachProfiles(
+  handovers: HandoverWithCreator[],
+  supabase: Awaited<ReturnType<typeof createSupabaseServer>>
+): Promise<HandoverWithCreator[]> {
+  const userIds = [
+    ...new Set(handovers.map((h) => h.created_by).filter(Boolean) as string[]),
+  ];
+  if (userIds.length === 0) return handovers;
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    (profiles || []).map((p: Pick<Profile, "id" | "full_name">) => [p.id, p])
+  );
+
+  return handovers.map((h) => ({
+    ...h,
+    profiles: h.created_by ? profileMap.get(h.created_by) || null : null,
+  }));
+}
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createSupabaseServer();
-    const uid = await getUid(request);
+    const uid = getUid(request);
     if (!uid) return apiUnauthorized();
 
     const { searchParams } = new URL(request.url);
@@ -28,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("handovers")
-      .select("*, profiles(id, full_name)", { count: "exact" });
+      .select("*", { count: "exact" });
 
     if (search) {
       query = query.or(
@@ -43,13 +68,19 @@ export async function GET(request: NextRequest) {
       .order(sort, { ascending: order === "asc" })
       .range(from, to);
 
-    if (error) return apiInternalError();
+    if (error) {
+      console.error("HANDOVERS GET ERROR:", error);
+      return apiInternalError();
+    }
+
+    const result = await attachProfiles(data as HandoverWithCreator[], supabase);
 
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
 
-    return apiOk(data, { total, page, limit, totalPages });
-  } catch {
+    return apiOk(result, { total, page, limit, totalPages });
+  } catch (e) {
+    console.error("HANDOVERS GET ERROR:", e);
     return apiInternalError();
   }
 }
@@ -57,18 +88,21 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createSupabaseServer();
-    const uid = await getUid(request);
+    const uid = getUid(request);
     if (!uid) return apiUnauthorized();
 
-    const role = await getUserRole(request);
+    const role = getUserRole(request);
     if (!isAdmin(role)) return apiForbidden();
 
     const body = await request.json();
-    const { period_from, period_to, handover_date, witnesses } = body;
 
-    if (!period_from || !period_to || !handover_date) {
-      return apiBadRequest("Missing required fields: period_from, period_to, handover_date");
+    const parsed = handoverSchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
     }
+
+    const { period_from, period_to, handover_date, witnesses } = parsed.data;
 
     const { data, error } = await supabase
       .from("handovers")
@@ -80,13 +114,17 @@ export async function POST(request: NextRequest) {
         status: "DRAFT",
         created_by: uid,
       })
-      .select("*, profiles(id, full_name)")
+      .select("*")
       .single();
 
-    if (error) return apiInternalError();
+    if (error) {
+      console.error("HANDOVERS INSERT ERROR:", error);
+      return apiInternalError(error.message);
+    }
 
     return apiCreated(data);
-  } catch {
+  } catch (e) {
+    console.error("HANDOVERS POST ERROR:", e);
     return apiInternalError();
   }
 }
