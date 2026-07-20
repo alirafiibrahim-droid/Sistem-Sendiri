@@ -4,13 +4,13 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,9 +63,8 @@ export async function POST(request: NextRequest) {
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!["ADMIN", "PENGURUS_INTI", "KABID"].includes(role)) {
-      return apiForbidden();
-    }
+    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    if (forbidden) return forbidden;
 
     const body = await request.json();
     const { name, description, urgency_level, start_date, end_date, budget_source } = body;

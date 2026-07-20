@@ -2,26 +2,18 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiCreated,
-  apiUnauthorized,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
 import { requireRole } from "@/lib/authz";
+import { fakultasFormSchema } from "@/lib/validations/settings";
 
-// GET /api/divisions
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const uid = getUid(request);
-    if (!uid) return apiUnauthorized();
-
     const supabase = await createSupabaseServer();
-    const { data, error } = await supabase
-      .from("divisions")
-      .select("*")
-      .order("name");
-
+    const { data, error } = await supabase.from("fakultas").select("*").order("name");
     if (error) return apiInternalError(error.message);
     return apiOk(data);
   } catch {
@@ -29,7 +21,6 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/divisions (Admin/Pengurus Inti only)
 export async function POST(request: Request) {
   try {
     const userRole = getUserRole(request);
@@ -37,20 +28,23 @@ export async function POST(request: Request) {
     if (forbidden) return forbidden;
 
     const body = await request.json();
-    const { name, description } = body;
+    const parsed = fakultasFormSchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
+    }
 
-    if (!name) return apiBadRequest("Nama divisi wajib diisi.");
-
+    const { name, description } = parsed.data;
     const supabase = await createSupabaseServer();
+
     const { data, error } = await supabase
-      .from("divisions")
+      .from("fakultas")
       .insert({ name, description: description || "" })
       .select()
       .single();
 
     if (error) {
-      if (error.code === "23505")
-        return apiBadRequest("Nama divisi sudah ada.");
+      if (error.code === "23505") return apiBadRequest("Nama fakultas sudah ada.");
       return apiInternalError(error.message);
     }
 

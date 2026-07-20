@@ -10,6 +10,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin } from "@/lib/authz";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     if (!uid) return apiUnauthorized();
 
     const role = await getUserRole(request);
-    if (role !== "ADMIN") return apiForbidden();
+    if (!isAdmin(role)) return apiForbidden();
 
     const body = await request.json();
     const { period_from, period_to, handover_date, witnesses } = body;

@@ -41,7 +41,7 @@ const projects = [
   },
 ];
 
-const statusVariant: Record<string, "success" | "warning" | "secondary" | "destructive"> = {
+const statusVariant: Record<string, "success" | "warning" | "secondary" | "destructive" | "default"> = {
   PROPOSED: "secondary",
   APPROVED: "warning",
   ONGOING: "default",

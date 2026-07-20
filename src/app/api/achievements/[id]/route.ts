@@ -9,6 +9,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin, isRoleAllowed } from "@/lib/authz";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -59,9 +60,8 @@ export async function PATCH(
 
     if (fetchError || !existing) return apiNotFound();
 
-    const allowedRoles = ["ADMIN", "PENGURUS_INTI", "KABID"];
     const isCreator = existing.created_by === uid;
-    const hasPermission = allowedRoles.includes(role) || isCreator;
+    const hasPermission = isRoleAllowed(role, ["PENGURUS_INTI", "KABID"]) || isCreator;
 
     if (!hasPermission) return apiForbidden();
 
@@ -111,7 +111,7 @@ export async function DELETE(
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
 
-    if (role !== "ADMIN") return apiForbidden();
+    if (!isAdmin(role)) return apiForbidden();
 
     const { id } = await params;
     const supabase = await createSupabaseServer();

@@ -2,15 +2,13 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 import { NextRequest } from "next/server";
-
-const ALLOWED_ROLES = ["ADMIN", "PENGURUS_INTI", "KABID"];
 
 export async function GET(
   request: NextRequest,
@@ -41,7 +39,8 @@ export async function DELETE(
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    if (!ALLOWED_ROLES.includes(role)) return apiForbidden();
+    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();

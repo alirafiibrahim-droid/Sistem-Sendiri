@@ -1,8 +1,11 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useCallback } from "react";
+import { createSupabaseClient } from "@/lib/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -12,104 +15,796 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema } from "@/lib/validations/settings";
+import type { OrganizationSettings, Division, Fakultas, Jurusan, Profile, ProfileWithDivision, UserRole } from "@/lib/types/database";
 
-const divisions = [
-  { id: "1", name: "Kestari", description: "Kesekretariatan dan Administrasi", members: 5 },
-  { id: "2", name: "Kewirausahaan", description: "Pengembangan Jiwa Wirausaha", members: 7 },
-  { id: "3", name: "Keagamaan", description: "Pembinaan Kerohanian", members: 6 },
-  { id: "4", name: "Sosial Masyarakat", description: "Pengabdian kepada Masyarakat", members: 8 },
-  { id: "5", name: "Hubungan Masyarakat", description: "Humas & Jaringan Eksternal", members: 6 },
-  { id: "6", name: "Olahraga", description: "Pembinaan Prestasi Olahraga & Keatletan", members: 9 },
-  { id: "7", name: "Seni dan Budaya", description: "Pengembangan Seni dan Budaya", members: 4 },
+type FormErrors = Record<string, string>;
+type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan";
+
+const tabs: { id: TabId; label: string }[] = [
+  { id: "profile", label: "Profile Saya" },
+  { id: "pengaturan-user", label: "Pengaturan User" },
+  { id: "organization", label: "Organisasi" },
+  { id: "divisions", label: "Divisi" },
+  { id: "fakultas-jurusan", label: "Fakultas & Jurusan" },
 ];
 
-const orgSettings = {
-  name: "SIORG",
-  description: "Sistem Informasi Organisasi Kemahasiswaan",
-  email: "admin@siorg.ac.id",
-  period: "2025/2026",
-  isMaintenance: false,
-};
-
 export default function SettingsPage() {
+  const supabase = createSupabaseClient();
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [user, setUser] = useState<Profile | null>(null);
+
+  // ─── Profile Tab ───
+  const [profileName, setProfileName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileAvatar, setProfileAvatar] = useState("");
+  const [profileErrors, setProfileErrors] = useState<FormErrors>({});
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  // ─── Organization Tab ───
+  const [orgData, setOrgData] = useState<OrganizationSettings | null>(null);
+  const [orgName, setOrgName] = useState("");
+  const [orgDesc, setOrgDesc] = useState("");
+  const [orgEmail, setOrgEmail] = useState("");
+  const [orgPeriod, setOrgPeriod] = useState("");
+  const [orgMaintenance, setOrgMaintenance] = useState(false);
+  const [orgErrors, setOrgErrors] = useState<FormErrors>({});
+  const [orgLoading, setOrgLoading] = useState(false);
+
+  // ─── Divisions Tab ───
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [showDivModal, setShowDivModal] = useState(false);
+  const [divEditId, setDivEditId] = useState<string | null>(null);
+  const [divName, setDivName] = useState("");
+  const [divDesc, setDivDesc] = useState("");
+  const [divErrors, setDivErrors] = useState<FormErrors>({});
+  const [divLoading, setDivLoading] = useState(false);
+
+  // ─── Fakultas & Jurusan Tab ───
+  const [fakultasList, setFakultasList] = useState<Fakultas[]>([]);
+  const [jurusanList, setJurusanList] = useState<(Jurusan & { fakultas?: Pick<Fakultas, "id" | "name"> | null })[]>([]);
+  const [fjTab, setFjTab] = useState<"fakultas" | "jurusan">("fakultas");
+  const [showFjModal, setShowFjModal] = useState(false);
+  const [fjEditId, setFjEditId] = useState<string | null>(null);
+  const [fjName, setFjName] = useState("");
+  const [fjDesc, setFjDesc] = useState("");
+  const [fjFakultasId, setFjFakultasId] = useState("");
+  const [fjErrors, setFjErrors] = useState<FormErrors>({});
+  const [fjLoading, setFjLoading] = useState(false);
+
+  // ─── Pengaturan User Tab ───
+  const [allUsers, setAllUsers] = useState<ProfileWithDivision[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [savingRole, setSavingRole] = useState<string | null>(null);
+  const [userRoleError, setUserRoleError] = useState("");
+
+  // ─── Tambah User Modal ───
+  const [showTambahUser, setShowTambahUser] = useState(false);
+  const [tambahUserId, setTambahUserId] = useState("");
+  const [tambahUserRole, setTambahUserRole] = useState("ANGGOTA");
+  const [tambahUserLoading, setTambahUserLoading] = useState(false);
+  const [tambahUserError, setTambahUserError] = useState("");
+
+  const handleTambahUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tambahUserId) { setTambahUserError("Pilih anggota terlebih dahulu."); return; }
+    setTambahUserLoading(true);
+    setTambahUserError("");
+    const res = await fetch(`/api/profiles/${tambahUserId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: tambahUserRole }),
+    });
+    const json = await res.json();
+    setTambahUserLoading(false);
+    if (!json.success) {
+      setTambahUserError(json.error?.message || "Gagal menyimpan.");
+      return;
+    }
+    setShowTambahUser(false);
+    setTambahUserId("");
+    setTambahUserRole("ANGGOTA");
+    fetchAllUsers();
+  };
+
+  // ─── Fetch Current User Profile ───
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (u) {
+        supabase.from("profiles").select("*").eq("id", u.id).single().then(({ data }) => {
+          if (data) {
+            setUser(data);
+            setProfileName(data.full_name);
+            setProfilePhone(data.phone_number || "");
+            setProfileAvatar(data.avatar_url || "");
+          }
+        });
+      }
+    });
+  }, [supabase]);
+
+  // ─── Fetch All Users (for Pengaturan User) ───
+  const fetchAllUsers = useCallback(async () => {
+    setUsersLoading(true);
+    const params = new URLSearchParams();
+    if (userSearch) params.set("search", userSearch);
+    params.set("limit", "200");
+    const res = await fetch(`/api/profiles?${params}`);
+    const json = await res.json();
+    if (json.success) setAllUsers(json.data);
+    setUsersLoading(false);
+  }, [userSearch]);
+
+  useEffect(() => { if (activeTab === "pengaturan-user") fetchAllUsers(); }, [activeTab, fetchAllUsers]);
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    setSavingRole(userId);
+    setUserRoleError("");
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role: newRole })
+      .eq("id", userId);
+    if (error) {
+      setUserRoleError(error.message);
+    } else {
+      setAllUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole as UserRole } : u)));
+    }
+    setSavingRole(null);
+  };
+
+  // ─── Fetch Organization Settings ───
+  const fetchOrg = useCallback(async () => {
+    const res = await fetch("/api/settings");
+    const json = await res.json();
+    if (json.success && json.data) {
+      setOrgData(json.data);
+      setOrgName(json.data.org_name);
+      setOrgDesc(json.data.org_description);
+      setOrgEmail(json.data.org_email || "");
+      setOrgPeriod(json.data.period_year);
+      setOrgMaintenance(json.data.is_maintenance);
+    }
+  }, []);
+
+  useEffect(() => { fetchOrg(); }, [fetchOrg]);
+
+  // ─── Fetch Divisions ───
+  const fetchDivisions = useCallback(async () => {
+    const res = await fetch("/api/divisions");
+    const json = await res.json();
+    if (json.success) setDivisions(json.data);
+  }, []);
+
+  useEffect(() => { fetchDivisions(); }, [fetchDivisions]);
+
+  // ─── Fetch Fakultas & Jurusan ───
+  const fetchFakultas = useCallback(async () => {
+    const res = await fetch("/api/fakultas");
+    const json = await res.json();
+    if (json.success) setFakultasList(json.data);
+  }, []);
+
+  const fetchJurusan = useCallback(async () => {
+    const res = await fetch("/api/jurusan");
+    const json = await res.json();
+    if (json.success) setJurusanList(json.data);
+  }, []);
+
+  useEffect(() => { fetchFakultas(); fetchJurusan(); }, [fetchFakultas, fetchJurusan]);
+
+  // ─── Profile Submit ───
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = profileFormSchema.safeParse({
+      full_name: profileName,
+      phone_number: profilePhone || undefined,
+      avatar_url: profileAvatar || undefined,
+    });
+    if (!parsed.success) {
+      const fieldErrors: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setProfileErrors(fieldErrors);
+      return;
+    }
+    setProfileErrors({});
+    setProfileLoading(true);
+    const res = await fetch(`/api/profiles/${user?.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      setProfileErrors({ _form: json.error?.message || "Gagal menyimpan." });
+    }
+    setProfileLoading(false);
+  };
+
+  // ─── Organization Submit ───
+  const handleOrgSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = orgSettingsFormSchema.safeParse({
+      org_name: orgName,
+      org_description: orgDesc || undefined,
+      org_email: orgEmail || undefined,
+      period_year: orgPeriod,
+      is_maintenance: orgMaintenance,
+    });
+    if (!parsed.success) {
+      const fieldErrors: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setOrgErrors(fieldErrors);
+      return;
+    }
+    setOrgErrors({});
+    setOrgLoading(true);
+    const res = await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      setOrgErrors({ _form: json.error?.message || "Gagal menyimpan." });
+    }
+    setOrgLoading(false);
+  };
+
+  // ─── Division: Open Modal ───
+  const openDivModal = (div?: Division) => {
+    if (div) {
+      setDivEditId(div.id);
+      setDivName(div.name);
+      setDivDesc(div.description);
+    } else {
+      setDivEditId(null);
+      setDivName("");
+      setDivDesc("");
+    }
+    setDivErrors({});
+    setShowDivModal(true);
+  };
+
+  // ─── Division: Submit ───
+  const handleDivSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = divisionFormSchema.safeParse({
+      name: divName,
+      description: divDesc || undefined,
+    });
+    if (!parsed.success) {
+      const fieldErrors: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setDivErrors(fieldErrors);
+      return;
+    }
+    setDivErrors({});
+    setDivLoading(true);
+    const url = divEditId ? `/api/divisions/${divEditId}` : "/api/divisions";
+    const method = divEditId ? "PATCH" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    const json = await res.json();
+    setDivLoading(false);
+    if (!json.success) {
+      setDivErrors({ _form: json.error?.message || "Gagal menyimpan." });
+      return;
+    }
+    setShowDivModal(false);
+    fetchDivisions();
+  };
+
+  // ─── Division: Delete ───
+  const deleteDivision = async (id: string) => {
+    if (!confirm("Hapus divisi ini?")) return;
+    await fetch(`/api/divisions/${id}`, { method: "DELETE" });
+    fetchDivisions();
+  };
+
+  // ─── Fakultas/Jurusan: Open Modal ───
+  const openFjModal = (item?: (Fakultas | Jurusan) & { fakultas?: Pick<Fakultas, "id" | "name"> | null }) => {
+    if (item) {
+      setFjEditId(item.id);
+      setFjName(item.name);
+      setFjDesc(item.description);
+      if (fjTab === "jurusan") {
+        setFjFakultasId((item as Jurusan).fakultas_id || "");
+      } else {
+        setFjFakultasId("");
+      }
+    } else {
+      setFjEditId(null);
+      setFjName("");
+      setFjDesc("");
+      setFjFakultasId("");
+    }
+    setFjErrors({});
+    setShowFjModal(true);
+  };
+
+  // ─── Fakultas/Jurusan: Submit ───
+  const handleFjSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const schema = fjTab === "fakultas" ? fakultasFormSchema : jurusanFormSchema;
+    const input = fjTab === "fakultas"
+      ? { name: fjName, description: fjDesc || undefined }
+      : { name: fjName, description: fjDesc || undefined, fakultas_id: fjFakultasId || undefined };
+
+    const parsed = schema.safeParse(input);
+    if (!parsed.success) {
+      const fieldErrors: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setFjErrors(fieldErrors);
+      return;
+    }
+    setFjErrors({});
+    setFjLoading(true);
+
+    const baseUrl = fjTab === "fakultas" ? "/api/fakultas" : "/api/jurusan";
+    const url = fjEditId ? `${baseUrl}/${fjEditId}` : baseUrl;
+    const method = fjEditId ? "PATCH" : "POST";
+
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    const json = await res.json();
+    setFjLoading(false);
+    if (!json.success) {
+      setFjErrors({ _form: json.error?.message || "Gagal menyimpan." });
+      return;
+    }
+    setShowFjModal(false);
+    fetchFakultas();
+    fetchJurusan();
+  };
+
+  // ─── Fakultas/Jurusan: Delete ───
+  const deleteFj = async (id: string) => {
+    if (!confirm(`Hapus ${fjTab === "fakultas" ? "fakultas" : "jurusan"} ini?`)) return;
+    const baseUrl = fjTab === "fakultas" ? "/api/fakultas" : "/api/jurusan";
+    await fetch(`${baseUrl}/${id}`, { method: "DELETE" });
+    fetchFakultas();
+    fetchJurusan();
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Pengaturan</h2>
-        <p className="text-muted-foreground">Konfigurasi sistem dan data organisasi</p>
+        <p className="text-muted-foreground">Konfigurasi profil, organisasi, dan data master</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ─── Tab Navigation ─── */}
+      <div className="flex gap-1 border-b border-border">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab.id
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ════════════════════════════════════════════════
+           TAB 1: PROFILE
+           ════════════════════════════════════════════════ */}
+      {activeTab === "profile" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile Saya</CardTitle>
+            <CardDescription>Ubah data profil pribadi Anda</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {user ? (
+              <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-lg">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="pname">Nama Lengkap <span className="text-red-500">*</span></label>
+                  <Input id="pname" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
+                  {profileErrors.full_name && <p className="text-sm text-red-500">{profileErrors.full_name}</p>}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="pphone">No Telepon</label>
+                  <Input id="pphone" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} />
+                  {profileErrors.phone_number && <p className="text-sm text-red-500">{profileErrors.phone_number}</p>}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="pavatar">URL Avatar</label>
+                  <Input id="pavatar" type="url" value={profileAvatar} onChange={(e) => setProfileAvatar(e.target.value)} />
+                  {profileErrors.avatar_url && <p className="text-sm text-red-500">{profileErrors.avatar_url}</p>}
+                </div>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p><span className="font-medium">Email:</span> {user.email}</p>
+                  <p><span className="font-medium">NIM:</span> {user.nim}</p>
+                  <p><span className="font-medium">Role:</span> <Badge>{user.role}</Badge></p>
+                  <p><span className="font-medium">Status:</span> <Badge variant={user.status === "AKTIF" ? "success" : "secondary"}>{user.status}</Badge></p>
+                </div>
+                {profileErrors._form && <p className="text-sm text-red-500 text-center">{profileErrors._form}</p>}
+                <Button type="submit" disabled={profileLoading}>{profileLoading ? "Menyimpan..." : "Simpan Profile"}</Button>
+              </form>
+            ) : (
+              <p className="text-muted-foreground">Memuat data...</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           TAB 2: PENGATURAN USER
+           ════════════════════════════════════════════════ */}
+      {activeTab === "pengaturan-user" && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Pengaturan User</CardTitle>
+                <CardDescription>Atur role pengguna dalam sistem.</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => setShowTambahUser(true)}>+ Tambah User</Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              placeholder="Cari nama atau NIM..."
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              className="max-w-sm"
+            />
+            {userRoleError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
+                {userRoleError}
+              </div>
+            )}
+            <div className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nama</TableHead>
+                    <TableHead>NIM</TableHead>
+                    <TableHead>Divisi</TableHead>
+                    <TableHead>Fakultas</TableHead>
+                    <TableHead>Jurusan</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="w-32">Aksi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {usersLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Memuat data...</TableCell>
+                    </TableRow>
+                  ) : allUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Tidak ada pengguna.</TableCell>
+                    </TableRow>
+                  ) : (
+                    allUsers.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell>
+                          <p className="font-medium">{u.full_name}</p>
+                          <p className="text-xs text-muted-foreground">{u.email}</p>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{u.nim}</TableCell>
+                        <TableCell className="text-sm">{u.divisions?.name ?? "-"}</TableCell>
+                        <TableCell className="text-sm">{u.fakultas?.name ?? "-"}</TableCell>
+                        <TableCell className="text-sm">{u.jurusan?.name ?? "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant={u.status === "AKTIF" ? "success" : "secondary"}>{u.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={u.role}
+                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                            disabled={savingRole === u.id}
+                          >
+                            <option value="ANGGOTA">Anggota</option>
+                            <option value="KABID">Kabid</option>
+                            <option value="PENGURUS_INTI">Pengurus Inti</option>
+                            <option value="ADMIN">Admin</option>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {savingRole === u.id && <span className="text-xs text-muted-foreground">Menyimpan...</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           TAB 3: ORGANIZATION
+           ════════════════════════════════════════════════ */}
+      {activeTab === "organization" && (
         <Card>
           <CardHeader>
             <CardTitle>Informasi Organisasi</CardTitle>
+            <CardDescription>Konfigurasi data organisasi (hanya Admin)</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Nama Organisasi</label>
-              <Input defaultValue={orgSettings.name} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Deskripsi</label>
-              <Input defaultValue={orgSettings.description} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
-              <Input defaultValue={orgSettings.email} type="email" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Periode</label>
-              <Input defaultValue={orgSettings.period} />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Mode Pemeliharaan</p>
-                <p className="text-xs text-muted-foreground">Nonaktifkan akses pengguna</p>
-              </div>
-              <Badge variant={orgSettings.isMaintenance ? "destructive" : "success"}>
-                {orgSettings.isMaintenance ? "Aktif" : "Nonaktif"}
-              </Badge>
-            </div>
-            <Button>Simpan Perubahan</Button>
+          <CardContent>
+            {orgData ? (
+              <form onSubmit={handleOrgSubmit} className="space-y-4 max-w-lg">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orgName">Nama Organisasi <span className="text-red-500">*</span></label>
+                  <Input id="orgName" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+                  {orgErrors.org_name && <p className="text-sm text-red-500">{orgErrors.org_name}</p>}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orgDesc">Deskripsi</label>
+                  <Input id="orgDesc" value={orgDesc} onChange={(e) => setOrgDesc(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orgEmail">Email Organisasi</label>
+                  <Input id="orgEmail" type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="orgPeriod">Periode <span className="text-red-500">*</span></label>
+                  <Input id="orgPeriod" value={orgPeriod} onChange={(e) => setOrgPeriod(e.target.value)} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Mode Pemeliharaan</p>
+                    <p className="text-xs text-muted-foreground">Nonaktifkan akses pengguna biasa</p>
+                  </div>
+                  <button type="button" onClick={() => setOrgMaintenance(!orgMaintenance)}>
+                    <Badge variant={orgMaintenance ? "destructive" : "success"}>
+                      {orgMaintenance ? "Aktif" : "Nonaktif"}
+                    </Badge>
+                  </button>
+                </div>
+                {orgErrors._form && <p className="text-sm text-red-500 text-center">{orgErrors._form}</p>}
+                <Button type="submit" disabled={orgLoading}>{orgLoading ? "Menyimpan..." : "Simpan Perubahan"}</Button>
+              </form>
+            ) : (
+              <p className="text-muted-foreground">Memuat data...</p>
+            )}
           </CardContent>
         </Card>
+      )}
 
+      {/* ════════════════════════════════════════════════
+           TAB 3: DIVISIONS
+           ════════════════════════════════════════════════ */}
+      {activeTab === "divisions" && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Divisi</CardTitle>
-              <Button size="sm">+ Tambah Divisi</Button>
+              <div>
+                <CardTitle>Divisi</CardTitle>
+                <CardDescription>Kelola data divisi organisasi</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => openDivModal()}>+ Tambah Divisi</Button>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nama</TableHead>
-                  <TableHead>Anggota</TableHead>
-                  <TableHead className="w-12"></TableHead>
+                  <TableHead>Nama Divisi</TableHead>
+                  <TableHead>Deskripsi</TableHead>
+                  <TableHead className="w-24 text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {divisions.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{d.name}</p>
-                        <p className="text-xs text-muted-foreground">{d.description}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{d.members} orang</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon">...</Button>
+                {divisions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                      Belum ada divisi.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  divisions.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell className="font-medium">{d.name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{d.description}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="sm" onClick={() => openDivModal(d)}>Edit</Button>
+                          <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteDivision(d.id)}>Hapus</Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
-      </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           TAB 4: FAKULTAS & JURUSAN
+           ════════════════════════════════════════════════ */}
+      {activeTab === "fakultas-jurusan" && (
+        <div className="space-y-4">
+          {/* Sub-tab Fakultas / Jurusan */}
+          <div className="flex gap-1 border-b border-border">
+            <button onClick={() => setFjTab("fakultas")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${fjTab === "fakultas" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>Fakultas</button>
+            <button onClick={() => setFjTab("jurusan")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${fjTab === "jurusan" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>Jurusan</button>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>{fjTab === "fakultas" ? "Fakultas" : "Jurusan"}</CardTitle>
+                <Button size="sm" onClick={() => openFjModal()}>+ Tambah</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nama</TableHead>
+                    <TableHead>Deskripsi</TableHead>
+                    {fjTab === "jurusan" && <TableHead>Fakultas</TableHead>}
+                    <TableHead className="w-24 text-right">Aksi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(fjTab === "fakultas" ? fakultasList : jurusanList).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={fjTab === "jurusan" ? 4 : 3} className="text-center py-8 text-muted-foreground">
+                        Belum ada data.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    (fjTab === "fakultas" ? fakultasList : jurusanList).map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{item.description}</TableCell>
+                        {fjTab === "jurusan" && (
+                          <TableCell className="text-muted-foreground text-sm">
+                            {(item as typeof jurusanList[number]).fakultas?.name || "-"}
+                          </TableCell>
+                        )}
+                        <TableCell className="text-right">
+                          <div className="flex gap-1 justify-end">
+                            <Button variant="ghost" size="sm" onClick={() => openFjModal(item)}>Edit</Button>
+                            <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteFj(item.id)}>Hapus</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           MODAL: Tambah User
+           ════════════════════════════════════════════════ */}
+      {showTambahUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowTambahUser(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold">Tambah User</h3>
+              <button onClick={() => setShowTambahUser(false)} className="p-1 hover:bg-muted rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <form onSubmit={handleTambahUser} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Pilih Anggota <span className="text-red-500">*</span></label>
+                <Select value={tambahUserId} onChange={(e) => setTambahUserId(e.target.value)}>
+                  <option value="">-- Pilih anggota --</option>
+                  {allUsers
+                    .filter((u) => u.id !== user?.id)
+                    .sort((a, b) => a.full_name.localeCompare(b.full_name))
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.full_name} ({u.nim}) - {u.role}
+                      </option>
+                    ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Role <span className="text-red-500">*</span></label>
+                <Select value={tambahUserRole} onChange={(e) => setTambahUserRole(e.target.value)}>
+                  <option value="ANGGOTA">Anggota</option>
+                  <option value="KABID">Kabid</option>
+                  <option value="PENGURUS_INTI">Pengurus Inti</option>
+                  <option value="ADMIN">Admin</option>
+                </Select>
+              </div>
+              {tambahUserError && <p className="text-sm text-red-500 text-center">{tambahUserError}</p>}
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" disabled={tambahUserLoading} className="flex-1">
+                  {tambahUserLoading ? "Menyimpan..." : "Simpan"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowTambahUser(false)}>Batal</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           MODAL: Divisi / Fakultas / Jurusan
+           ════════════════════════════════════════════════ */}
+      {(showDivModal || showFjModal) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowDivModal(false); setShowFjModal(false); }} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-bold">
+                  {showDivModal
+                    ? (divEditId ? "Edit Divisi" : "Tambah Divisi")
+                    : (fjEditId ? `Edit ${fjTab === "fakultas" ? "Fakultas" : "Jurusan"}` : `Tambah ${fjTab === "fakultas" ? "Fakultas" : "Jurusan"}`)}
+                </h3>
+              </div>
+              <button onClick={() => { setShowDivModal(false); setShowFjModal(false); }} className="p-1 hover:bg-muted rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <form onSubmit={showDivModal ? handleDivSubmit : handleFjSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nama <span className="text-red-500">*</span></label>
+                <Input value={showDivModal ? divName : fjName} onChange={(e) => showDivModal ? setDivName(e.target.value) : setFjName(e.target.value)} />
+                {(showDivModal ? divErrors : fjErrors).name && <p className="text-sm text-red-500">{(showDivModal ? divErrors : fjErrors).name}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Deskripsi</label>
+                <Input value={showDivModal ? divDesc : fjDesc} onChange={(e) => showDivModal ? setDivDesc(e.target.value) : setFjDesc(e.target.value)} />
+              </div>
+              {showFjModal && fjTab === "jurusan" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fakultas</label>
+                  <Select value={fjFakultasId} onChange={(e) => setFjFakultasId(e.target.value)}>
+                    <option value="">Pilih fakultas</option>
+                    {fakultasList.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </Select>
+                  {fjErrors.fakultas_id && <p className="text-sm text-red-500">{fjErrors.fakultas_id}</p>}
+                </div>
+              )}
+              {(showDivModal ? divErrors : fjErrors)._form && (
+                <p className="text-sm text-red-500 text-center">{(showDivModal ? divErrors : fjErrors)._form}</p>
+              )}
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" disabled={showDivModal ? divLoading : fjLoading} className="flex-1">
+                  {(showDivModal ? divLoading : fjLoading) ? "Menyimpan..." : "Simpan"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => { setShowDivModal(false); setShowFjModal(false); }}>Batal</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

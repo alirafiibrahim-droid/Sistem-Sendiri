@@ -8,9 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isRoleAllowed } from "@/lib/authz";
 import { NextRequest } from "next/server";
-
-const PATCH_ADMIN_ROLES = ["ADMIN", "PENGURUS_INTI"];
 
 export async function GET(
   request: NextRequest,
@@ -32,7 +31,7 @@ export async function GET(
       .eq("id", id)
       .single();
 
-    if (!role || !PATCH_ADMIN_ROLES.includes(role)) {
+    if (!isRoleAllowed(role, ["PENGURUS_INTI", "KABID"])) {
       query = supabase
         .from("dues_payments")
         .select(
@@ -65,14 +64,14 @@ export async function PATCH(
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
-    const isAdmin = role && PATCH_ADMIN_ROLES.includes(role);
+    const isAdminUser = isRoleAllowed(role, ["PENGURUS_INTI"]);
 
     let baseQuery = supabase
       .from("dues_payments")
       .select("id, user_id, status")
       .eq("id", id);
 
-    if (!isAdmin) {
+    if (!isAdminUser) {
       baseQuery = baseQuery.eq("user_id", uid);
     }
 
@@ -82,7 +81,7 @@ export async function PATCH(
 
     const body = await request.json();
 
-    if (isAdmin) {
+    if (isAdminUser) {
       const { status, feedback, verified_by, verified_at, ...rest } = body;
       const updateData: Record<string, unknown> = { ...rest };
       if (status !== undefined) updateData.status = status;

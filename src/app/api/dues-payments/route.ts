@@ -3,16 +3,14 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isRoleAllowed } from "@/lib/authz";
 import { NextRequest } from "next/server";
-
-const VIEW_ROLES = ["ADMIN", "PENGURUS_INTI", "KABID"];
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +37,7 @@ export async function GET(request: NextRequest) {
         { count: "exact" }
       );
 
-    if (!role || !VIEW_ROLES.includes(role)) {
+    if (!isRoleAllowed(role, ["PENGURUS_INTI", "KABID"])) {
       query = query.eq("user_id", uid);
     }
 

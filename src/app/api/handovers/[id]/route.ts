@@ -9,6 +9,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin, requireRole } from "@/lib/authz";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -46,9 +47,8 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = await getUserRole(request);
-    if (!["ADMIN", "PENGURUS_INTI"].includes(role)) {
-      return apiForbidden();
-    }
+    const forbidden = requireRole(role, ["PENGURUS_INTI"]);
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const body = await request.json();
@@ -86,7 +86,7 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = await getUserRole(request);
-    if (role !== "ADMIN") return apiForbidden();
+    if (!isAdmin(role)) return apiForbidden();
 
     const { id } = await params;
 

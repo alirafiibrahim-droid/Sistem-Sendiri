@@ -803,13 +803,10 @@ CREATE POLICY "finances_select_all"
     TO authenticated
     USING (true);
 
-CREATE POLICY "finances_insert_admin_core"
+CREATE POLICY "finances_insert_all_roles"
     ON public.finances FOR INSERT
     TO authenticated
-    WITH CHECK (
-        (SELECT role FROM public.profiles WHERE id = auth.uid())
-        IN ('ADMIN', 'PENGURUS_INTI')
-    );
+    WITH CHECK (true);
 -- UPDATE & DELETE dicegah oleh trigger immutable (bagian 15)
 
 -- ----------------------------------------------------------------------------
@@ -1214,7 +1211,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-    INSERT INTO public.profiles (id, email, full_name, nim, role, division_id, phone_number, status)
+    INSERT INTO public.profiles (id, email, full_name, nim, role, division_id, phone_number, status, fakultas_id, jurusan_id)
     VALUES (
         new.id,
         new.email,
@@ -1223,7 +1220,9 @@ BEGIN
         COALESCE((new.raw_user_meta_data->>'role')::public.user_role, 'ANGGOTA'::public.user_role),
         NULLIF(new.raw_user_meta_data->>'division_id', '')::UUID,
         new.raw_user_meta_data->>'phone_number',
-        'AKTIF'::public.user_status
+        'AKTIF'::public.user_status,
+        NULLIF(new.raw_user_meta_data->>'fakultas_id', '')::UUID,
+        NULLIF(new.raw_user_meta_data->>'jurusan_id', '')::UUID
     );
     RETURN NEW;
 END;

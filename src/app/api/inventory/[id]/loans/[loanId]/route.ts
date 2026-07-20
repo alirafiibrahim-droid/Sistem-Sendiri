@@ -2,11 +2,13 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
+  apiForbidden,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 
 // PATCH /api/inventory/[id]/loans/[loanId] (approve/reject/return)
 export async function PATCH(
@@ -18,9 +20,8 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    if (!["ADMIN", "PENGURUS_INTI"].includes(userRole ?? "")) {
-      return apiUnauthorized();
-    }
+    const forbidden = requireRole(userRole, ["PENGURUS_INTI"]);
+    if (forbidden) return forbidden;
 
     const { id, loanId } = await params;
     const body = await request.json();

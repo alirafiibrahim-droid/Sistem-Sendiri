@@ -3,12 +3,12 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiForbidden,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 import type { PaginationParams } from "@/lib/types/api";
 
 // GET /api/profiles?page=1&limit=25&search=&role=&status=&division_id=&sort=full_name&order=asc
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from("profiles")
-      .select("*, divisions(id, name)", { count: "exact" });
+      .select("*, divisions(id, name), fakultas(id, name), jurusan(id, name)", { count: "exact" });
 
     if (search) {
       query = query.or(`full_name.ilike.%${search}%,nim.ilike.%${search}%`);
@@ -63,12 +63,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const role = getUserRole(request);
-    if (!role || !["ADMIN", "PENGURUS_INTI"].includes(role)) {
-      return apiForbidden();
-    }
+    const forbidden = requireRole(role, ["PENGURUS_INTI"]);
+    if (forbidden) return forbidden;
 
     const body = await request.json();
-    const { email, full_name, nim, phone_number, division_id, role: userRole } = body;
+    const { email, full_name, nim, phone_number, division_id, role: userRole, fakultas_id, jurusan_id } = body;
 
     if (!email || !full_name || !nim) {
       return apiBadRequest("Email, full_name, dan nim wajib diisi.");
@@ -96,6 +95,8 @@ export async function POST(request: Request) {
           phone_number,
           role: userRole || "ANGGOTA",
           division_id,
+          fakultas_id,
+          jurusan_id,
         },
       });
 

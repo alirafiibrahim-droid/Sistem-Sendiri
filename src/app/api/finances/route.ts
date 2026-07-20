@@ -3,16 +3,37 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiForbidden,
-  apiNotFound,
   apiBadRequest,
   apiInternalError,
   getUid,
-  getUserRole,
 } from "@/lib/api-response";
+import { financeFormSchema } from "@/lib/validations/finance";
 import { NextRequest } from "next/server";
+import type { FinanceWithDetails, Profile, Program } from "@/lib/types/database";
 
-const ALLOWED_ROLES = ["ADMIN", "PENGURUS_INTI", "KABID"];
+async function attachProfiles(
+  finances: FinanceWithDetails[],
+  supabase: Awaited<ReturnType<typeof createSupabaseServer>>
+): Promise<FinanceWithDetails[]> {
+  const userIds = [
+    ...new Set(finances.map((f) => f.created_by).filter(Boolean) as string[]),
+  ];
+  if (userIds.length === 0) return finances;
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    (profiles || []).map((p: Pick<Profile, "id" | "full_name">) => [p.id, p])
+  );
+
+  return finances.map((f) => ({
+    ...f,
+    profiles: f.created_by ? profileMap.get(f.created_by) || null : null,
+  }));
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("finances")
-      .select("*, profiles(id, full_name), programs(id, name)", { count: "exact" });
+      .select("*, programs(id, name)", { count: "exact" });
 
     if (type) query = query.eq("type", type);
     if (programId) query = query.eq("program_id", programId);
@@ -45,13 +66,16 @@ export async function GET(request: NextRequest) {
       .order(sort, { ascending: order === "asc" })
       .range(from, to);
 
-    if (error) return apiInternalError();
+    if (error) return apiInternalError(error.message);
 
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
 
-    return apiOk(data, { total, page, limit, totalPages });
-  } catch {
+    const result = await attachProfiles(data as FinanceWithDetails[], supabase);
+
+    return apiOk(result, { total, page, limit, totalPages });
+  } catch (e) {
+    console.error("FINANCES GET ERROR:", e);
     return apiInternalError();
   }
 }
@@ -61,15 +85,15 @@ export async function POST(request: NextRequest) {
     const uid = getUid(request);
     if (!uid) return apiUnauthorized();
 
-    const role = getUserRole(request);
-    if (!role || !ALLOWED_ROLES.includes(role)) return apiForbidden();
-
     const body = await request.json();
-    const { type, amount, description, date, program_id, receipt_url } = body;
 
-    if (!type || !amount || !description || !date) {
-      return apiBadRequest("Missing required fields");
+    const parsed = financeFormSchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
     }
+
+    const { type, amount, description, date, program_id, receipt_url } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
@@ -81,16 +105,22 @@ export async function POST(request: NextRequest) {
         description,
         date,
         program_id: program_id || null,
-        receipt_url: receipt_url || null,
+        receipt_url: receipt_url || "",
         created_by: uid,
       })
-      .select("*, profiles(id, full_name), programs(id, name)")
+      .select("*, programs(id, name)")
       .single();
 
-    if (error) return apiInternalError();
+    if (error) {
+      console.error("FINANCES INSERT ERROR:", error);
+      return apiInternalError(error.message);
+    }
 
-    return apiCreated(data);
-  } catch {
+    const result = (await attachProfiles([data as FinanceWithDetails], supabase))[0];
+
+    return apiCreated(result);
+  } catch (e) {
+    console.error("FINANCES POST ERROR:", e);
     return apiInternalError();
   }
 }

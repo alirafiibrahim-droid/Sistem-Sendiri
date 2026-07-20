@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Select } from "@/components/ui/select";
-import type { ProfileWithDivision, Division } from "@/lib/types/database";
+import type { ProfileWithDivision, Division, Fakultas, Jurusan } from "@/lib/types/database";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
@@ -47,6 +47,8 @@ export default function MemberDetailPage() {
 
   const [member, setMember] = useState<ProfileWithDivision | null>(null);
   const [divisions, setDivisions] = useState<Division[]>([]);
+  const [fakultasList, setFakultasList] = useState<Fakultas[]>([]);
+  const [jurusanList, setJurusanList] = useState<Jurusan[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -56,12 +58,16 @@ export default function MemberDetailPage() {
   const [status, setStatus] = useState("");
   const [divisionId, setDivisionId] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [fakultasId, setFakultasId] = useState("");
+  const [jurusanId, setJurusanId] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [{ data: memberData }, { data: divData }] = await Promise.all([
-      supabase.from("profiles").select("*, divisions(id, name)").eq("id", id).single(),
+    const [{ data: memberData }, { data: divData }, { data: fakData }, { data: jurData }] = await Promise.all([
+      supabase.from("profiles").select("*, divisions(id, name), fakultas(id, name), jurusan(id, name)").eq("id", id).single(),
       supabase.from("divisions").select("id, name, description, created_at, updated_at").order("name"),
+      supabase.from("fakultas").select("*").order("name"),
+      supabase.from("jurusan").select("*").order("name"),
     ]);
     if (memberData) {
       const m = memberData as ProfileWithDivision;
@@ -70,8 +76,12 @@ export default function MemberDetailPage() {
       setStatus(m.status);
       setDivisionId(m.division_id ?? "");
       setPhoneNumber(m.phone_number ?? "");
+      setFakultasId(m.fakultas_id ?? "");
+      setJurusanId(m.jurusan_id ?? "");
     }
     if (divData) setDivisions(divData as Division[]);
+    if (fakData) setFakultasList(fakData as Fakultas[]);
+    if (jurData) setJurusanList(jurData as Jurusan[]);
     setLoading(false);
   }, [supabase, id]);
 
@@ -90,6 +100,8 @@ export default function MemberDetailPage() {
         status,
         division_id: divisionId || null,
         phone_number: phoneNumber || null,
+        fakultas_id: fakultasId || null,
+        jurusan_id: jurusanId || null,
       })
       .eq("id", id);
 
@@ -149,6 +161,8 @@ export default function MemberDetailPage() {
             <div className="flex justify-between"><span className="text-muted-foreground">Email</span><span>{member.email}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">No. HP</span><span>{member.phone_number ?? "-"}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Divisi</span><span>{member.divisions?.name ?? "-"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Fakultas</span><span>{member.fakultas?.name ?? "-"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Jurusan</span><span>{member.jurusan?.name ?? "-"}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Bergabung</span><span>{new Date(member.joined_at).toLocaleDateString("id-ID")}</span></div>
           </CardContent>
         </Card>
@@ -186,6 +200,26 @@ export default function MemberDetailPage() {
                 <option value="">Tidak ada divisi</option>
                 {divisions.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Fakultas</label>
+              <Select value={fakultasId} onChange={(e) => { setFakultasId(e.target.value); setJurusanId(""); }}>
+                <option value="">Tidak ada fakultas</option>
+                {fakultasList.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Jurusan</label>
+              <Select value={jurusanId} onChange={(e) => setJurusanId(e.target.value)}>
+                <option value="">Tidak ada jurusan</option>
+                {jurusanList.filter((j) => !fakultasId || j.fakultas_id === fakultasId).map((j) => (
+                  <option key={j.id} value={j.id}>{j.name}</option>
                 ))}
               </Select>
             </div>

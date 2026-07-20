@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import type { Division } from "@/lib/types/database";
+import type { Division, Fakultas, Jurusan } from "@/lib/types/database";
 
 type FormErrors = Record<string, string>;
 
@@ -16,6 +16,8 @@ export default function NewMemberPage() {
   const supabase = createSupabaseClient();
 
   const [divisions, setDivisions] = useState<Division[]>([]);
+  const [fakultasList, setFakultasList] = useState<Fakultas[]>([]);
+  const [jurusanList, setJurusanList] = useState<Jurusan[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -24,7 +26,8 @@ export default function NewMemberPage() {
   const [nim, setNim] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [divisionId, setDivisionId] = useState("");
-  const [role, setRole] = useState("ANGGOTA");
+  const [fakultasId, setFakultasId] = useState("");
+  const [jurusanId, setJurusanId] = useState("");
 
   useEffect(() => {
     supabase
@@ -35,6 +38,17 @@ export default function NewMemberPage() {
         if (data) setDivisions(data);
       });
   }, [supabase]);
+
+  useEffect(() => {
+    fetch("/api/fakultas")
+      .then((r) => r.json())
+      .then((json) => { if (json.success) setFakultasList(json.data); });
+    fetch("/api/jurusan")
+      .then((r) => r.json())
+      .then((json) => { if (json.success) setJurusanList(json.data); });
+  }, []);
+
+  const filteredJurusan = jurusanList.filter((j) => !fakultasId || j.fakultas_id === fakultasId);
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
@@ -80,7 +94,9 @@ export default function NewMemberPage() {
         nim,
         phone_number: phoneNumber || null,
         division_id: divisionId || null,
-        role,
+        role: "ANGGOTA",
+        fakultas_id: fakultasId || null,
+        jurusan_id: jurusanId || null,
       }),
     });
 
@@ -155,7 +171,7 @@ export default function NewMemberPage() {
               </div>
             </div>
 
-            {/* No. HP & Divisi */}
+            {/* No. HP, Divisi, Fakultas, Jurusan */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="phone">
@@ -187,20 +203,37 @@ export default function NewMemberPage() {
               </div>
             </div>
 
-            {/* Role */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="role">
-                Role <span className="text-red-500">*</span>
-              </label>
-              <Select id="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="ANGGOTA">Anggota</option>
-                <option value="KABID">Kabid (Kepala Bidang)</option>
-                <option value="PENGURUS_INTI">Pengurus Inti</option>
-                <option value="ADMIN">Admin</option>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Role menentukan hak akses pengguna dalam sistem. Admin memiliki akses penuh.
-              </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="fakultas">
+                  Fakultas
+                </label>
+                <Select
+                  id="fakultas"
+                  value={fakultasId}
+                  onChange={(e) => { setFakultasId(e.target.value); setJurusanId(""); }}
+                >
+                  <option value="">Pilih fakultas</option>
+                  {fakultasList.map((f) => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="jurusan">
+                  Jurusan
+                </label>
+                <Select
+                  id="jurusan"
+                  value={jurusanId}
+                  onChange={(e) => setJurusanId(e.target.value)}
+                >
+                  <option value="">Pilih jurusan</option>
+                  {filteredJurusan.map((j) => (
+                    <option key={j.id} value={j.id}>{j.name}</option>
+                  ))}
+                </Select>
+              </div>
             </div>
 
             {errors._form && (

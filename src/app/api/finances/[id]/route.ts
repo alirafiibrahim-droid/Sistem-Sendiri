@@ -9,9 +9,33 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin, requireRole } from "@/lib/authz";
 import { NextRequest } from "next/server";
+import type { FinanceWithDetails, Profile } from "@/lib/types/database";
 
-const PATCH_ALLOWED_ROLES = ["ADMIN", "PENGURUS_INTI", "KABID"];
+async function attachProfiles(
+  finances: FinanceWithDetails[],
+  supabase: Awaited<ReturnType<typeof createSupabaseServer>>
+): Promise<FinanceWithDetails[]> {
+  const userIds = [
+    ...new Set(finances.map((f) => f.created_by).filter(Boolean) as string[]),
+  ];
+  if (userIds.length === 0) return finances;
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    (profiles || []).map((p: Pick<Profile, "id" | "full_name">) => [p.id, p])
+  );
+
+  return finances.map((f) => ({
+    ...f,
+    profiles: f.created_by ? profileMap.get(f.created_by) || null : null,
+  }));
+}
 
 export async function GET(
   request: NextRequest,
@@ -26,13 +50,15 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("finances")
-      .select("*, profiles(id, full_name), programs(id, name)")
+      .select("*, programs(id, name)")
       .eq("id", id)
       .single();
 
     if (error || !data) return apiNotFound();
 
-    return apiOk(data);
+    const result = (await attachProfiles([data as FinanceWithDetails], supabase))[0];
+
+    return apiOk(result);
   } catch {
     return apiInternalError();
   }
@@ -47,7 +73,8 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!role || !PATCH_ALLOWED_ROLES.includes(role)) return apiForbidden();
+    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
@@ -75,12 +102,14 @@ export async function PATCH(
       .from("finances")
       .update(updateData)
       .eq("id", id)
-      .select("*, profiles(id, full_name), programs(id, name)")
+      .select("*, programs(id, name)")
       .single();
 
     if (error) return apiInternalError();
 
-    return apiOk(data);
+    const result = (await attachProfiles([data as FinanceWithDetails], supabase))[0];
+
+    return apiOk(result);
   } catch {
     return apiInternalError();
   }
@@ -95,7 +124,7 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (role !== "ADMIN") return apiForbidden();
+    if (!isAdmin(role)) return apiForbidden();
 
     const { id } = await params;
     const supabase = await createSupabaseServer();

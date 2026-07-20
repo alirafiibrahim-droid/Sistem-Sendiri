@@ -274,3 +274,35 @@ export interface UpdateOrganizationSettingsRequest {
   period_year?: string;
   is_maintenance?: boolean;
 }
+
+export interface CreateDivisionRequest {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateDivisionRequest {
+  name?: string;
+  description?: string;
+}
+
+export interface CreateFakultasRequest {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateFakultasRequest {
+  name?: string;
+  description?: string;
+}
+
+export interface CreateJurusanRequest {
+  name: string;
+  description?: string;
+  fakultas_id?: string;
+}
+
+export interface UpdateJurusanRequest {
+  name?: string;
+  description?: string;
+  fakultas_id?: string;
+}

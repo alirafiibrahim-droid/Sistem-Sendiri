@@ -3,12 +3,12 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiForbidden,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 import type { PaginationParams } from "@/lib/types/api";
 
 // GET /api/programs/[id]/tasks?page=1&limit=25&search=&sort=&order=asc
@@ -68,9 +68,8 @@ export async function POST(
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    if (!["ADMIN", "PENGURUS_INTI", "KABID"].includes(userRole ?? "")) {
-      return apiForbidden();
-    }
+    const forbidden = requireRole(userRole, ["PENGURUS_INTI", "KABID"]);
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const body = await request.json();

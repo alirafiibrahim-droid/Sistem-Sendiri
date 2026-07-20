@@ -3,15 +3,13 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiForbidden,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 import { NextRequest } from "next/server";
-
-const ALLOWED_ROLES = ["ADMIN", "PENGURUS_INTI", "KABID", "coach"];
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,7 +54,10 @@ export async function POST(request: NextRequest) {
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    if (!ALLOWED_ROLES.includes(role)) return apiForbidden();
+    if (role !== "coach") {
+      const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+      if (forbidden) return forbidden;
+    }
 
     const body = await request.json();
     const { date, session_type, duration_minutes, intensity, athlete_ids } = body;

@@ -8,6 +8,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { requireRole } from "@/lib/authz";
 import type { PaginationParams } from "@/lib/types/api";
 
 // GET /api/inventory?page=1&limit=25&search=&category=&condition=
@@ -64,9 +65,8 @@ export async function POST(request: Request) {
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    if (!["ADMIN", "PENGURUS_INTI", "KABID"].includes(userRole ?? "")) {
-      return apiUnauthorized();
-    }
+    const forbidden = requireRole(userRole, ["PENGURUS_INTI", "KABID"]);
+    if (forbidden) return forbidden;
 
     const body = await request.json();
     const { name, category, stock, condition, location, description, photo_url } = body;

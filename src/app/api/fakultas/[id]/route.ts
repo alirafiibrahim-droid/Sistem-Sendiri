@@ -4,13 +4,14 @@ import {
   apiUnauthorized,
   apiForbidden,
   apiNotFound,
+  apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
 import { isAdmin, requireRole } from "@/lib/authz";
+import { fakultasFormSchema } from "@/lib/validations/settings";
 
-// GET /api/divisions/[id]
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -21,21 +22,14 @@ export async function GET(
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
-
-    const { data, error } = await supabase
-      .from("divisions")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (error || !data) return apiNotFound("Divisi");
+    const { data, error } = await supabase.from("fakultas").select("*").eq("id", id).single();
+    if (error || !data) return apiNotFound("Fakultas");
     return apiOk(data);
   } catch {
     return apiInternalError();
   }
 }
 
-// PATCH /api/divisions/[id]
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -47,23 +41,31 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const supabase = await createSupabaseServer();
+    const parsed = fakultasFormSchema.partial().safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
+    }
 
+    const supabase = await createSupabaseServer();
     const { data, error } = await supabase
-      .from("divisions")
-      .update(body)
+      .from("fakultas")
+      .update(parsed.data)
       .eq("id", id)
       .select()
       .single();
 
-    if (error) return apiInternalError(error.message);
+    if (error) {
+      if (error.code === "23505") return apiBadRequest("Nama fakultas sudah ada.");
+      return apiInternalError(error.message);
+    }
+
     return apiOk(data);
   } catch {
     return apiInternalError();
   }
 }
 
-// DELETE /api/divisions/[id] (Admin only)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -74,11 +76,9 @@ export async function DELETE(
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
-
-    const { error } = await supabase.from("divisions").delete().eq("id", id);
+    const { error } = await supabase.from("fakultas").delete().eq("id", id);
     if (error) return apiInternalError(error.message);
-
-    return apiOk({ message: "Divisi berhasil dihapus." });
+    return apiOk({ message: "Fakultas berhasil dihapus." });
   } catch {
     return apiInternalError();
   }

@@ -7,6 +7,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin } from "@/lib/authz";
 
 // GET /api/audit-logs?page=1&limit=25&target_table=&action=&sort=created_at&order=desc
 export async function GET(request: Request) {
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
     const uid = getUid(request);
     const userRole = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    if (userRole !== "ADMIN") return apiForbidden();
+    if (!isAdmin(userRole)) return apiForbidden();
 
     const { searchParams } = new URL(request.url);
     const page = Number(searchParams.get("page") || "1");

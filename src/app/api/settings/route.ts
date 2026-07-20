@@ -9,6 +9,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin } from "@/lib/authz";
 
 // GET /api/settings
 export async function GET(request: Request) {
@@ -37,7 +38,7 @@ export async function PATCH(request: Request) {
     const uid = getUid(request);
     const userRole = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    if (userRole !== "ADMIN") return apiForbidden();
+    if (!isAdmin(userRole)) return apiForbidden();
 
     const body = await request.json();
     const allowedFields = [

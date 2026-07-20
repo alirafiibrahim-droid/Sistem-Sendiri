@@ -107,6 +107,8 @@ export default function MembersPage() {
                 <TableHead>NIM</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Divisi</TableHead>
+                <TableHead>Fakultas</TableHead>
+                <TableHead>Jurusan</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>No. HP</TableHead>
                 <TableHead className="w-12"></TableHead>
@@ -115,13 +117,13 @@ export default function MembersPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                     Memuat data...
                   </TableCell>
                 </TableRow>
               ) : members.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                     Belum ada data anggota.
                   </TableCell>
                 </TableRow>
@@ -147,6 +149,8 @@ export default function MembersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>{m.divisions?.name ?? "-"}</TableCell>
+                    <TableCell className="text-sm">{m.fakultas?.name ?? "-"}</TableCell>
+                    <TableCell className="text-sm">{m.jurusan?.name ?? "-"}</TableCell>
                     <TableCell>
                       <Badge variant={statusVariant[m.status]}>{m.status}</Badge>
                     </TableCell>

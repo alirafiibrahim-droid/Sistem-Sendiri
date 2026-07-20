@@ -56,12 +56,16 @@ export interface Profile {
   phone_number: string | null;
   status: UserStatus;
   avatar_url: string | null;
+  fakultas_id: string | null;
+  jurusan_id: string | null;
   joined_at: string;
   updated_at: string;
 }
 
 export interface ProfileWithDivision extends Profile {
   divisions: Pick<Division, "id" | "name"> | null;
+  fakultas: Pick<Fakultas, "id" | "name"> | null;
+  jurusan: Pick<Jurusan, "id" | "name"> | null;
 }
 
 export interface OrganizationSettings {
@@ -73,6 +77,27 @@ export interface OrganizationSettings {
   period_year: string;
   is_maintenance: boolean;
   updated_at: string;
+}
+
+export interface Fakultas {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Jurusan {
+  id: string;
+  name: string;
+  description: string;
+  fakultas_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JurusanWithFakultas extends Jurusan {
+  fakultas: Pick<Fakultas, "id" | "name"> | null;
 }
 
 export interface AuditLog {

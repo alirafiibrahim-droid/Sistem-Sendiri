@@ -9,6 +9,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin, requireRole } from "@/lib/authz";
 
 export async function PATCH(
   request: NextRequest,
@@ -21,9 +22,8 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!["ADMIN", "PENGURUS_INTI", "KABID"].includes(role)) {
-      return apiForbidden();
-    }
+    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    if (forbidden) return forbidden;
 
     const { id, milestoneId } = await params;
     const body = await request.json();
@@ -81,7 +81,7 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (role !== "ADMIN") return apiForbidden();
+    if (!isAdmin(role)) return apiForbidden();
 
     const { id, milestoneId } = await params;
     const supabase = await createSupabaseServer();

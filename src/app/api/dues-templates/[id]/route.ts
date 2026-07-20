@@ -8,9 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin, requireRole } from "@/lib/authz";
 import { NextRequest } from "next/server";
-
-const PATCH_ALLOWED_ROLES = ["ADMIN", "PENGURUS_INTI"];
 
 export async function GET(
   request: NextRequest,
@@ -46,7 +45,8 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!role || !PATCH_ALLOWED_ROLES.includes(role)) return apiForbidden();
+    const forbidden = requireRole(role, ["PENGURUS_INTI"]);
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
@@ -91,7 +91,7 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (role !== "ADMIN") return apiForbidden();
+    if (!isAdmin(role)) return apiForbidden();
 
     const { id } = await params;
     const supabase = await createSupabaseServer();

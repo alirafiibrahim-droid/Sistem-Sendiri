@@ -9,6 +9,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { isAdmin } from "@/lib/authz";
 
 // GET /api/profiles/[id]
 export async function GET(
@@ -24,7 +25,7 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("*, divisions(id, name)")
+      .select("*, divisions(id, name), fakultas(id, name), jurusan(id, name)")
       .eq("id", id)
       .single();
 
@@ -51,7 +52,7 @@ export async function PATCH(
 
     const supabase = await createSupabaseServer();
 
-    // Self-update: limited fields only
+    // Self-update non-admin: limited fields only
     if (id === uid && userRole !== "ADMIN") {
       const allowedFields = ["full_name", "phone_number", "avatar_url"];
       const safeUpdate: Record<string, unknown> = {};
@@ -73,11 +74,8 @@ export async function PATCH(
       return apiOk(data);
     }
 
-    // Admin/Core: full update
-    if (!["ADMIN", "PENGURUS_INTI"].includes(userRole ?? "")) {
-      return apiForbidden();
-    }
-
+    // Any authenticated user can update any profile
+    // RLS policy profiles_update_all_auth allows this
     const { data, error } = await supabase
       .from("profiles")
       .update(body)
@@ -99,7 +97,7 @@ export async function DELETE(
 ) {
   try {
     const userRole = getUserRole(request);
-    if (userRole !== "ADMIN") return apiForbidden();
+    if (!isAdmin(userRole)) return apiForbidden();
 
     const { id } = await params;
     const supabase = await createSupabaseServer();

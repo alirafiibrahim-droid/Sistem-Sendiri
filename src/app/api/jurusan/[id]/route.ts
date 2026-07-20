@@ -3,15 +3,15 @@ import {
   apiOk,
   apiUnauthorized,
   apiForbidden,
-  apiBadRequest,
   apiNotFound,
+  apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
 import { isAdmin, requireRole } from "@/lib/authz";
+import { jurusanFormSchema } from "@/lib/validations/settings";
 
-// GET /api/inventory/[id]
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -22,85 +22,67 @@ export async function GET(
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
-
     const { data, error } = await supabase
-      .from("inventory_items")
-      .select("*")
+      .from("jurusan")
+      .select("*, fakultas(id, name)")
       .eq("id", id)
       .single();
-
-    if (error || !data) return apiNotFound("Barang tidak ditemukan.");
+    if (error || !data) return apiNotFound("Jurusan");
     return apiOk(data);
   } catch {
     return apiInternalError();
   }
 }
 
-// PATCH /api/inventory/[id] (Admin/Pengurus Inti)
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const uid = getUid(request);
-    if (!uid) return apiUnauthorized();
-
     const userRole = getUserRole(request);
     const forbidden = requireRole(userRole, ["PENGURUS_INTI"]);
     if (forbidden) return forbidden;
 
     const { id } = await params;
     const body = await request.json();
-    const { name, category, stock, condition, location, description, photo_url, is_active } = body;
-
-    const supabase = await createSupabaseServer();
-
-    const updateData: Record<string, unknown> = {};
-    if (name !== undefined) updateData.name = name;
-    if (category !== undefined) updateData.category = category;
-    if (stock !== undefined) updateData.stock = Number(stock);
-    if (condition !== undefined) updateData.condition = condition;
-    if (location !== undefined) updateData.location = location;
-    if (description !== undefined) updateData.description = description;
-    if (photo_url !== undefined) updateData.photo_url = photo_url || null;
-    if (is_active !== undefined) updateData.is_active = is_active;
-
-    if (Object.keys(updateData).length === 0) {
-      return apiBadRequest("Tidak ada data yang diperbarui.");
+    const parsed = jurusanFormSchema.partial().safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
     }
 
+    const supabase = await createSupabaseServer();
     const { data, error } = await supabase
-      .from("inventory_items")
-      .update(updateData)
+      .from("jurusan")
+      .update(parsed.data)
       .eq("id", id)
-      .select()
+      .select("*, fakultas(id, name)")
       .single();
 
-    if (error) return apiInternalError(error.message);
+    if (error) {
+      if (error.code === "23505") return apiBadRequest("Nama jurusan sudah ada.");
+      return apiInternalError(error.message);
+    }
+
     return apiOk(data);
   } catch {
     return apiInternalError();
   }
 }
 
-// DELETE /api/inventory/[id] (Admin only)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const uid = getUid(request);
-    if (!uid) return apiUnauthorized();
-
     const userRole = getUserRole(request);
     if (!isAdmin(userRole)) return apiForbidden();
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
-
-    const { error } = await supabase.from("inventory_items").delete().eq("id", id);
+    const { error } = await supabase.from("jurusan").delete().eq("id", id);
     if (error) return apiInternalError(error.message);
-    return apiOk(null);
+    return apiOk({ message: "Jurusan berhasil dihapus." });
   } catch {
     return apiInternalError();
   }
