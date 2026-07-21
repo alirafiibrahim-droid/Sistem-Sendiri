@@ -37,20 +37,25 @@ export function Sidebar() {
   const [userAvatar, setUserAvatar] = useState("");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user: u } }) => {
-      if (u) {
-        setUserEmail(u.email || "");
-        supabase.from("profiles").select("full_name, avatar_url").eq("id", u.id).single().then(({ data }) => {
-          if (data) {
-            setUserName(data.full_name);
-            setUserAvatar(data.avatar_url || "");
-          }
-        });
-      }
-    });
+    const fetchProfile = () => {
+      supabase.auth.getUser().then(({ data: { user: u } }) => {
+        if (u) {
+          setUserEmail(u.email || "");
+          supabase.from("profiles").select("full_name, avatar_url").eq("id", u.id).single().then(({ data }) => {
+            if (data) {
+              setUserName(data.full_name);
+              setUserAvatar(data.avatar_url || "");
+            }
+          });
+        }
+      });
+    };
+    fetchProfile();
     fetch("/api/settings").then((r) => r.json()).then((json) => {
       if (json.success && json.data) setOrgData(json.data);
     });
+    window.addEventListener("profile-updated", fetchProfile);
+    return () => window.removeEventListener("profile-updated", fetchProfile);
   }, [supabase]);
 
   return (

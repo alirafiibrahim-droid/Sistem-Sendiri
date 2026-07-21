@@ -484,6 +484,7 @@ export default function SettingsPage() {
       setProfileAvatarUrl(avatarUrl);
       setProfileAvatarPreview(avatarUrl);
       setProfileAvatarFile(null);
+      window.dispatchEvent(new Event("profile-updated"));
     }
     setProfileLoading(false);
   };
