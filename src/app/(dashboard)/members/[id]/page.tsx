@@ -145,6 +145,7 @@ export default function MemberDetailPage() {
         <CardContent className="pt-6">
           <div className="flex items-center gap-4">
             <Avatar
+              src={member.avatar_url}
               fallback={member.full_name.split(" ").map((n) => n[0]).join("")}
               className="h-16 w-16"
             />
