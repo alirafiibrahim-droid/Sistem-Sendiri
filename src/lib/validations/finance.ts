@@ -16,6 +16,8 @@ export const financeFormSchema = z.object({
   program_id: z.string().uuid("ID program tidak valid.").optional().or(z.literal("")),
   receipt_url: z.string().url("URL bukti harus valid.").optional().or(z.literal("")),
   wallet_id: z.string().uuid("ID dompet tidak valid.").optional().or(z.literal("")),
+  bank_id: z.string().uuid("ID bank tidak valid.").optional().or(z.literal("")),
+  cash_account_id: z.string().uuid("ID kas tidak valid.").optional().or(z.literal("")),
 });
 
 export type FinanceFormValues = z.infer<typeof financeFormSchema>;

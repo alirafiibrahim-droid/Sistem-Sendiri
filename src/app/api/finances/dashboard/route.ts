@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     // Fetch all finance transactions for balance calculation
     const { data: finances } = await supabase
       .from("finances")
-      .select("type, amount, wallet_id");
+      .select("type, amount, wallet_id, bank_id, cash_account_id");
 
     // Calculate balances
     let totalIncome = 0;
@@ -86,9 +86,9 @@ export async function GET(request: NextRequest) {
       let income = 0;
       let expense = 0;
 
-      // For unassigned transactions (no wallet_id) that belong to this bank's wallets
       for (const f of finances || []) {
-        if (f.wallet_id && walletIds.includes(f.wallet_id)) {
+        // Direct bank reference or via wallet
+        if (f.bank_id === b.id || (f.wallet_id && walletIds.includes(f.wallet_id))) {
           if (f.type === "INCOME") income += Number(f.amount);
           else expense += Number(f.amount);
         }
@@ -115,7 +115,8 @@ export async function GET(request: NextRequest) {
       let expense = 0;
 
       for (const f of finances || []) {
-        if (f.wallet_id && walletIds.includes(f.wallet_id)) {
+        // Direct cash reference or via wallet
+        if (f.cash_account_id === c.id || (f.wallet_id && walletIds.includes(f.wallet_id))) {
           if (f.type === "INCOME") income += Number(f.amount);
           else expense += Number(f.amount);
         }

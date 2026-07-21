@@ -50,7 +50,7 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("finances")
-      .select("*, programs(id, name), wallets(id, name)")
+      .select("*, programs(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
       .eq("id", id)
       .single();
 
@@ -88,7 +88,7 @@ export async function PATCH(
     if (!existing) return apiNotFound();
 
     const body = await request.json();
-    const { type, amount, description, date, program_id, receipt_url, wallet_id } = body;
+    const { type, amount, description, date, program_id, receipt_url, wallet_id, bank_id, cash_account_id } = body;
 
     const updateData: Record<string, unknown> = {};
     if (type !== undefined) updateData.type = type;
@@ -98,12 +98,14 @@ export async function PATCH(
     if (program_id !== undefined) updateData.program_id = program_id;
     if (receipt_url !== undefined) updateData.receipt_url = receipt_url;
     if (wallet_id !== undefined) updateData.wallet_id = wallet_id;
+    if (bank_id !== undefined) updateData.bank_id = bank_id;
+    if (cash_account_id !== undefined) updateData.cash_account_id = cash_account_id;
 
     const { data, error } = await supabase
       .from("finances")
       .update(updateData)
       .eq("id", id)
-      .select("*, programs(id, name), wallets(id, name)")
+      .select("*, programs(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
       .single();
 
     if (error) return apiInternalError();

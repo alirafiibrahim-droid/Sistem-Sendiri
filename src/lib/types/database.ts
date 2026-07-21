@@ -209,6 +209,8 @@ export interface Finance {
   program_id: string | null;
   receipt_url: string;
   wallet_id: string | null;
+  bank_id: string | null;
+  cash_account_id: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -217,6 +219,8 @@ export interface FinanceWithDetails extends Finance {
   profiles: Pick<Profile, "id" | "full_name"> | null;
   programs: Pick<Program, "id" | "name"> | null;
   wallets: Pick<Wallet, "id" | "name"> | null;
+  banks: Pick<Bank, "id" | "name"> | null;
+  cash_accounts: Pick<CashAccount, "id" | "name"> | null;
 }
 
 export interface DuesTemplate {

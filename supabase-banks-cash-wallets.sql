@@ -52,10 +52,16 @@ CREATE TABLE IF NOT EXISTS public.wallets (
 COMMENT ON TABLE public.wallets IS 'Dompet/dompet digital dalam satu rekening bank atau kas tunai';
 
 -- ----------------------------------------------------------------------------
--- 4. ALTER FINANCES: tambahkan wallet_id
+-- 4. ALTER FINANCES: tambahkan wallet_id, bank_id, cash_account_id
 -- ----------------------------------------------------------------------------
 ALTER TABLE public.finances
     ADD COLUMN IF NOT EXISTS wallet_id UUID REFERENCES public.wallets(id) ON DELETE SET NULL;
+
+ALTER TABLE public.finances
+    ADD COLUMN IF NOT EXISTS bank_id UUID REFERENCES public.banks(id) ON DELETE SET NULL;
+
+ALTER TABLE public.finances
+    ADD COLUMN IF NOT EXISTS cash_account_id UUID REFERENCES public.cash_accounts(id) ON DELETE SET NULL;
 
 -- ----------------------------------------------------------------------------
 -- 5. INDEXES
@@ -63,6 +69,8 @@ ALTER TABLE public.finances
 CREATE INDEX IF NOT EXISTS idx_wallets_bank ON public.wallets(bank_id);
 CREATE INDEX IF NOT EXISTS idx_wallets_cash ON public.wallets(cash_account_id);
 CREATE INDEX IF NOT EXISTS idx_finances_wallet ON public.finances(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_finances_bank ON public.finances(bank_id);
+CREATE INDEX IF NOT EXISTS idx_finances_cash ON public.finances(cash_account_id);
 
 -- ----------------------------------------------------------------------------
 -- 6. RLS: Enable RLS

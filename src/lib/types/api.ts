@@ -136,6 +136,8 @@ export interface CreateFinanceRequest {
   program_id?: string;
   receipt_url: string;
   wallet_id?: string;
+  bank_id?: string;
+  cash_account_id?: string;
 }
 
 // Dues Types

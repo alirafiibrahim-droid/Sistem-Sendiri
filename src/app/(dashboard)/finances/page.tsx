@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { financeFormSchema } from "@/lib/validations/finance";
-import type { FinanceWithDetails, Program, WalletWithOwner } from "@/lib/types/database";
+import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
@@ -119,6 +119,8 @@ export default function FinancesPage() {
   // Dropdown data
   const [programs, setPrograms] = useState<Pick<Program, "id" | "name">[]>([]);
   const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
+  const [banksList, setBanksList] = useState<Pick<Bank, "id" | "name" | "account_number">[]>([]);
+  const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
 
   // Dashboard data
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -170,6 +172,16 @@ export default function FinancesPage() {
       });
   }, []);
 
+  // Fetch banks & cash for dropdown
+  useEffect(() => {
+    Promise.all([fetch("/api/banks"), fetch("/api/cash")]).then(([bRes, cRes]) =>
+      Promise.all([bRes.json(), cRes.json()]).then(([bJson, cJson]) => {
+        if (bJson.success) setBanksList(bJson.data);
+        if (cJson.success) setCashList(cJson.data);
+      })
+    );
+  }, []);
+
   // Fetch dashboard data
   const fetchDashboard = useCallback(async () => {
     const res = await fetch("/api/finances/dashboard");
@@ -219,6 +231,18 @@ export default function FinancesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Parse wallet_id: could be a UUID (wallet), "bank:UUID", or "cash:UUID"
+    let walletId = "";
+    let bankId = "";
+    let cashAccountId = "";
+    if (formWalletId.startsWith("bank:")) {
+      bankId = formWalletId.replace("bank:", "");
+    } else if (formWalletId.startsWith("cash:")) {
+      cashAccountId = formWalletId.replace("cash:", "");
+    } else if (formWalletId) {
+      walletId = formWalletId;
+    }
+
     const result = financeFormSchema.safeParse({
       type: formType,
       amount: formAmount,
@@ -226,7 +250,9 @@ export default function FinancesPage() {
       date: formDate,
       program_id: formProgramId || undefined,
       receipt_url: formReceiptUrl || undefined,
-      wallet_id: formWalletId || undefined,
+      wallet_id: walletId || undefined,
+      bank_id: bankId || undefined,
+      cash_account_id: cashAccountId || undefined,
     });
 
     if (!result.success) {
@@ -252,7 +278,9 @@ export default function FinancesPage() {
         date: formDate,
         program_id: formProgramId || undefined,
         receipt_url: formReceiptUrl || undefined,
-        wallet_id: formWalletId || undefined,
+        wallet_id: walletId || undefined,
+        bank_id: bankId || undefined,
+        cash_account_id: cashAccountId || undefined,
       }),
     });
 
@@ -506,7 +534,7 @@ export default function FinancesPage() {
                       {t.description}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {t.wallets?.name || "-"}
+                      {t.wallets?.name || t.banks?.name || t.cash_accounts?.name || "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {t.programs?.name || "-"}
@@ -699,11 +727,33 @@ export default function FinancesPage() {
                     onChange={(e) => setFormWalletId(e.target.value)}
                   >
                     <option value="">Tanpa dompet tertentu</option>
-                    {walletsList.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})
-                      </option>
-                    ))}
+                    {banksList.length > 0 && (
+                      <optgroup label="Bank (Tanpa Dompet)">
+                        {banksList.map((b) => (
+                          <option key={`bank-${b.id}`} value={`bank:${b.id}`}>
+                            {b.name} - {b.account_number}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {cashList.length > 0 && (
+                      <optgroup label="Kas (Tanpa Dompet)">
+                        {cashList.map((c) => (
+                          <option key={`cash-${c.id}`} value={`cash:${c.id}`}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {walletsList.length > 0 && (
+                      <optgroup label="Dompet">
+                        {walletsList.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </Select>
                   {errors.wallet_id && (
                     <p className="text-sm text-red-500">{errors.wallet_id}</p>
