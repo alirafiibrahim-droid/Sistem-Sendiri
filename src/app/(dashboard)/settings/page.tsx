@@ -22,10 +22,10 @@ import type { OrganizationSettings, Division, Fakultas, Jurusan, Profile, Profil
 type FormErrors = Record<string, string>;
 type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan" | "kas-bank" | "dompet";
 
-const tabs: { id: TabId; label: string }[] = [
+const allTabs: { id: TabId; label: string; adminOnly?: boolean }[] = [
   { id: "profile", label: "Profile Saya" },
-  { id: "pengaturan-user", label: "Pengaturan User" },
-  { id: "organization", label: "Organisasi" },
+  { id: "pengaturan-user", label: "Pengaturan User", adminOnly: true },
+  { id: "organization", label: "Organisasi", adminOnly: true },
   { id: "divisions", label: "Divisi" },
   { id: "fakultas-jurusan", label: "Fakultas & Jurusan" },
   { id: "kas-bank", label: "Kas & Bank" },
@@ -156,11 +156,14 @@ export default function SettingsPage() {
             setProfilePhone(data.phone_number || "");
             setProfileAvatarUrl(data.avatar_url || "");
             setProfileAvatarPreview(data.avatar_url || "");
+            if (data.role !== "ADMIN" && (activeTab === "organization" || activeTab === "pengaturan-user")) {
+              setActiveTab("profile");
+            }
           }
         });
       }
     });
-  }, [supabase]);
+  }, [supabase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Fetch All Users (for Pengaturan User) ───
   const fetchAllUsers = useCallback(async () => {
@@ -680,19 +683,21 @@ export default function SettingsPage() {
 
       {/* ─── Tab Navigation ─── */}
       <div className="flex gap-1 border-b border-border">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.id
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {allTabs
+          .filter((tab) => !tab.adminOnly || user?.role === "ADMIN")
+          .map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
       </div>
 
       {/* ════════════════════════════════════════════════
@@ -886,7 +891,9 @@ export default function SettingsPage() {
             <CardDescription>Konfigurasi data organisasi (hanya Admin)</CardDescription>
           </CardHeader>
           <CardContent>
-            {orgData ? (
+            {user?.role !== "ADMIN" ? (
+              <p className="text-muted-foreground text-center py-8">Anda tidak memiliki akses untuk mengubah pengaturan organisasi.</p>
+            ) : orgData ? (
               <form onSubmit={handleOrgSubmit} className="space-y-4 max-w-lg">
                 {/* Logo Upload */}
                 <div className="flex items-start gap-6">
