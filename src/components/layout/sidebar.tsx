@@ -50,12 +50,19 @@ export function Sidebar() {
         }
       });
     };
+    const fetchOrg = () => {
+      fetch("/api/settings").then((r) => r.json()).then((json) => {
+        if (json.success && json.data) setOrgData(json.data);
+      });
+    };
     fetchProfile();
-    fetch("/api/settings").then((r) => r.json()).then((json) => {
-      if (json.success && json.data) setOrgData(json.data);
-    });
+    fetchOrg();
     window.addEventListener("profile-updated", fetchProfile);
-    return () => window.removeEventListener("profile-updated", fetchProfile);
+    window.addEventListener("org-settings-updated", fetchOrg);
+    return () => {
+      window.removeEventListener("profile-updated", fetchProfile);
+      window.removeEventListener("org-settings-updated", fetchOrg);
+    };
   }, [supabase]);
 
   return (

@@ -543,6 +543,7 @@ export default function SettingsPage() {
       setOrgData(json.data);
       setOrgLogoPreview(logoUrl);
       setOrgLogoFile(null);
+      window.dispatchEvent(new Event("org-settings-updated"));
     }
     setOrgLoading(false);
   };
