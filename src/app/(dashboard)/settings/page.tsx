@@ -53,6 +53,8 @@ export default function SettingsPage() {
   const [orgEmail, setOrgEmail] = useState("");
   const [orgPeriod, setOrgPeriod] = useState("");
   const [orgMaintenance, setOrgMaintenance] = useState(false);
+  const [orgLogoFile, setOrgLogoFile] = useState<File | null>(null);
+  const [orgLogoPreview, setOrgLogoPreview] = useState("");
   const [orgErrors, setOrgErrors] = useState<FormErrors>({});
   const [orgLoading, setOrgLoading] = useState(false);
 
@@ -200,6 +202,7 @@ export default function SettingsPage() {
       setOrgEmail(json.data.org_email || "");
       setOrgPeriod(json.data.period_year);
       setOrgMaintenance(json.data.is_maintenance);
+      setOrgLogoPreview(json.data.org_logo_url || "");
     }
   }, []);
 
@@ -503,14 +506,39 @@ export default function SettingsPage() {
     }
     setOrgErrors({});
     setOrgLoading(true);
+
+    let logoUrl = orgData?.org_logo_url || "";
+
+    // Upload logo if file selected
+    if (orgLogoFile) {
+      const ext = orgLogoFile.name.split(".").pop();
+      const filePath = `org/logo.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, orgLogoFile, { upsert: true });
+
+      if (uploadError) {
+        setOrgErrors({ _form: "Gagal upload logo: " + uploadError.message });
+        setOrgLoading(false);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      logoUrl = urlData.publicUrl;
+    }
+
     const res = await fetch("/api/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(parsed.data),
+      body: JSON.stringify({ ...parsed.data, org_logo_url: logoUrl || null }),
     });
     const json = await res.json();
     if (!json.success) {
       setOrgErrors({ _form: json.error?.message || "Gagal menyimpan." });
+    } else {
+      setOrgData(json.data);
+      setOrgLogoPreview(logoUrl);
+      setOrgLogoFile(null);
     }
     setOrgLoading(false);
   };
@@ -860,33 +888,68 @@ export default function SettingsPage() {
           <CardContent>
             {orgData ? (
               <form onSubmit={handleOrgSubmit} className="space-y-4 max-w-lg">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="orgName">Nama Organisasi <span className="text-red-500">*</span></label>
-                  <Input id="orgName" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
-                  {orgErrors.org_name && <p className="text-sm text-red-500">{orgErrors.org_name}</p>}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="orgDesc">Deskripsi</label>
-                  <Input id="orgDesc" value={orgDesc} onChange={(e) => setOrgDesc(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="orgEmail">Email Organisasi</label>
-                  <Input id="orgEmail" type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="orgPeriod">Periode <span className="text-red-500">*</span></label>
-                  <Input id="orgPeriod" value={orgPeriod} onChange={(e) => setOrgPeriod(e.target.value)} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Mode Pemeliharaan</p>
-                    <p className="text-xs text-muted-foreground">Nonaktifkan akses pengguna biasa</p>
+                {/* Logo Upload */}
+                <div className="flex items-start gap-6">
+                  <div className="shrink-0">
+                    {orgLogoPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={orgLogoPreview} alt="Logo Organisasi" className="h-20 w-20 rounded-xl object-cover border" />
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-muted text-2xl font-bold text-muted-foreground border">
+                        {orgName ? orgName.charAt(0).toUpperCase() : "O"}
+                      </div>
+                    )}
                   </div>
-                  <button type="button" onClick={() => setOrgMaintenance(!orgMaintenance)}>
-                    <Badge variant={orgMaintenance ? "destructive" : "success"}>
-                      {orgMaintenance ? "Aktif" : "Nonaktif"}
-                    </Badge>
-                  </button>
+                  <div className="flex-1 space-y-2">
+                    <label className="text-sm font-medium">Logo Organisasi</label>
+                    <p className="text-xs text-muted-foreground">Format: PNG, JPG, atau WebP. Tanpa batas ukuran file.</p>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setOrgLogoFile(file);
+                          setOrgLogoPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                    />
+                    {orgLogoFile && (
+                      <p className="text-xs text-muted-foreground">{orgLogoFile.name}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orgName">Nama Organisasi <span className="text-red-500">*</span></label>
+                    <Input id="orgName" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+                    {orgErrors.org_name && <p className="text-sm text-red-500">{orgErrors.org_name}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orgDesc">Deskripsi</label>
+                    <Input id="orgDesc" value={orgDesc} onChange={(e) => setOrgDesc(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orgEmail">Email Organisasi</label>
+                    <Input id="orgEmail" type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orgPeriod">Periode <span className="text-red-500">*</span></label>
+                    <Input id="orgPeriod" value={orgPeriod} onChange={(e) => setOrgPeriod(e.target.value)} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Mode Pemeliharaan</p>
+                      <p className="text-xs text-muted-foreground">Nonaktifkan akses pengguna biasa</p>
+                    </div>
+                    <button type="button" onClick={() => setOrgMaintenance(!orgMaintenance)}>
+                      <Badge variant={orgMaintenance ? "destructive" : "success"}>
+                        {orgMaintenance ? "Aktif" : "Nonaktif"}
+                      </Badge>
+                    </button>
+                  </div>
                 </div>
                 {orgErrors._form && <p className="text-sm text-red-500 text-center">{orgErrors._form}</p>}
                 <Button type="submit" disabled={orgLoading}>{orgLoading ? "Menyimpan..." : "Simpan Perubahan"}</Button>

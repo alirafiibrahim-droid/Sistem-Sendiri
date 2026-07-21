@@ -1,8 +1,12 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/ui/avatar";
+import type { OrganizationSettings } from "@/lib/types/database";
 
 interface NavItem {
   label: string;
@@ -26,15 +30,42 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const supabase = createSupabaseClient();
+  const [orgData, setOrgData] = useState<OrganizationSettings | null>(null);
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userAvatar, setUserAvatar] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (u) {
+        setUserEmail(u.email || "");
+        supabase.from("profiles").select("full_name, avatar_url").eq("id", u.id).single().then(({ data }) => {
+          if (data) {
+            setUserName(data.full_name);
+            setUserAvatar(data.avatar_url || "");
+          }
+        });
+      }
+    });
+    fetch("/api/settings").then((r) => r.json()).then((json) => {
+      if (json.success && json.data) setOrgData(json.data);
+    });
+  }, [supabase]);
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r bg-sidebar-bg text-sidebar-foreground">
       <div className="flex h-14 items-center border-b border-sidebar-border px-4">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-            S
-          </div>
-          <span className="font-semibold text-lg">SIORG</span>
+          {orgData?.org_logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={orgData.org_logo_url} alt="Logo" className="h-8 w-8 rounded-lg object-cover" />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
+              S
+            </div>
+          )}
+          <span className="font-semibold text-lg">{orgData?.org_name || "SIORG"}</span>
         </Link>
       </div>
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
@@ -62,12 +93,15 @@ export function Sidebar() {
       </nav>
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-primary text-sm font-medium">
-            A
-          </div>
+          <Avatar
+            src={userAvatar}
+            alt={userName}
+            fallback={userName ? userName.charAt(0).toUpperCase() : "?"}
+            className="h-9 w-9 text-sm"
+          />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">Admin</p>
-            <p className="text-xs text-sidebar-foreground/50 truncate">admin@siorg.ac.id</p>
+            <p className="text-sm font-medium truncate">{userName || "Memuat..."}</p>
+            <p className="text-xs text-sidebar-foreground/50 truncate">{userEmail}</p>
           </div>
         </div>
       </div>
