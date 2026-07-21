@@ -13,14 +13,22 @@ import type { ProfileWithDivision, Division, Fakultas, Jurusan } from "@/lib/typ
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
+  KETUA_UMUM: "Ketua Umum",
+  WAKIL_KETUA: "Wakil Ketua",
   PENGURUS_INTI: "Pengurus Inti",
+  SEKRETARIS: "Sekretaris",
+  BENDAHARA: "Bendahara",
   KABID: "Kabid",
   ANGGOTA: "Anggota",
 };
 
 const roleBadgeVariant: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
   ADMIN: "destructive",
+  KETUA_UMUM: "destructive",
+  WAKIL_KETUA: "default",
   PENGURUS_INTI: "default",
+  SEKRETARIS: "success",
+  BENDAHARA: "success",
   KABID: "warning",
   ANGGOTA: "secondary",
 };
@@ -176,11 +184,15 @@ export default function MemberDetailPage() {
               <Select value={role} onChange={(e) => setRole(e.target.value)}>
                 <option value="ANGGOTA">Anggota</option>
                 <option value="KABID">Kabid (Kepala Bidang)</option>
+                <option value="BENDAHARA">Bendahara</option>
+                <option value="SEKRETARIS">Sekretaris</option>
                 <option value="PENGURUS_INTI">Pengurus Inti</option>
+                <option value="WAKIL_KETUA">Wakil Ketua</option>
+                <option value="KETUA_UMUM">Ketua Umum</option>
                 <option value="ADMIN">Admin</option>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Admin: akses penuh. Pengurus Inti: CRUD & approval. Kabid: kelola divisi. Anggota: akses terbatas.
+                Admin: akses penuh. Ketua Umum & Wakil: pengawasan. Pengurus Inti, Sekretaris & Bendahara: CRUD & approval. Kabid: kelola divisi. Anggota: akses terbatas.
               </p>
             </div>
 

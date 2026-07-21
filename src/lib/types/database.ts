@@ -3,7 +3,7 @@
 // Auto-generated type definitions matching schema.sql
 // ============================================================================
 
-export type UserRole = "ADMIN" | "PENGURUS_INTI" | "KABID" | "ANGGOTA";
+export type UserRole = "ADMIN" | "KETUA_UMUM" | "WAKIL_KETUA" | "PENGURUS_INTI" | "SEKRETARIS" | "BENDAHARA" | "KABID" | "ANGGOTA";
 export type UserStatus = "AKTIF" | "CUTI" | "ALUMNI" | "NONAKTIF";
 
 export type ProgramStatus = "PLANNED" | "ONGOING" | "COMPLETED" | "CANCELLED";

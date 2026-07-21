@@ -21,14 +21,22 @@ import type { ProfileWithDivision } from "@/lib/types/database";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
+  KETUA_UMUM: "Ketua Umum",
+  WAKIL_KETUA: "Wakil Ketua",
   PENGURUS_INTI: "Pengurus Inti",
+  SEKRETARIS: "Sekretaris",
+  BENDAHARA: "Bendahara",
   KABID: "Kabid",
   ANGGOTA: "Anggota",
 };
 
 const roleBadgeVariant: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
   ADMIN: "destructive",
+  KETUA_UMUM: "destructive",
+  WAKIL_KETUA: "default",
   PENGURUS_INTI: "default",
+  SEKRETARIS: "success",
+  BENDAHARA: "success",
   KABID: "warning",
   ANGGOTA: "secondary",
 };
@@ -92,7 +100,11 @@ export default function MembersPage() {
         <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
           <option value="ALL">Semua Role</option>
           <option value="ADMIN">Admin</option>
+          <option value="KETUA_UMUM">Ketua Umum</option>
+          <option value="WAKIL_KETUA">Wakil Ketua</option>
           <option value="PENGURUS_INTI">Pengurus Inti</option>
+          <option value="SEKRETARIS">Sekretaris</option>
+          <option value="BENDAHARA">Bendahara</option>
           <option value="KABID">Kabid</option>
           <option value="ANGGOTA">Anggota</option>
         </Select>

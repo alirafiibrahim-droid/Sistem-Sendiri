@@ -753,7 +753,11 @@ export default function SettingsPage() {
                           >
                             <option value="ANGGOTA">Anggota</option>
                             <option value="KABID">Kabid</option>
+                            <option value="BENDAHARA">Bendahara</option>
+                            <option value="SEKRETARIS">Sekretaris</option>
                             <option value="PENGURUS_INTI">Pengurus Inti</option>
+                            <option value="WAKIL_KETUA">Wakil Ketua</option>
+                            <option value="KETUA_UMUM">Ketua Umum</option>
                             <option value="ADMIN">Admin</option>
                           </Select>
                         </TableCell>
@@ -1095,7 +1099,11 @@ export default function SettingsPage() {
                 <Select value={tambahUserRole} onChange={(e) => setTambahUserRole(e.target.value)}>
                   <option value="ANGGOTA">Anggota</option>
                   <option value="KABID">Kabid</option>
+                  <option value="BENDAHARA">Bendahara</option>
+                  <option value="SEKRETARIS">Sekretaris</option>
                   <option value="PENGURUS_INTI">Pengurus Inti</option>
+                  <option value="WAKIL_KETUA">Wakil Ketua</option>
+                  <option value="KETUA_UMUM">Ketua Umum</option>
                   <option value="ADMIN">Admin</option>
                 </Select>
               </div>
