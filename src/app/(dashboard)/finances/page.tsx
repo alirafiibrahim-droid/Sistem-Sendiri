@@ -16,10 +16,62 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { financeFormSchema } from "@/lib/validations/finance";
-import type { FinanceWithDetails, Program } from "@/lib/types/database";
+import type { FinanceWithDetails, Program, WalletWithOwner } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
+
+interface DashboardData {
+  total_income: number;
+  total_expense: number;
+  total_balance: number;
+  banks: Array<{
+    bank_id: string;
+    bank_name: string;
+    account_number: string;
+    account_holder: string;
+    income: number;
+    expense: number;
+    balance: number;
+    wallets: Array<{
+      wallet_id: string;
+      wallet_name: string;
+      bank_id: string;
+      cash_account_id: string | null;
+      is_active: boolean;
+      income: number;
+      expense: number;
+      balance: number;
+    }>;
+  }>;
+  cash_accounts: Array<{
+    cash_account_id: string;
+    cash_account_name: string;
+    income: number;
+    expense: number;
+    balance: number;
+    wallets: Array<{
+      wallet_id: string;
+      wallet_name: string;
+      bank_id: string | null;
+      cash_account_id: string;
+      is_active: boolean;
+      income: number;
+      expense: number;
+      balance: number;
+    }>;
+  }>;
+  wallets: Array<{
+    wallet_id: string;
+    wallet_name: string;
+    bank_id: string | null;
+    cash_account_id: string | null;
+    is_active: boolean;
+    income: number;
+    expense: number;
+    balance: number;
+  }>;
+}
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -62,9 +114,18 @@ export default function FinancesPage() {
   );
   const [formProgramId, setFormProgramId] = useState("");
   const [formReceiptUrl, setFormReceiptUrl] = useState("");
+  const [formWalletId, setFormWalletId] = useState("");
 
-  // Programs for dropdown
+  // Dropdown data
   const [programs, setPrograms] = useState<Pick<Program, "id" | "name">[]>([]);
+  const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
+
+  // Dashboard data
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+
+  // Hierarchical filter state
+  const [filterBankCash, setFilterBankCash] = useState("");
+  const [filterWalletId, setFilterWalletId] = useState("");
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
@@ -74,6 +135,7 @@ export default function FinancesPage() {
     });
     if (search) params.set("search", search);
     if (filterType) params.set("type", filterType);
+    if (filterWalletId) params.set("wallet_id", filterWalletId);
 
     const res = await fetch(`/api/finances?${params}`);
     const json = await res.json();
@@ -83,7 +145,7 @@ export default function FinancesPage() {
       setMeta(json.meta);
     }
     setLoading(false);
-  }, [page, search, filterType]);
+  }, [page, search, filterType, filterWalletId]);
 
   useEffect(() => {
     fetchTransactions();
@@ -99,35 +161,44 @@ export default function FinancesPage() {
       });
   }, [supabase]);
 
-  // Summary from all data (fetch without pagination for totals)
-  const [summary, setSummary] = useState({ income: 0, expense: 0 });
+  // Fetch wallets for dropdown
+  useEffect(() => {
+    fetch("/api/wallets")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) setWalletsList(json.data);
+      });
+  }, []);
+
+  // Fetch dashboard data
+  const fetchDashboard = useCallback(async () => {
+    const res = await fetch("/api/finances/dashboard");
+    const json = await res.json();
+    if (json.success) setDashboard(json.data);
+  }, []);
 
   useEffect(() => {
-    const fetchSummary = async () => {
-      const [incRes, expRes] = await Promise.all([
-        fetch("/api/finances?limit=9999&type=INCOME"),
-        fetch("/api/finances?limit=9999&type=EXPENSE"),
-      ]);
-      const incJson = await incRes.json();
-      const expJson = await expRes.json();
+    fetchDashboard();
+  }, [fetchDashboard]);
 
-      const income = incJson.success
-        ? incJson.data.reduce(
-            (s: number, t: FinanceWithDetails) => s + Number(t.amount),
-            0
-          )
-        : 0;
-      const expense = expJson.success
-        ? expJson.data.reduce(
-            (s: number, t: FinanceWithDetails) => s + Number(t.amount),
-            0
-          )
-        : 0;
+  // Get available wallets based on hierarchical filter
+  const availableWallets = filterBankCash
+    ? walletsList.filter(
+        (w) => w.bank_id === filterBankCash || w.cash_account_id === filterBankCash
+      )
+    : walletsList;
 
-      setSummary({ income, expense });
-    };
-    fetchSummary();
-  }, []);
+  // Build label for bank/cash selector
+  const bankCashOptions = [
+    ...(dashboard?.banks.map((b) => ({
+      id: b.bank_id,
+      label: `Bank: ${b.bank_name}`,
+    })) || []),
+    ...(dashboard?.cash_accounts.map((c) => ({
+      id: c.cash_account_id,
+      label: `Kas: ${c.cash_account_name}`,
+    })) || []),
+  ];
 
   const resetForm = () => {
     setFormType("INCOME");
@@ -136,6 +207,7 @@ export default function FinancesPage() {
     setFormDate(new Date().toISOString().split("T")[0]);
     setFormProgramId("");
     setFormReceiptUrl("");
+    setFormWalletId("");
     setErrors({});
   };
 
@@ -154,6 +226,7 @@ export default function FinancesPage() {
       date: formDate,
       program_id: formProgramId || undefined,
       receipt_url: formReceiptUrl || undefined,
+      wallet_id: formWalletId || undefined,
     });
 
     if (!result.success) {
@@ -179,6 +252,7 @@ export default function FinancesPage() {
         date: formDate,
         program_id: formProgramId || undefined,
         receipt_url: formReceiptUrl || undefined,
+        wallet_id: formWalletId || undefined,
       }),
     });
 
@@ -193,6 +267,7 @@ export default function FinancesPage() {
     setShowModal(false);
     setFormLoading(false);
     fetchTransactions();
+    fetchDashboard();
   };
 
   const totalPages = meta.totalPages || 1;
@@ -220,7 +295,7 @@ export default function FinancesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(summary.income)}
+              {formatCurrency(dashboard?.total_income || 0)}
             </div>
           </CardContent>
         </Card>
@@ -232,26 +307,108 @@ export default function FinancesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(summary.expense)}
+              {formatCurrency(dashboard?.total_expense || 0)}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Saldo Kas
+              Saldo Keseluruhan
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(summary.income - summary.expense)}
+              {formatCurrency(dashboard?.total_balance || 0)}
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Balance per Bank/Cash */}
+      {dashboard && (dashboard.banks.length > 0 || dashboard.cash_accounts.length > 0) && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Saldo per Bank/Kas</h3>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {dashboard.banks.map((b) => (
+              <Card key={b.bank_id}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium text-sm">{b.bank_name}</p>
+                    <Badge variant="outline" className="text-xs">{b.account_number}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">{b.account_holder}</p>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Masuk</p>
+                      <p className="font-medium text-green-600">{formatCurrency(b.income)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Keluar</p>
+                      <p className="font-medium text-red-600">{formatCurrency(b.expense)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Saldo</p>
+                      <p className="font-bold">{formatCurrency(b.balance)}</p>
+                    </div>
+                  </div>
+                  {b.wallets.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+                      {b.wallets.map((w) => (
+                        <div key={w.wallet_id} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{w.wallet_name}</span>
+                          <span className={`font-medium ${w.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {formatCurrency(w.balance)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+            {dashboard.cash_accounts.map((c) => (
+              <Card key={c.cash_account_id}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium text-sm">{c.cash_account_name}</p>
+                    <Badge variant="secondary" className="text-xs">Kas</Badge>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Masuk</p>
+                      <p className="font-medium text-green-600">{formatCurrency(c.income)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Keluar</p>
+                      <p className="font-medium text-red-600">{formatCurrency(c.expense)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Saldo</p>
+                      <p className="font-bold">{formatCurrency(c.balance)}</p>
+                    </div>
+                  </div>
+                  {c.wallets.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+                      {c.wallets.map((w) => (
+                        <div key={w.wallet_id} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{w.wallet_name}</span>
+                          <span className={`font-medium ${w.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {formatCurrency(w.balance)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <Input
           placeholder="Cari transaksi..."
           value={search}
@@ -273,6 +430,33 @@ export default function FinancesPage() {
           <option value="INCOME">Pemasukan</option>
           <option value="EXPENSE">Pengeluaran</option>
         </Select>
+        <Select
+          value={filterBankCash}
+          onChange={(e) => {
+            setFilterBankCash(e.target.value);
+            setFilterWalletId("");
+            setPage(1);
+          }}
+          className="w-56"
+        >
+          <option value="">Semua Bank/Kas</option>
+          {bankCashOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>{opt.label}</option>
+          ))}
+        </Select>
+        <Select
+          value={filterWalletId}
+          onChange={(e) => {
+            setFilterWalletId(e.target.value);
+            setPage(1);
+          }}
+          className="w-56"
+        >
+          <option value="">Semua Dompet</option>
+          {availableWallets.map((w) => (
+            <option key={w.id} value={w.id}>{w.name}</option>
+          ))}
+        </Select>
       </div>
 
       {/* Table */}
@@ -284,6 +468,7 @@ export default function FinancesPage() {
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Tipe</TableHead>
                 <TableHead>Deskripsi</TableHead>
+                <TableHead>Dompet</TableHead>
                 <TableHead>Program</TableHead>
                 <TableHead>Dicatat Oleh</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
@@ -292,13 +477,13 @@ export default function FinancesPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Memuat data...
                   </TableCell>
                 </TableRow>
               ) : transactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Belum ada transaksi.
                   </TableCell>
                 </TableRow>
@@ -319,6 +504,9 @@ export default function FinancesPage() {
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {t.description}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {t.wallets?.name || "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {t.programs?.name || "-"}
@@ -497,6 +685,28 @@ export default function FinancesPage() {
                   />
                   {errors.description && (
                     <p className="text-sm text-red-500">{errors.description}</p>
+                  )}
+                </div>
+
+                {/* Dompet */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="wallet">
+                    Dompet / Rekening
+                  </label>
+                  <Select
+                    id="wallet"
+                    value={formWalletId}
+                    onChange={(e) => setFormWalletId(e.target.value)}
+                  >
+                    <option value="">Tanpa dompet tertentu</option>
+                    {walletsList.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})
+                      </option>
+                    ))}
+                  </Select>
+                  {errors.wallet_id && (
+                    <p className="text-sm text-red-500">{errors.wallet_id}</p>
                   )}
                 </div>
 

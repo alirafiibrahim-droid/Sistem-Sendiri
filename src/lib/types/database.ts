@@ -164,6 +164,41 @@ export interface TaskWithAssignee extends Task {
   profiles: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
 }
 
+// A6: Kas & Bank
+export interface Bank {
+  id: string;
+  name: string;
+  account_number: string;
+  account_holder: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashAccount {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Wallet {
+  id: string;
+  name: string;
+  description: string;
+  bank_id: string | null;
+  cash_account_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WalletWithOwner extends Wallet {
+  banks: Pick<Bank, "id" | "name"> | null;
+  cash_accounts: Pick<CashAccount, "id" | "name"> | null;
+}
+
 // A4: Keuangan
 export interface Finance {
   id: string;
@@ -173,6 +208,7 @@ export interface Finance {
   date: string;
   program_id: string | null;
   receipt_url: string;
+  wallet_id: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -180,6 +216,7 @@ export interface Finance {
 export interface FinanceWithDetails extends Finance {
   profiles: Pick<Profile, "id" | "full_name"> | null;
   programs: Pick<Program, "id" | "name"> | null;
+  wallets: Pick<Wallet, "id" | "name"> | null;
 }
 
 export interface DuesTemplate {

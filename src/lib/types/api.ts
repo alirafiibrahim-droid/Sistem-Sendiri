@@ -135,6 +135,7 @@ export interface CreateFinanceRequest {
   date: string;
   program_id?: string;
   receipt_url: string;
+  wallet_id?: string;
 }
 
 // Dues Types
@@ -273,6 +274,46 @@ export interface UpdateOrganizationSettingsRequest {
   org_logo_url?: string;
   period_year?: string;
   is_maintenance?: boolean;
+}
+
+export interface CreateBankRequest {
+  name: string;
+  account_number: string;
+  account_holder: string;
+  description?: string;
+}
+
+export interface UpdateBankRequest {
+  name?: string;
+  account_number?: string;
+  account_holder?: string;
+  description?: string;
+}
+
+export interface CreateCashAccountRequest {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateCashAccountRequest {
+  name?: string;
+  description?: string;
+}
+
+export interface CreateWalletRequest {
+  name: string;
+  description?: string;
+  bank_id?: string;
+  cash_account_id?: string;
+  is_active?: boolean;
+}
+
+export interface UpdateWalletRequest {
+  name?: string;
+  description?: string;
+  bank_id?: string;
+  cash_account_id?: string;
+  is_active?: boolean;
 }
 
 export interface CreateDivisionRequest {

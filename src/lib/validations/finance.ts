@@ -15,6 +15,7 @@ export const financeFormSchema = z.object({
   date: z.string().min(1, "Tanggal wajib diisi."),
   program_id: z.string().uuid("ID program tidak valid.").optional().or(z.literal("")),
   receipt_url: z.string().url("URL bukti harus valid.").optional().or(z.literal("")),
+  wallet_id: z.string().uuid("ID dompet tidak valid.").optional().or(z.literal("")),
 });
 
 export type FinanceFormValues = z.infer<typeof financeFormSchema>;

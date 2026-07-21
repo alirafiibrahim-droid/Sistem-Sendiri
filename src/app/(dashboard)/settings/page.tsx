@@ -15,11 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema } from "@/lib/validations/settings";
-import type { OrganizationSettings, Division, Fakultas, Jurusan, Profile, ProfileWithDivision, UserRole } from "@/lib/types/database";
+import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
+import type { OrganizationSettings, Division, Fakultas, Jurusan, Profile, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
 
 type FormErrors = Record<string, string>;
-type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan";
+type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan" | "kas-bank" | "dompet";
 
 const tabs: { id: TabId; label: string }[] = [
   { id: "profile", label: "Profile Saya" },
@@ -27,6 +27,8 @@ const tabs: { id: TabId; label: string }[] = [
   { id: "organization", label: "Organisasi" },
   { id: "divisions", label: "Divisi" },
   { id: "fakultas-jurusan", label: "Fakultas & Jurusan" },
+  { id: "kas-bank", label: "Kas & Bank" },
+  { id: "dompet", label: "Dompet" },
 ];
 
 export default function SettingsPage() {
@@ -85,6 +87,36 @@ export default function SettingsPage() {
   const [tambahUserRole, setTambahUserRole] = useState("ANGGOTA");
   const [tambahUserLoading, setTambahUserLoading] = useState(false);
   const [tambahUserError, setTambahUserError] = useState("");
+
+  // ─── Kas & Bank Tab ───
+  const [banksList, setBanksList] = useState<Bank[]>([]);
+  const [cashList, setCashList] = useState<CashAccount[]>([]);
+  const [kbTab, setKbTab] = useState<"bank" | "kas">("bank");
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [bankEditId, setBankEditId] = useState<string | null>(null);
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankAccountHolder, setBankAccountHolder] = useState("");
+  const [bankDesc, setBankDesc] = useState("");
+  const [bankErrors, setBankErrors] = useState<FormErrors>({});
+  const [bankLoading, setBankLoading] = useState(false);
+  const [showCashModal, setShowCashModal] = useState(false);
+  const [cashEditId, setCashEditId] = useState<string | null>(null);
+  const [cashName, setCashName] = useState("");
+  const [cashDesc, setCashDesc] = useState("");
+  const [cashErrors, setCashErrors] = useState<FormErrors>({});
+  const [cashLoading, setCashLoading] = useState(false);
+
+  // ─── Dompet Tab ───
+  const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [walletEditId, setWalletEditId] = useState<string | null>(null);
+  const [walletName, setWalletName] = useState("");
+  const [walletDesc, setWalletDesc] = useState("");
+  const [walletBankId, setWalletBankId] = useState("");
+  const [walletCashId, setWalletCashId] = useState("");
+  const [walletErrors, setWalletErrors] = useState<FormErrors>({});
+  const [walletLoading, setWalletLoading] = useState(false);
 
   const handleTambahUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,6 +224,204 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => { fetchFakultas(); fetchJurusan(); }, [fetchFakultas, fetchJurusan]);
+
+  // ─── Fetch Banks & Cash Accounts ───
+  const fetchBanks = useCallback(async () => {
+    const res = await fetch("/api/banks");
+    const json = await res.json();
+    if (json.success) setBanksList(json.data);
+  }, []);
+
+  const fetchCash = useCallback(async () => {
+    const res = await fetch("/api/cash");
+    const json = await res.json();
+    if (json.success) setCashList(json.data);
+  }, []);
+
+  const fetchWallets = useCallback(async () => {
+    const res = await fetch("/api/wallets");
+    const json = await res.json();
+    if (json.success) setWalletsList(json.data);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "kas-bank") { fetchBanks(); fetchCash(); }
+    if (activeTab === "dompet") { fetchWallets(); fetchBanks(); fetchCash(); }
+  }, [activeTab, fetchBanks, fetchCash, fetchWallets]);
+
+  // ─── Bank CRUD ───
+  const openBankModal = (bank?: Bank) => {
+    if (bank) {
+      setBankEditId(bank.id);
+      setBankName(bank.name);
+      setBankAccountNumber(bank.account_number);
+      setBankAccountHolder(bank.account_holder);
+      setBankDesc(bank.description);
+    } else {
+      setBankEditId(null);
+      setBankName("");
+      setBankAccountNumber("");
+      setBankAccountHolder("");
+      setBankDesc("");
+    }
+    setBankErrors({});
+    setShowBankModal(true);
+  };
+
+  const handleBankSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = bankFormSchema.safeParse({
+      name: bankName,
+      account_number: bankAccountNumber,
+      account_holder: bankAccountHolder,
+      description: bankDesc || undefined,
+    });
+    if (!parsed.success) {
+      const fe: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fe[key]) fe[key] = issue.message;
+      }
+      setBankErrors(fe);
+      return;
+    }
+    setBankErrors({});
+    setBankLoading(true);
+    const url = bankEditId ? `/api/banks/${bankEditId}` : "/api/banks";
+    const method = bankEditId ? "PATCH" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    const json = await res.json();
+    setBankLoading(false);
+    if (!json.success) { setBankErrors({ _form: json.error?.message || "Gagal menyimpan." }); return; }
+    setShowBankModal(false);
+    fetchBanks();
+  };
+
+  const deleteBank = async (id: string) => {
+    if (!confirm("Hapus bank ini?")) return;
+    await fetch(`/api/banks/${id}`, { method: "DELETE" });
+    fetchBanks();
+    fetchWallets();
+  };
+
+  // ─── Cash Account CRUD ───
+  const openCashModal = (cash?: CashAccount) => {
+    if (cash) {
+      setCashEditId(cash.id);
+      setCashName(cash.name);
+      setCashDesc(cash.description);
+    } else {
+      setCashEditId(null);
+      setCashName("");
+      setCashDesc("");
+    }
+    setCashErrors({});
+    setShowCashModal(true);
+  };
+
+  const handleCashSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = cashAccountFormSchema.safeParse({
+      name: cashName,
+      description: cashDesc || undefined,
+    });
+    if (!parsed.success) {
+      const fe: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fe[key]) fe[key] = issue.message;
+      }
+      setCashErrors(fe);
+      return;
+    }
+    setCashErrors({});
+    setCashLoading(true);
+    const url = cashEditId ? `/api/cash/${cashEditId}` : "/api/cash";
+    const method = cashEditId ? "PATCH" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    const json = await res.json();
+    setCashLoading(false);
+    if (!json.success) { setCashErrors({ _form: json.error?.message || "Gagal menyimpan." }); return; }
+    setShowCashModal(false);
+    fetchCash();
+  };
+
+  const deleteCash = async (id: string) => {
+    if (!confirm("Hapus kas ini?")) return;
+    await fetch(`/api/cash/${id}`, { method: "DELETE" });
+    fetchCash();
+    fetchWallets();
+  };
+
+  // ─── Wallet CRUD ───
+  const openWalletModal = (wallet?: WalletWithOwner) => {
+    if (wallet) {
+      setWalletEditId(wallet.id);
+      setWalletName(wallet.name);
+      setWalletDesc(wallet.description);
+      setWalletBankId(wallet.bank_id || "");
+      setWalletCashId(wallet.cash_account_id || "");
+    } else {
+      setWalletEditId(null);
+      setWalletName("");
+      setWalletDesc("");
+      setWalletBankId("");
+      setWalletCashId("");
+    }
+    setWalletErrors({});
+    setShowWalletModal(true);
+  };
+
+  const handleWalletSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = walletFormSchema.safeParse({
+      name: walletName,
+      description: walletDesc || undefined,
+      bank_id: walletBankId || undefined,
+      cash_account_id: walletCashId || undefined,
+    });
+    if (!parsed.success) {
+      const fe: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fe[key]) fe[key] = issue.message;
+      }
+      setWalletErrors(fe);
+      return;
+    }
+    if (!parsed.data.bank_id && !parsed.data.cash_account_id) {
+      setWalletErrors({ bank_id: "Pilih salah satu: Bank atau Kas." });
+      return;
+    }
+    setWalletErrors({});
+    setWalletLoading(true);
+    const url = walletEditId ? `/api/wallets/${walletEditId}` : "/api/wallets";
+    const method = walletEditId ? "PATCH" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    const json = await res.json();
+    setWalletLoading(false);
+    if (!json.success) { setWalletErrors({ _form: json.error?.message || "Gagal menyimpan." }); return; }
+    setShowWalletModal(false);
+    fetchWallets();
+  };
+
+  const deleteWallet = async (id: string) => {
+    if (!confirm("Hapus dompet ini?")) return;
+    await fetch(`/api/wallets/${id}`, { method: "DELETE" });
+    fetchWallets();
+  };
 
   // ─── Profile Submit ───
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -697,8 +927,139 @@ export default function SettingsPage() {
                 </TableBody>
               </Table>
             </CardContent>
+           </Card>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           TAB 5: KAS & BANK
+           ════════════════════════════════════════════════ */}
+      {activeTab === "kas-bank" && (
+        <div className="space-y-4">
+          <div className="flex gap-1 border-b border-border">
+            <button onClick={() => setKbTab("bank")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${kbTab === "bank" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>Bank</button>
+            <button onClick={() => setKbTab("kas")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${kbTab === "kas" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>Kas</button>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>{kbTab === "bank" ? "Data Bank" : "Data Kas"}</CardTitle>
+                <Button size="sm" onClick={() => kbTab === "bank" ? openBankModal() : openCashModal()}>+ Tambah</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nama</TableHead>
+                    {kbTab === "bank" && <TableHead>No. Rekening</TableHead>}
+                    {kbTab === "bank" && <TableHead>Atas Nama</TableHead>}
+                    <TableHead>Deskripsi</TableHead>
+                    <TableHead className="w-24 text-right">Aksi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(kbTab === "bank" ? banksList : cashList).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={kbTab === "bank" ? 5 : 3} className="text-center py-8 text-muted-foreground">
+                        Belum ada data.
+                      </TableCell>
+                    </TableRow>
+                  ) : kbTab === "bank" ? (
+                    banksList.map((b) => (
+                      <TableRow key={b.id}>
+                        <TableCell className="font-medium">{b.name}</TableCell>
+                        <TableCell className="text-sm font-mono">{b.account_number}</TableCell>
+                        <TableCell className="text-sm">{b.account_holder}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{b.description || "-"}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-1 justify-end">
+                            <Button variant="ghost" size="sm" onClick={() => openBankModal(b)}>Edit</Button>
+                            <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteBank(b.id)}>Hapus</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    cashList.map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-medium">{c.name}</TableCell>
+                        <TableCell colSpan={2} className="text-muted-foreground text-sm">{c.description || "-"}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-1 justify-end">
+                            <Button variant="ghost" size="sm" onClick={() => openCashModal(c)}>Edit</Button>
+                            <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteCash(c.id)}>Hapus</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           TAB 6: DOMPET
+           ════════════════════════════════════════════════ */}
+      {activeTab === "dompet" && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Dompet</CardTitle>
+                <CardDescription>Kelola dompet dalam setiap Bank atau Kas</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => openWalletModal()}>+ Tambah Dompet</Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nama Dompet</TableHead>
+                  <TableHead>Pemilik</TableHead>
+                  <TableHead>Deskripsi</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-24 text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {walletsList.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      Belum ada dompet.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  walletsList.map((w) => (
+                    <TableRow key={w.id}>
+                      <TableCell className="font-medium">{w.name}</TableCell>
+                      <TableCell className="text-sm">
+                        <Badge variant="outline">{w.banks?.name || w.cash_accounts?.name || "-"}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{w.description || "-"}</TableCell>
+                      <TableCell>
+                        <Badge variant={w.is_active ? "success" : "secondary"}>
+                          {w.is_active ? "Aktif" : "Nonaktif"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="sm" onClick={() => openWalletModal(w)}>Edit</Button>
+                          <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteWallet(w.id)}>Hapus</Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {/* ════════════════════════════════════════════════
@@ -800,6 +1161,140 @@ export default function SettingsPage() {
                   {(showDivModal ? divLoading : fjLoading) ? "Menyimpan..." : "Simpan"}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => { setShowDivModal(false); setShowFjModal(false); }}>Batal</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           MODAL: Bank
+           ════════════════════════════════════════════════ */}
+      {showBankModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowBankModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold">{bankEditId ? "Edit Bank" : "Tambah Bank"}</h3>
+              <button onClick={() => setShowBankModal(false)} className="p-1 hover:bg-muted rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <form onSubmit={handleBankSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nama Bank <span className="text-red-500">*</span></label>
+                <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="Contoh: BCA, Mandiri" />
+                {bankErrors.name && <p className="text-sm text-red-500">{bankErrors.name}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nomor Rekening <span className="text-red-500">*</span></label>
+                <Input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} placeholder="1234567890" />
+                {bankErrors.account_number && <p className="text-sm text-red-500">{bankErrors.account_number}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Atas Nama <span className="text-red-500">*</span></label>
+                <Input value={bankAccountHolder} onChange={(e) => setBankAccountHolder(e.target.value)} placeholder="Nama pemegang rekening" />
+                {bankErrors.account_holder && <p className="text-sm text-red-500">{bankErrors.account_holder}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Keterangan</label>
+                <Input value={bankDesc} onChange={(e) => setBankDesc(e.target.value)} placeholder="Opsional" />
+              </div>
+              {bankErrors._form && <p className="text-sm text-red-500 text-center">{bankErrors._form}</p>}
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" disabled={bankLoading} className="flex-1">
+                  {bankLoading ? "Menyimpan..." : "Simpan"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowBankModal(false)}>Batal</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           MODAL: Kas
+           ════════════════════════════════════════════════ */}
+      {showCashModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowCashModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold">{cashEditId ? "Edit Kas" : "Tambah Kas"}</h3>
+              <button onClick={() => setShowCashModal(false)} className="p-1 hover:bg-muted rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <form onSubmit={handleCashSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nama Kas <span className="text-red-500">*</span></label>
+                <Input value={cashName} onChange={(e) => setCashName(e.target.value)} placeholder="Contoh: Kas Utama" />
+                {cashErrors.name && <p className="text-sm text-red-500">{cashErrors.name}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Keterangan</label>
+                <Input value={cashDesc} onChange={(e) => setCashDesc(e.target.value)} placeholder="Opsional" />
+              </div>
+              {cashErrors._form && <p className="text-sm text-red-500 text-center">{cashErrors._form}</p>}
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" disabled={cashLoading} className="flex-1">
+                  {cashLoading ? "Menyimpan..." : "Simpan"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCashModal(false)}>Batal</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           MODAL: Dompet
+           ════════════════════════════════════════════════ */}
+      {showWalletModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowWalletModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold">{walletEditId ? "Edit Dompet" : "Tambah Dompet"}</h3>
+              <button onClick={() => setShowWalletModal(false)} className="p-1 hover:bg-muted rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <form onSubmit={handleWalletSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nama Dompet <span className="text-red-500">*</span></label>
+                <Input value={walletName} onChange={(e) => setWalletName(e.target.value)} placeholder="Contoh: Dompet Operasional" />
+                {walletErrors.name && <p className="text-sm text-red-500">{walletErrors.name}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Milik Bank</label>
+                <Select value={walletBankId} onChange={(e) => { setWalletBankId(e.target.value); if (e.target.value) setWalletCashId(""); }}>
+                  <option value="">Tidak dari bank</option>
+                  {banksList.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name} - {b.account_number}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Milik Kas</label>
+                <Select value={walletCashId} onChange={(e) => { setWalletCashId(e.target.value); if (e.target.value) setWalletBankId(""); }}>
+                  <option value="">Tidak dari kas</option>
+                  {cashList.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </Select>
+                {walletErrors.bank_id && <p className="text-sm text-red-500">{walletErrors.bank_id}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Keterangan</label>
+                <Input value={walletDesc} onChange={(e) => setWalletDesc(e.target.value)} placeholder="Opsional" />
+              </div>
+              {walletErrors._form && <p className="text-sm text-red-500 text-center">{walletErrors._form}</p>}
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" disabled={walletLoading} className="flex-1">
+                  {walletLoading ? "Menyimpan..." : "Simpan"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowWalletModal(false)}>Batal</Button>
               </div>
             </form>
           </div>

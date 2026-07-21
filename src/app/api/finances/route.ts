@@ -9,7 +9,7 @@ import {
 } from "@/lib/api-response";
 import { financeFormSchema } from "@/lib/validations/finance";
 import { NextRequest } from "next/server";
-import type { FinanceWithDetails, Profile, Program } from "@/lib/types/database";
+import type { FinanceWithDetails, Profile } from "@/lib/types/database";
 
 async function attachProfiles(
   finances: FinanceWithDetails[],
@@ -54,12 +54,15 @@ export async function GET(request: NextRequest) {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
+    const walletId = searchParams.get("wallet_id");
+
     let query = supabase
       .from("finances")
-      .select("*, programs(id, name)", { count: "exact" });
+      .select("*, programs(id, name), wallets(id, name)", { count: "exact" });
 
     if (type) query = query.eq("type", type);
     if (programId) query = query.eq("program_id", programId);
+    if (walletId) query = query.eq("wallet_id", walletId);
     if (search) query = query.ilike("description", `%${search}%`);
 
     const { data, count, error } = await query
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest) {
       return apiBadRequest(msg);
     }
 
-    const { type, amount, description, date, program_id, receipt_url } = parsed.data;
+    const { type, amount, description, date, program_id, receipt_url, wallet_id } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
@@ -106,9 +109,10 @@ export async function POST(request: NextRequest) {
         date,
         program_id: program_id || null,
         receipt_url: receipt_url || "",
+        wallet_id: wallet_id || null,
         created_by: uid,
       })
-      .select("*, programs(id, name)")
+      .select("*, programs(id, name), wallets(id, name)")
       .single();
 
     if (error) {
