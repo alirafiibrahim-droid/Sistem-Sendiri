@@ -39,7 +39,6 @@ export const walletFormSchema = z.object({
 export const profileFormSchema = z.object({
   full_name: z.string().min(2, "Nama minimal 2 karakter.").max(100, "Nama maksimal 100 karakter."),
   phone_number: z.string().max(20, "No telepon maksimal 20 karakter.").optional().or(z.literal("")),
-  avatar_url: z.string().url("URL avatar harus valid.").optional().or(z.literal("")),
 });
 
 export const orgSettingsFormSchema = z.object({

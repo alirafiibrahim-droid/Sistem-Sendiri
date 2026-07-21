@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -39,7 +40,9 @@ export default function SettingsPage() {
   // ─── Profile Tab ───
   const [profileName, setProfileName] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
-  const [profileAvatar, setProfileAvatar] = useState("");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState("");
+  const [profileAvatarFile, setProfileAvatarFile] = useState<File | null>(null);
+  const [profileAvatarPreview, setProfileAvatarPreview] = useState("");
   const [profileErrors, setProfileErrors] = useState<FormErrors>({});
   const [profileLoading, setProfileLoading] = useState(false);
 
@@ -144,12 +147,13 @@ export default function SettingsPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user: u } }) => {
       if (u) {
-        supabase.from("profiles").select("*").eq("id", u.id).single().then(({ data }) => {
+        supabase.from("profiles").select("*, divisions(id, name), fakultas(id, name), jurusan(id, name)").eq("id", u.id).single().then(({ data }) => {
           if (data) {
             setUser(data);
             setProfileName(data.full_name);
             setProfilePhone(data.phone_number || "");
-            setProfileAvatar(data.avatar_url || "");
+            setProfileAvatarUrl(data.avatar_url || "");
+            setProfileAvatarPreview(data.avatar_url || "");
           }
         });
       }
@@ -429,7 +433,6 @@ export default function SettingsPage() {
     const parsed = profileFormSchema.safeParse({
       full_name: profileName,
       phone_number: profilePhone || undefined,
-      avatar_url: profileAvatar || undefined,
     });
     if (!parsed.success) {
       const fieldErrors: FormErrors = {};
@@ -442,14 +445,39 @@ export default function SettingsPage() {
     }
     setProfileErrors({});
     setProfileLoading(true);
+
+    let avatarUrl = profileAvatarUrl;
+
+    // Upload avatar if file selected
+    if (profileAvatarFile && user) {
+      const ext = profileAvatarFile.name.split(".").pop();
+      const filePath = `${user.id}/avatar.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, profileAvatarFile, { upsert: true });
+
+      if (uploadError) {
+        setProfileErrors({ _form: "Gagal upload foto: " + uploadError.message });
+        setProfileLoading(false);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      avatarUrl = urlData.publicUrl;
+    }
+
     const res = await fetch(`/api/profiles/${user?.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(parsed.data),
+      body: JSON.stringify({ ...parsed.data, avatar_url: avatarUrl || null }),
     });
     const json = await res.json();
     if (!json.success) {
       setProfileErrors({ _form: json.error?.message || "Gagal menyimpan." });
+    } else {
+      setProfileAvatarUrl(avatarUrl);
+      setProfileAvatarPreview(avatarUrl);
+      setProfileAvatarFile(null);
     }
     setProfileLoading(false);
   };
@@ -645,36 +673,82 @@ export default function SettingsPage() {
       {activeTab === "profile" && (
         <Card>
           <CardHeader>
-            <CardTitle>Profile Saya</CardTitle>
+            <CardTitle>Pengaturan Profil Saya</CardTitle>
             <CardDescription>Ubah data profil pribadi Anda</CardDescription>
           </CardHeader>
           <CardContent>
             {user ? (
-              <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-lg">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="pname">Nama Lengkap <span className="text-red-500">*</span></label>
-                  <Input id="pname" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
-                  {profileErrors.full_name && <p className="text-sm text-red-500">{profileErrors.full_name}</p>}
+              <div className="space-y-6 max-w-2xl">
+                {/* Avatar Upload */}
+                <div className="flex items-start gap-6">
+                  <div className="shrink-0">
+                    <Avatar
+                      src={profileAvatarPreview || profileAvatarUrl}
+                      alt={user.full_name}
+                      fallback={user.full_name.charAt(0).toUpperCase()}
+                      className="h-24 w-24 text-2xl"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <label className="text-sm font-medium">Foto Profil</label>
+                    <p className="text-xs text-muted-foreground">Format: PNG, JPG, atau WebP. Tanpa batas ukuran file.</p>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setProfileAvatarFile(file);
+                          setProfileAvatarPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                    />
+                    {profileAvatarFile && (
+                      <p className="text-xs text-muted-foreground">{profileAvatarFile.name}</p>
+                    )}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="pphone">No Telepon</label>
-                  <Input id="pphone" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} />
-                  {profileErrors.phone_number && <p className="text-sm text-red-500">{profileErrors.phone_number}</p>}
+
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold mb-3">Data Diri</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium" htmlFor="pname">Nama Lengkap <span className="text-red-500">*</span></label>
+                      <Input id="pname" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
+                      {profileErrors.full_name && <p className="text-sm text-red-500">{profileErrors.full_name}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Email</label>
+                      <Input value={user.email} disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">NIM</label>
+                      <Input value={user.nim} disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium" htmlFor="pphone">No. Telepon</label>
+                      <Input id="pphone" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} placeholder="-" />
+                      {profileErrors.phone_number && <p className="text-sm text-red-500">{profileErrors.phone_number}</p>}
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="pavatar">URL Avatar</label>
-                  <Input id="pavatar" type="url" value={profileAvatar} onChange={(e) => setProfileAvatar(e.target.value)} />
-                  {profileErrors.avatar_url && <p className="text-sm text-red-500">{profileErrors.avatar_url}</p>}
+
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold mb-3">Informasi Keanggotaan</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-8 text-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Role</span><Badge>{user.role}</Badge></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge variant={user.status === "AKTIF" ? "success" : "secondary"}>{user.status}</Badge></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Divisi</span><span>{user.divisions?.name ?? "-"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Fakultas</span><span>{user.fakultas?.name ?? "-"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Jurusan</span><span>{user.jurusan?.name ?? "-"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Bergabung</span><span>{new Date(user.joined_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span></div>
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p><span className="font-medium">Email:</span> {user.email}</p>
-                  <p><span className="font-medium">NIM:</span> {user.nim}</p>
-                  <p><span className="font-medium">Role:</span> <Badge>{user.role}</Badge></p>
-                  <p><span className="font-medium">Status:</span> <Badge variant={user.status === "AKTIF" ? "success" : "secondary"}>{user.status}</Badge></p>
-                </div>
+
                 {profileErrors._form && <p className="text-sm text-red-500 text-center">{profileErrors._form}</p>}
-                <Button type="submit" disabled={profileLoading}>{profileLoading ? "Menyimpan..." : "Simpan Profile"}</Button>
-              </form>
+                <Button type="button" disabled={profileLoading} onClick={handleProfileSubmit}>{profileLoading ? "Menyimpan..." : "Simpan Profil"}</Button>
+              </div>
             ) : (
               <p className="text-muted-foreground">Memuat data...</p>
             )}
