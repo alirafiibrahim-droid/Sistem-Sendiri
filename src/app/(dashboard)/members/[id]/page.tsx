@@ -185,6 +185,8 @@ export default function MemberDetailPage() {
               <Select value={role} onChange={(e) => setRole(e.target.value)}>
                 <option value="ANGGOTA">Anggota</option>
                 <option value="KABID">Kabid (Kepala Bidang)</option>
+                <option value="PELATIH">Pelatih</option>
+                <option value="PEMBINA">Pembina</option>
                 <option value="BENDAHARA">Bendahara</option>
                 <option value="SEKRETARIS">Sekretaris</option>
                 <option value="PENGURUS_INTI">Pengurus Inti</option>
@@ -193,7 +195,7 @@ export default function MemberDetailPage() {
                 <option value="ADMIN">Admin</option>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Admin: akses penuh. Ketua Umum & Wakil: pengawasan. Pengurus Inti, Sekretaris & Bendahara: CRUD & approval. Kabid: kelola divisi. Anggota: akses terbatas.
+                Admin: akses penuh. Ketua Umum & Wakil: pengawasan. Pengurus Inti, Sekretaris & Bendahara: CRUD & approval. Kabid: kelola divisi. Pelatih: bimbingan atlet. Pembina: pengawasan keatletan. Anggota: akses terbatas.
               </p>
             </div>
 

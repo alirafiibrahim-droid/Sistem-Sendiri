@@ -1,16 +1,37 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { achievementFormSchema } from "@/lib/validations/achievement";
 import type { Achievement } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
+
+interface ParticipantRow {
+  user_id: string;
+  juara: string;
+  keterangan: string;
+}
+
+interface MemberOption {
+  id: string;
+  full_name: string;
+  nim: string;
+}
 
 const statusVariant: Record<string, "success" | "warning" | "destructive"> = {
   APPROVED: "success",
@@ -38,6 +59,7 @@ function formatDate(dateStr: string) {
 }
 
 export default function AchievementsPage() {
+  const router = useRouter();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [meta, setMeta] = useState<ApiMeta>({});
   const [loading, setLoading] = useState(true);
@@ -53,6 +75,9 @@ export default function AchievementsPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
+  // Members data for dropdown
+  const [members, setMembers] = useState<MemberOption[]>([]);
+
   // Form state
   const [formTitle, setFormTitle] = useState("");
   const [formDescription, setFormDescription] = useState("");
@@ -64,6 +89,7 @@ export default function AchievementsPage() {
     new Date().toISOString().split("T")[0]
   );
   const [formProofUrl, setFormProofUrl] = useState("");
+  const [formParticipants, setFormParticipants] = useState<ParticipantRow[]>([]);
 
   const fetchAchievements = useCallback(async () => {
     setLoading(true);
@@ -90,6 +116,20 @@ export default function AchievementsPage() {
     fetchAchievements();
   }, [fetchAchievements]);
 
+  const fetchMembers = async () => {
+    const res = await fetch("/api/profiles?limit=500");
+    const json = await res.json();
+    if (json.success) {
+      setMembers(
+        json.data.map((p: { id: string; full_name: string; nim: string }) => ({
+          id: p.id,
+          full_name: p.full_name,
+          nim: p.nim,
+        }))
+      );
+    }
+  };
+
   const resetForm = () => {
     setFormTitle("");
     setFormDescription("");
@@ -99,12 +139,35 @@ export default function AchievementsPage() {
     setFormOrganizer("");
     setFormDate(new Date().toISOString().split("T")[0]);
     setFormProofUrl("");
+    setFormParticipants([]);
     setErrors({});
   };
 
   const openModal = () => {
     resetForm();
+    fetchMembers();
     setShowModal(true);
+  };
+
+  const addParticipant = () => {
+    setFormParticipants([
+      ...formParticipants,
+      { user_id: "", juara: "", keterangan: "" },
+    ]);
+  };
+
+  const removeParticipant = (index: number) => {
+    setFormParticipants(formParticipants.filter((_, i) => i !== index));
+  };
+
+  const updateParticipant = (
+    index: number,
+    field: keyof ParticipantRow,
+    value: string
+  ) => {
+    const updated = [...formParticipants];
+    updated[index] = { ...updated[index], [field]: value };
+    setFormParticipants(updated);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -119,13 +182,21 @@ export default function AchievementsPage() {
       organizer: formOrganizer || undefined,
       achievement_date: formDate,
       proof_url: formProofUrl || undefined,
+      participants:
+        formParticipants.length > 0
+          ? formParticipants.map((p) => ({
+              user_id: p.user_id,
+              juara: p.juara,
+              keterangan: p.keterangan || undefined,
+            }))
+          : undefined,
     });
 
     if (!result.success) {
       const fieldErrors: FormErrors = {};
       for (const issue of result.error.issues) {
-        const key = issue.path[0] as string;
-        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+        const path = issue.path.join(".");
+        if (!fieldErrors[path]) fieldErrors[path] = issue.message;
       }
       setErrors(fieldErrors);
       return;
@@ -146,6 +217,14 @@ export default function AchievementsPage() {
         organizer: formOrganizer || undefined,
         achievement_date: formDate,
         proof_url: formProofUrl || undefined,
+        participants:
+          formParticipants.length > 0
+            ? formParticipants.map((p) => ({
+                user_id: p.user_id,
+                juara: p.juara,
+                keterangan: p.keterangan || undefined,
+              }))
+            : undefined,
       }),
     });
 
@@ -241,7 +320,7 @@ export default function AchievementsPage() {
           </div>
         ) : (
           achievements.map((a) => (
-            <Card key={a.id}>
+            <Card key={a.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push(`/achievements/${a.id}`)}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
@@ -312,7 +391,7 @@ export default function AchievementsPage() {
             onClick={() => setShowModal(false)}
           />
 
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -504,6 +583,103 @@ export default function AchievementsPage() {
                   {errors.proof_url && (
                     <p className="text-sm text-red-500">{errors.proof_url}</p>
                   )}
+                </div>
+
+                {/* Anggota Berprestasi */}
+                <div className="space-y-3 border-t pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">
+                      Anggota Berprestasi
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addParticipant}
+                    >
+                      + Tambah Anggota
+                    </Button>
+                  </div>
+
+                  {formParticipants.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Belum ada anggota ditambahkan. Klik &quot;+ Tambah Anggota&quot; untuk menambahkan.
+                    </p>
+                  )}
+
+                  {formParticipants.map((p, idx) => (
+                    <div
+                      key={idx}
+                      className="flex gap-2 items-start p-3 bg-muted/50 rounded-lg"
+                    >
+                      <div className="flex-1 space-y-2">
+                        <Select
+                          value={p.user_id}
+                          onChange={(e) =>
+                            updateParticipant(idx, "user_id", e.target.value)
+                          }
+                        >
+                          <option value="">Pilih anggota</option>
+                          {members.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name} ({m.nim})
+                            </option>
+                          ))}
+                        </Select>
+                        {errors[`participants.${idx}.user_id`] && (
+                          <p className="text-xs text-red-500">
+                            {errors[`participants.${idx}.user_id`]}
+                          </p>
+                        )}
+
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <Input
+                              placeholder="Juara (contoh: Juara 1)"
+                              value={p.juara}
+                              onChange={(e) =>
+                                updateParticipant(idx, "juara", e.target.value)
+                              }
+                            />
+                            {errors[`participants.${idx}.juara`] && (
+                              <p className="text-xs text-red-500">
+                                {errors[`participants.${idx}.juara`]}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <Input
+                              placeholder="Keterangan (opsional)"
+                              value={p.keterangan}
+                              onChange={(e) =>
+                                updateParticipant(idx, "keterangan", e.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeParticipant(idx)}
+                        className="p-1.5 hover:bg-destructive/10 rounded-lg text-destructive mt-1"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
                 </div>
 
                 {errors._form && (

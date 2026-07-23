@@ -20,6 +20,8 @@ import type {
   InventoryItem,
   InventoryLoan,
   InventoryDamageLog,
+  InventoryPurchase,
+  WalletWithOwner,
 } from "@/lib/types/database";
 
 const categoryLabel: Record<string, string> = {
@@ -66,7 +68,7 @@ const damageTypeLabel: Record<string, string> = {
   MAINTENANCE: "Pemeliharaan",
 };
 
-type Tab = "info" | "loans" | "damage";
+type Tab = "info" | "loans" | "damage" | "purchases";
 
 export default function InventoryDetailPage() {
   const router = useRouter();
@@ -102,6 +104,16 @@ export default function InventoryDetailPage() {
   const [damageCost, setDamageCost] = useState("");
   const [damageLoading, setDamageLoading] = useState(false);
 
+  // Purchase form
+  const [purchases, setPurchases] = useState<InventoryPurchase[]>([]);
+  const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
+  const [showPurchaseForm, setShowPurchaseForm] = useState(false);
+  const [purchaseDate, setPurchaseDate] = useState("");
+  const [purchaseAmount, setPurchaseAmount] = useState("");
+  const [purchaseSource, setPurchaseSource] = useState("");
+  const [purchaseDesc, setPurchaseDesc] = useState("");
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [{ data: itemData }, { data: loanData }, { data: logData }] = await Promise.all([
@@ -115,9 +127,23 @@ export default function InventoryDetailPage() {
     setLoading(false);
   }, [supabase, id]);
 
+  const fetchPurchases = useCallback(async () => {
+    const res = await fetch(`/api/inventory/${id}/purchases`);
+    const json = await res.json();
+    if (json.success) setPurchases(json.data);
+  }, [id]);
+
+  const fetchWallets = useCallback(async () => {
+    const res = await fetch("/api/wallets");
+    const json = await res.json();
+    if (json.success) setWalletsList(json.data);
+  }, []);
+
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchPurchases();
+    fetchWallets();
+  }, [fetchData, fetchPurchases, fetchWallets]);
 
   const handleLoan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,6 +233,45 @@ export default function InventoryDetailPage() {
     setDamageLoading(false);
   };
 
+  const handlePurchase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPurchaseLoading(true);
+
+    let walletId = "";
+    let bankId = "";
+    let cashAccountId = "";
+    if (purchaseSource.startsWith("bank:")) {
+      bankId = purchaseSource.replace("bank:", "");
+    } else if (purchaseSource.startsWith("cash:")) {
+      cashAccountId = purchaseSource.replace("cash:", "");
+    } else if (purchaseSource) {
+      walletId = purchaseSource;
+    }
+
+    const res = await fetch(`/api/inventory/${id}/purchases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: Number(purchaseAmount),
+        date: purchaseDate,
+        wallet_id: walletId || undefined,
+        bank_id: bankId || undefined,
+        cash_account_id: cashAccountId || undefined,
+        description: purchaseDesc || undefined,
+      }),
+    });
+
+    if (res.ok) {
+      setShowPurchaseForm(false);
+      setPurchaseDate("");
+      setPurchaseAmount("");
+      setPurchaseSource("");
+      setPurchaseDesc("");
+      fetchPurchases();
+    }
+    setPurchaseLoading(false);
+  };
+
   if (loading) {
     return <div className="text-center py-8 text-muted-foreground">Memuat data...</div>;
   }
@@ -230,7 +295,7 @@ export default function InventoryDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {([["info", "Info"], ["loans", "Peminjaman"], ["damage", "Kerusakan"]] as const).map(([key, label]) => (
+        {([["info", "Info"], ["loans", "Peminjaman"], ["damage", "Kerusakan"], ["purchases", "Pembelian"]] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
@@ -450,6 +515,109 @@ export default function InventoryDetailPage() {
                         <TableCell className="text-sm">
                           {(log as unknown as Record<string, unknown>).profiles
                             ? ((log as unknown as Record<string, unknown>).profiles as Record<string, string>).full_name
+                            : "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Purchases */}
+      {activeTab === "purchases" && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => setShowPurchaseForm(true)}>Catat Pembelian</Button>
+          </div>
+
+          {showPurchaseForm && (
+            <Card>
+              <CardHeader><CardTitle>Form Pembelian Barang</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handlePurchase} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Tanggal Pembelian</label>
+                      <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} required />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Nominal (Rp)</label>
+                      <Input type="number" min="1" placeholder="0" value={purchaseAmount} onChange={(e) => setPurchaseAmount(e.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Sumber Dana</label>
+                    <Select value={purchaseSource} onChange={(e) => setPurchaseSource(e.target.value)} required>
+                      <option value="">Pilih sumber dana...</option>
+                      {walletsList.some((w) => w.bank_id) && (
+                        <optgroup label="Bank">
+                          {walletsList.filter((w) => w.bank_id).map((w) => (
+                            <option key={w.id} value={`bank:${w.bank_id}`}>{w.banks?.name} ({w.name})</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {walletsList.some((w) => w.cash_account_id) && (
+                        <optgroup label="Kas">
+                          {walletsList.filter((w) => w.cash_account_id).map((w) => (
+                            <option key={w.id} value={`cash:${w.cash_account_id}`}>{w.cash_accounts?.name} ({w.name})</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {walletsList.length > 0 && (
+                        <optgroup label="Dompet">
+                          {walletsList.map((w) => (
+                            <option key={w.id} value={w.id}>{w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Deskripsi</label>
+                    <Input placeholder="Deskripsi pembelian..." value={purchaseDesc} onChange={(e) => setPurchaseDesc(e.target.value)} />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="submit" disabled={purchaseLoading}>{purchaseLoading ? "Menyimpan..." : "Simpan"}</Button>
+                    <Button type="button" variant="outline" onClick={() => setShowPurchaseForm(false)}>Batal</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Nominal</TableHead>
+                    <TableHead>Sumber</TableHead>
+                    <TableHead>Deskripsi</TableHead>
+                    <TableHead>Dicatat oleh</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {purchases.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Belum ada catatan pembelian.</TableCell>
+                    </TableRow>
+                  ) : (
+                    purchases.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="text-sm">{p.date}</TableCell>
+                        <TableCell className="text-sm font-medium">
+                          {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(p.amount)}
+                        </TableCell>
+                        <TableCell className="text-sm">{(p as unknown as Record<string, unknown>).wallets ? ((p as unknown as Record<string, unknown>).wallets as Record<string, string>).name : (p as unknown as Record<string, unknown>).banks ? ((p as unknown as Record<string, unknown>).banks as Record<string, string>).name : (p as unknown as Record<string, unknown>).cash_accounts ? ((p as unknown as Record<string, unknown>).cash_accounts as Record<string, string>).name : "-"}</TableCell>
+                        <TableCell className="text-sm max-w-xs truncate">{p.description || "-"}</TableCell>
+                        <TableCell className="text-sm">
+                          {(p as unknown as Record<string, unknown>).profiles
+                            ? ((p as unknown as Record<string, unknown>).profiles as Record<string, string>).full_name
                             : "-"}
                         </TableCell>
                       </TableRow>

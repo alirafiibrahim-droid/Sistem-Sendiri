@@ -106,6 +106,8 @@ export default function MembersPage() {
           <option value="SEKRETARIS">Sekretaris</option>
           <option value="BENDAHARA">Bendahara</option>
           <option value="KABID">Kabid</option>
+          <option value="PELATIH">Pelatih</option>
+          <option value="PEMBINA">Pembina</option>
           <option value="ANGGOTA">Anggota</option>
         </Select>
       </div>

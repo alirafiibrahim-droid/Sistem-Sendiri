@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       organizer,
       achievement_date,
       proof_url,
-      participant_ids,
+      participants,
     } = parsed.data;
 
     const supabase = await createSupabaseServer();
@@ -142,15 +142,17 @@ export async function POST(request: NextRequest) {
       return apiInternalError(insertError.message);
     }
 
-    if (participant_ids && participant_ids.length > 0) {
-      const participants = participant_ids.map((userId: string) => ({
+    if (participants && participants.length > 0) {
+      const rows = participants.map((p) => ({
         achievement_id: achievement.id,
-        user_id: userId,
+        user_id: p.user_id,
+        juara: p.juara,
+        keterangan: p.keterangan || null,
       }));
 
       const { error: participantError } = await supabase
         .from("achievement_participants")
-        .insert(participants);
+        .insert(rows);
 
       if (participantError) {
         console.error("ACHIEVEMENTS PARTICIPANTS INSERT ERROR:", participantError);

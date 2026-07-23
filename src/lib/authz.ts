@@ -6,7 +6,7 @@
 
 import { apiForbidden } from "./api-response";
 
-export type AppRole = "ADMIN" | "KETUA_UMUM" | "WAKIL_KETUA" | "PENGURUS_INTI" | "SEKRETARIS" | "BENDAHARA" | "KABID" | "ANGGOTA";
+export type AppRole = "ADMIN" | "KETUA_UMUM" | "WAKIL_KETUA" | "PENGURUS_INTI" | "SEKRETARIS" | "BENDAHARA" | "KABID" | "PELATIH" | "PEMBINA" | "ANGGOTA";
 
 /**
  * Role hierarchy levels: higher number = more privileges.
@@ -19,6 +19,8 @@ export const ROLE_LEVEL: Record<AppRole, number> = {
   SEKRETARIS: 65,
   BENDAHARA: 65,
   KABID: 50,
+  PEMBINA: 45,
+  PELATIH: 40,
   ANGGOTA: 10,
 };
 

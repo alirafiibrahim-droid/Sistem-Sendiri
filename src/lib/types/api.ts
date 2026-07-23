@@ -197,7 +197,11 @@ export interface CreateAchievementRequest {
   organizer?: string;
   achievement_date: string;
   proof_url?: string;
-  participant_ids?: string[];
+  participants?: {
+    user_id: string;
+    juara: string;
+    keterangan?: string;
+  }[];
 }
 
 export interface VerifyAchievementRequest {
@@ -325,6 +329,16 @@ export interface CreateDivisionRequest {
 
 export interface UpdateDivisionRequest {
   name?: string;
+  description?: string;
+}
+
+// Inventory Purchase Types
+export interface CreateInventoryPurchaseRequest {
+  amount: number;
+  date: string;
+  wallet_id?: string;
+  bank_id?: string;
+  cash_account_id?: string;
   description?: string;
 }
 

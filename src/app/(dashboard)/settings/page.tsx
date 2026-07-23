@@ -862,6 +862,8 @@ export default function SettingsPage() {
                           >
                             <option value="ANGGOTA">Anggota</option>
                             <option value="KABID">Kabid</option>
+                            <option value="PELATIH">Pelatih</option>
+                            <option value="PEMBINA">Pembina</option>
                             <option value="BENDAHARA">Bendahara</option>
                             <option value="SEKRETARIS">Sekretaris</option>
                             <option value="PENGURUS_INTI">Pengurus Inti</option>
@@ -1245,6 +1247,8 @@ export default function SettingsPage() {
                 <Select value={tambahUserRole} onChange={(e) => setTambahUserRole(e.target.value)}>
                   <option value="ANGGOTA">Anggota</option>
                   <option value="KABID">Kabid</option>
+                  <option value="PELATIH">Pelatih</option>
+                  <option value="PEMBINA">Pembina</option>
                   <option value="BENDAHARA">Bendahara</option>
                   <option value="SEKRETARIS">Sekretaris</option>
                   <option value="PENGURUS_INTI">Pengurus Inti</option>

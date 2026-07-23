@@ -61,3 +61,19 @@ export const inventoryDamageLogFormSchema = z.object({
     .max(500, "Deskripsi maksimal 500 karakter."),
   estimated_cost: z.coerce.number().min(0, "Biaya estimasi tidak boleh negatif.").optional(),
 });
+
+export const inventoryPurchaseFormSchema = z
+  .object({
+    amount: z.coerce
+      .number()
+      .positive("Jumlah harus lebih dari 0.")
+      .max(999999999999, "Jumlah terlalu besar."),
+    date: z.string().min(1, "Tanggal pembelian wajib diisi."),
+    wallet_id: z.string().uuid("ID dompet tidak valid.").optional().or(z.literal("")),
+    bank_id: z.string().uuid("ID bank tidak valid.").optional().or(z.literal("")),
+    cash_account_id: z.string().uuid("ID kas tidak valid.").optional().or(z.literal("")),
+    description: z.string().max(500, "Deskripsi maksimal 500 karakter.").optional(),
+  })
+  .refine((data) => data.wallet_id || data.bank_id || data.cash_account_id, {
+    message: "Sumber dana wajib dipilih (Dompet, Bank, atau Kas).",
+  });

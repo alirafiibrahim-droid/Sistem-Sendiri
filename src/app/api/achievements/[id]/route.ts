@@ -23,17 +23,57 @@ export async function GET(
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
-    const { data, error } = await supabase
+    const { data: achievement, error } = await supabase
       .from("achievements")
-      .select(
-        "*, profiles(id, full_name), achievement_participants(*, profiles(id, full_name, nim, avatar_url))"
-      )
+      .select("*")
       .eq("id", id)
       .single();
 
-    if (error || !data) return apiNotFound();
+    if (error || !achievement) return apiNotFound();
 
-    return apiOk(data);
+    const { data: participantRows } = await supabase
+      .from("achievement_participants")
+      .select("*")
+      .eq("achievement_id", id);
+
+    const participants = participantRows || [];
+
+    const allUserIds = new Set<string>();
+    if (achievement.created_by) allUserIds.add(achievement.created_by);
+    for (const p of participants) {
+      if (p.user_id) allUserIds.add(p.user_id);
+    }
+
+    let profilesMap = new Map<string, { id: string; full_name: string; nim?: string; avatar_url?: string }>();
+    if (allUserIds.size > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, nim, avatar_url")
+        .in("id", [...allUserIds]);
+
+      if (profiles) {
+        for (const p of profiles) {
+          profilesMap.set(p.id, p);
+        }
+      }
+    }
+
+    const creatorProfile = achievement.created_by
+      ? profilesMap.get(achievement.created_by) || null
+      : null;
+
+    const participantsWithProfiles = participants.map(
+      (p: { id: string; achievement_id: string; user_id: string; juara: string; keterangan: string | null }) => ({
+        ...p,
+        profiles: profilesMap.get(p.user_id) || null,
+      })
+    );
+
+    return apiOk({
+      ...achievement,
+      profiles: creatorProfile,
+      achievement_participants: participantsWithProfiles,
+    });
   } catch (error) {
     return apiInternalError();
   }
@@ -65,7 +105,7 @@ export async function PATCH(
 
     if (!hasPermission) return apiForbidden();
 
-    const { participant_ids, ...updateData } = body;
+    const { participants, ...updateData } = body;
 
     const { data, error } = await supabase
       .from("achievements")
@@ -76,21 +116,23 @@ export async function PATCH(
 
     if (error) throw error;
 
-    if (participant_ids !== undefined) {
+    if (participants !== undefined) {
       await supabase
         .from("achievement_participants")
         .delete()
         .eq("achievement_id", id);
 
-      if (participant_ids.length > 0) {
-        const participants = participant_ids.map((userId: string) => ({
+      if (participants.length > 0) {
+        const rows = participants.map((p: { user_id: string; juara: string; keterangan?: string }) => ({
           achievement_id: id,
-          user_id: userId,
+          user_id: p.user_id,
+          juara: p.juara,
+          keterangan: p.keterangan || null,
         }));
 
         const { error: participantError } = await supabase
           .from("achievement_participants")
-          .insert(participants);
+          .insert(rows);
 
         if (participantError) throw participantError;
       }

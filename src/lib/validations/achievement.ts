@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+export const achievementParticipantSchema = z.object({
+  user_id: z.string().min(1, "Anggota wajib dipilih."),
+  juara: z
+    .string()
+    .min(1, "Juara wajib diisi.")
+    .max(50, "Juara maksimal 50 karakter."),
+  keterangan: z
+    .string()
+    .max(500, "Keterangan maksimal 500 karakter.")
+    .optional()
+    .or(z.literal("")),
+});
+
 export const achievementFormSchema = z.object({
   title: z
     .string()
@@ -29,7 +42,10 @@ export const achievementFormSchema = z.object({
     .url("URL bukti harus valid.")
     .optional()
     .or(z.literal("")),
-  participant_ids: z.array(z.string()).optional(),
+  participants: z.array(achievementParticipantSchema).optional(),
 });
 
 export type AchievementFormValues = z.infer<typeof achievementFormSchema>;
+export type AchievementParticipantFormValues = z.infer<
+  typeof achievementParticipantSchema
+>;

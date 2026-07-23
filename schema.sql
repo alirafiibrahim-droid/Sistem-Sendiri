@@ -29,7 +29,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions;
 -- ============================================================================
 
 -- A2 & A5: Role & Status pengguna
-CREATE TYPE public.user_role AS ENUM ('ADMIN', 'PENGURUS_INTI', 'KABID', 'ANGGOTA');
+CREATE TYPE public.user_role AS ENUM ('ADMIN', 'KETUA_UMUM', 'WAKIL_KETUA', 'PENGURUS_INTI', 'SEKRETARIS', 'BENDAHARA', 'KABID', 'PELATIH', 'PEMBINA', 'ANGGOTA');
 CREATE TYPE public.user_status AS ENUM ('AKTIF', 'CUTI', 'ALUMNI', 'NONAKTIF');
 
 -- A9: Status program kerja
@@ -429,7 +429,7 @@ CREATE TABLE public.achievements (
     proof_url         TEXT,
     status            public.achievement_status NOT NULL DEFAULT 'PENDING',
     rejection_reason  TEXT,
-    created_by        UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_by        UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -441,8 +441,9 @@ COMMENT ON TABLE public.achievements IS 'Data prestasi organisasi & individu / W
 CREATE TABLE public.achievement_participants (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     achievement_id      UUID NOT NULL REFERENCES public.achievements(id) ON DELETE CASCADE,
-    user_id             UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    role_in_achievement VARCHAR(100),
+    user_id             UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    juara               VARCHAR(50) NOT NULL DEFAULT '',
+    keterangan          TEXT,
     UNIQUE(achievement_id, user_id)
 );
 
@@ -586,6 +587,25 @@ CREATE TABLE public.inventory_damage_logs (
 
 COMMENT ON TABLE public.inventory_damage_logs IS 'Log kerusakan/kehilangan/pemeliharaan barang inventaris (A12)';
 
+-- ----------------------------------------------------------------------------
+-- A12: INVENTORY PURCHASES (Pencatatan pembelian barang)
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.inventory_purchases (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    item_id         UUID NOT NULL REFERENCES public.inventory_items(id) ON DELETE CASCADE,
+    amount          NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    date            DATE NOT NULL,
+    wallet_id       UUID REFERENCES public.wallets(id) ON DELETE SET NULL,
+    bank_id         UUID REFERENCES public.banks(id) ON DELETE SET NULL,
+    cash_account_id UUID REFERENCES public.cash_accounts(id) ON DELETE SET NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    finance_id      UUID REFERENCES public.finances(id) ON DELETE SET NULL,
+    created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.inventory_purchases IS 'Pencatatan pembelian barang inventaris (A12)';
+
 
 -- ============================================================================
 -- BAGIAN 11: INDEXES (Optimasi performa query)
@@ -657,6 +677,11 @@ CREATE INDEX idx_inventory_loans_return_date ON public.inventory_loans(return_da
 CREATE INDEX idx_inventory_damage_logs_item ON public.inventory_damage_logs(item_id);
 CREATE INDEX idx_inventory_damage_logs_type ON public.inventory_damage_logs(type);
 
+-- Inventory Purchases (A12)
+CREATE INDEX idx_inventory_purchases_item ON public.inventory_purchases(item_id);
+CREATE INDEX idx_inventory_purchases_date ON public.inventory_purchases(date);
+CREATE INDEX idx_inventory_purchases_finance ON public.inventory_purchases(finance_id);
+
 -- Audit Logs (A6)
 CREATE INDEX idx_audit_logs_user ON public.audit_logs(user_id);
 CREATE INDEX idx_audit_logs_action ON public.audit_logs(action);
@@ -699,6 +724,7 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_damage_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_purchases ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
 -- A5: RLS PROFILES
@@ -1194,6 +1220,37 @@ CREATE POLICY "inventory_damage_logs_insert_core"
     WITH CHECK (
         (SELECT role FROM public.profiles WHERE id = auth.uid())
         IN ('ADMIN', 'PENGURUS_INTI')
+    );
+
+-- ----------------------------------------------------------------------------
+-- A12: RLS INVENTORY PURCHASES
+-- ----------------------------------------------------------------------------
+CREATE POLICY "inventory_purchases_select_all"
+    ON public.inventory_purchases FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "inventory_purchases_insert_core"
+    ON public.inventory_purchases FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID', 'BENDAHARA')
+    );
+
+CREATE POLICY "inventory_purchases_update_core"
+    ON public.inventory_purchases FOR UPDATE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'BENDAHARA')
+    );
+
+CREATE POLICY "inventory_purchases_delete_admin"
+    ON public.inventory_purchases FOR DELETE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'ADMIN'
     );
 
 

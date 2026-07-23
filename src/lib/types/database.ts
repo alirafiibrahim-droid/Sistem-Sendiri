@@ -3,7 +3,7 @@
 // Auto-generated type definitions matching schema.sql
 // ============================================================================
 
-export type UserRole = "ADMIN" | "KETUA_UMUM" | "WAKIL_KETUA" | "PENGURUS_INTI" | "SEKRETARIS" | "BENDAHARA" | "KABID" | "ANGGOTA";
+export type UserRole = "ADMIN" | "KETUA_UMUM" | "WAKIL_KETUA" | "PENGURUS_INTI" | "SEKRETARIS" | "BENDAHARA" | "KABID" | "PELATIH" | "PEMBINA" | "ANGGOTA";
 export type UserStatus = "AKTIF" | "CUTI" | "ALUMNI" | "NONAKTIF";
 
 export type ProgramStatus = "PLANNED" | "ONGOING" | "COMPLETED" | "CANCELLED";
@@ -396,7 +396,8 @@ export interface AchievementParticipant {
   id: string;
   achievement_id: string;
   user_id: string;
-  role_in_achievement: string | null;
+  juara: string;
+  keterangan: string | null;
 }
 
 export interface AchievementParticipantWithProfile
@@ -509,4 +510,27 @@ export interface InventoryDamageLog {
 export interface InventoryDamageLogWithDetails extends InventoryDamageLog {
   inventory_items: Pick<InventoryItem, "id" | "code" | "name">;
   profiles: Pick<Profile, "id" | "full_name">;
+}
+
+// A12: Pembelian Barang Inventaris
+export interface InventoryPurchase {
+  id: string;
+  item_id: string;
+  amount: number;
+  date: string;
+  wallet_id: string | null;
+  bank_id: string | null;
+  cash_account_id: string | null;
+  description: string;
+  finance_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface InventoryPurchaseWithDetails extends InventoryPurchase {
+  inventory_items: Pick<InventoryItem, "id" | "code" | "name">;
+  wallets: Pick<Wallet, "id" | "name"> | null;
+  banks: Pick<Bank, "id" | "name"> | null;
+  cash_accounts: Pick<CashAccount, "id" | "name"> | null;
+  profiles: Pick<Profile, "id" | "full_name"> | null;
 }
