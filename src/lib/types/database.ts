@@ -23,6 +23,8 @@ export type HandoverStatus = "DRAFT" | "SIGNED" | "COMPLETED";
 
 export type MetricType = "QUANTITATIVE" | "QUALITATIVE";
 export type IntensityLevel = "LOW" | "MEDIUM" | "HIGH";
+export type TrainingCategory = "STRENGTH" | "POWER" | "SPEED" | "AGILITY" | "ENDURANCE" | "FLEXIBILITY" | "TEKNIK" | "MENTAL" | "GAME_INTELLIGENCE";
+export type AttendanceMethod = "MANUAL" | "QR";
 
 export type AchievementType = "ORGANIZATION" | "INDIVIDUAL";
 export type AchievementStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -313,6 +315,7 @@ export interface AthleticMetric {
   name: string;
   type: MetricType;
   unit: string | null;
+  category: TrainingCategory | null;
   created_at: string;
 }
 
@@ -323,9 +326,17 @@ export interface AthleteCoachMapping {
   created_at: string;
 }
 
+export interface Training {
+  id: string;
+  name: string;
+  category: TrainingCategory;
+  created_at: string;
+}
+
 export interface TrainingSession {
   id: string;
   coach_id: string | null;
+  training_id: string | null;
   date: string;
   session_type: string | null;
   duration_minutes: number | null;
@@ -335,6 +346,7 @@ export interface TrainingSession {
 
 export interface TrainingSessionWithCoach extends TrainingSession {
   profiles: Pick<Profile, "id" | "full_name"> | null;
+  trainings: Pick<Training, "id" | "name" | "category"> | null;
   training_session_attendants: TrainingSessionAttendant[];
 }
 
@@ -342,6 +354,9 @@ export interface TrainingSessionAttendant {
   id: string;
   session_id: string;
   athlete_id: string;
+  method: AttendanceMethod;
+  scanned_at: string | null;
+  profiles?: Pick<Profile, "id" | "full_name" | "nim" | "avatar_url"> | null;
 }
 
 export interface Assessment {

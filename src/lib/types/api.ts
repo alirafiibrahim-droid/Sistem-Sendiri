@@ -217,8 +217,14 @@ export interface CreateMetricRequest {
   unit?: string;
 }
 
+export interface CreateTrainingRequest {
+  name: string;
+  category: string;
+}
+
 export interface CreateTrainingSessionRequest {
-  date: string;
+  dates: string[];
+  training_id?: string;
   session_type?: string;
   duration_minutes?: number;
   intensity?: string;

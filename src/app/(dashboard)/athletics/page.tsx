@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,24 +15,32 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { trainingSessionSchema } from "@/lib/validations/training";
-import type { TrainingSessionWithCoach } from "@/lib/types/database";
+import SpiderChart from "@/components/charts/spider-chart";
+import { trainingSessionSchema, trainingFormSchema } from "@/lib/validations/training";
+import type { TrainingSessionWithCoach, Training, Profile } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
+import Link from "next/link";
 
 type FormErrors = Record<string, string>;
+type TabId = "matrix" | "sessions" | "trainings";
+
+const CATEGORY_LABELS: Record<string, string> = {
+  STRENGTH: "Strength",
+  POWER: "Power",
+  SPEED: "Speed",
+  AGILITY: "Agility",
+  ENDURANCE: "Endurance",
+  FLEXIBILITY: "Flexibility",
+  TEKNIK: "Teknik",
+  MENTAL: "Mental",
+  GAME_INTELLIGENCE: "Game Intelligence",
+};
 
 const intensityVariant: Record<string, "destructive" | "warning" | "secondary"> = {
   HIGH: "destructive",
   MEDIUM: "warning",
   LOW: "secondary",
 };
-
-const metrics = [
-  { id: "1", name: "Kecepatan 100m", type: "QUANTITATIVE", unit: "s", latest: 12.5, target: 12.0 },
-  { id: "2", name: "Bench Press", type: "QUANTITATIVE", unit: "kg", latest: 60, target: 70 },
-  { id: "3", name: "Teknik Dasar", type: "QUALITATIVE", unit: "skala 1-5", latest: 4, target: 5 },
-  { id: "4", name: "Lari 5km", type: "QUANTITATIVE", unit: "menit", latest: 25, target: 22 },
-];
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
@@ -41,10 +50,12 @@ function formatDate(dateStr: string) {
   });
 }
 
-export default function AthleticsPage() {
-  const [tab, setTab] = useState<"metrics" | "sessions">("sessions");
+const supabase = createSupabaseClient();
 
-  // Sessions state
+export default function AthleticsPage() {
+  const [tab, setTab] = useState<TabId>("sessions");
+
+  // ─── Sessions state ───
   const [sessions, setSessions] = useState<TrainingSessionWithCoach[]>([]);
   const [meta, setMeta] = useState<ApiMeta>({});
   const [loading, setLoading] = useState(true);
@@ -52,25 +63,36 @@ export default function AthleticsPage() {
   const [page, setPage] = useState(1);
   const limit = 15;
 
-  // Modal state
-  const [showModal, setShowModal] = useState(false);
+  // ─── Session modal ───
+  const [showSessionModal, setShowSessionModal] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-
-  // Form state
-  const [formDate, setFormDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-  const [formType, setFormType] = useState("");
+  const [formDates, setFormDates] = useState<string[]>([new Date().toISOString().split("T")[0]]);
+  const [formTrainingId, setFormTrainingId] = useState("");
   const [formDuration, setFormDuration] = useState("");
   const [formIntensity, setFormIntensity] = useState("MEDIUM");
+  const [trainingsList, setTrainingsList] = useState<Training[]>([]);
 
+  // ─── Trainings tab state ───
+  const [trainings, setTrainings] = useState<Training[]>([]);
+  const [trainingsLoading, setTrainingsLoading] = useState(true);
+  const [showTrainingModal, setShowTrainingModal] = useState(false);
+  const [trainingFormLoading, setTrainingFormLoading] = useState(false);
+  const [trainingErrors, setTrainingErrors] = useState<FormErrors>({});
+  const [trainingName, setTrainingName] = useState("");
+  const [trainingCategory, setTrainingCategory] = useState("");
+  const [editingTraining, setEditingTraining] = useState<Training | null>(null);
+
+  // ─── Matrix state ───
+  const [athletes, setAthletes] = useState<Pick<Profile, "id" | "full_name" | "nim">[]>([]);
+  const [selectedAthlete, setSelectedAthlete] = useState("");
+  const [athleteScores, setAthleteScores] = useState<Array<{ category: string; avg_score: number; assessment_count: number }>>([]);
+  const [scoresLoading, setScoresLoading] = useState(false);
+
+  // ─── Fetch sessions ───
   const fetchSessions = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-    });
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (search) params.set("search", search);
 
     const res = await fetch(`/api/training-sessions?${params}`);
@@ -87,25 +109,63 @@ export default function AthleticsPage() {
     if (tab === "sessions") fetchSessions();
   }, [fetchSessions, tab]);
 
-  const resetForm = () => {
-    setFormDate(new Date().toISOString().split("T")[0]);
-    setFormType("");
+  // ─── Fetch trainings for dropdown ───
+  useEffect(() => {
+    fetch("/api/trainings")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success) {
+          setTrainingsList(j.data);
+          setTrainings(j.data);
+        }
+        setTrainingsLoading(false);
+      });
+  }, [showSessionModal, showTrainingModal]);
+
+  // ─── Fetch athletes for matrix ───
+  useEffect(() => {
+    if (tab !== "matrix") return;
+    supabase
+      .from("profiles")
+      .select("id, full_name, nim")
+      .in("role", ["ANGGOTA", "PELATIH"])
+      .order("full_name")
+      .then(({ data }) => {
+        if (data) setAthletes(data);
+      });
+  }, [tab]);
+
+  // ─── Fetch athlete scores ───
+  useEffect(() => {
+    if (!selectedAthlete) {
+      setAthleteScores([]);
+      return;
+    }
+    setScoresLoading(true);
+    fetch(`/api/athlete-scores?athlete_id=${selectedAthlete}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success) setAthleteScores(j.data);
+        setScoresLoading(false);
+      });
+  }, [selectedAthlete]);
+
+  // ─── Session form ───
+  const resetSessionForm = () => {
+    setFormDates([new Date().toISOString().split("T")[0]]);
+    setFormTrainingId("");
     setFormDuration("");
     setFormIntensity("MEDIUM");
     setErrors({});
   };
 
-  const openModal = () => {
-    resetForm();
-    setShowModal(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSessionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const result = trainingSessionSchema.safeParse({
-      date: formDate,
-      session_type: formType,
+      dates: formDates,
+      training_id: formTrainingId || undefined,
+      session_type: trainingsList.find((t) => t.id === formTrainingId)?.name || "",
       duration_minutes: formDuration,
       intensity: formIntensity,
     });
@@ -127,8 +187,9 @@ export default function AthleticsPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        date: formDate,
-        session_type: formType,
+        dates: formDates,
+        training_id: formTrainingId || undefined,
+        session_type: trainingsList.find((t) => t.id === formTrainingId)?.name || undefined,
         duration_minutes: Number(formDuration),
         intensity: formIntensity,
       }),
@@ -142,117 +203,201 @@ export default function AthleticsPage() {
       return;
     }
 
-    setShowModal(false);
+    setShowSessionModal(false);
     setFormLoading(false);
-    if (tab === "sessions") fetchSessions();
+    fetchSessions();
+  };
+
+  // ─── Training form ───
+  const resetTrainingForm = () => {
+    setTrainingName("");
+    setTrainingCategory("");
+    setEditingTraining(null);
+    setTrainingErrors({});
+  };
+
+  const handleTrainingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const parsed = trainingFormSchema.safeParse({
+      name: trainingName,
+      category: trainingCategory,
+    });
+
+    if (!parsed.success) {
+      const fieldErrors: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setTrainingErrors(fieldErrors);
+      return;
+    }
+
+    setTrainingErrors({});
+    setTrainingFormLoading(true);
+
+    const url = editingTraining ? `/api/trainings/${editingTraining.id}` : "/api/trainings";
+    const method = editingTraining ? "PATCH" : "POST";
+
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      setTrainingErrors({ _form: json.error?.message || "Gagal menyimpan latihan." });
+      setTrainingFormLoading(false);
+      return;
+    }
+
+    setShowTrainingModal(false);
+    setTrainingFormLoading(false);
+    // Refresh trainings list
+    const listRes = await fetch("/api/trainings");
+    const listJson = await listRes.json();
+    if (listJson.success) {
+      setTrainings(listJson.data);
+      setTrainingsList(listJson.data);
+    }
+  };
+
+  const handleDeleteTraining = async (id: string) => {
+    if (!confirm("Hapus latihan ini?")) return;
+    const res = await fetch(`/api/trainings/${id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (json.success) {
+      setTrainings((prev) => prev.filter((t) => t.id !== id));
+      setTrainingsList((prev) => prev.filter((t) => t.id !== id));
+    }
   };
 
   const totalPages = meta.totalPages || 1;
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Keatletan</h2>
           <p className="text-muted-foreground">Monitoring performa dan sesi latihan atlet</p>
         </div>
-        <Button onClick={openModal}>+ Sesi Latihan Baru</Button>
+        {tab === "sessions" && (
+          <Button
+            onClick={() => {
+              resetSessionForm();
+              setShowSessionModal(true);
+            }}
+          >
+            + Sesi Latihan Baru
+          </Button>
+        )}
+        {tab === "trainings" && (
+          <Button
+            onClick={() => {
+              resetTrainingForm();
+              setShowTrainingModal(true);
+            }}
+          >
+            + Latihan Baru
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2">
-        <Button
-          variant={tab === "metrics" ? "default" : "outline"}
-          onClick={() => setTab("metrics")}
-        >
-          Metrik Performa
+        <Button variant={tab === "matrix" ? "default" : "outline"} onClick={() => setTab("matrix")}>
+          Matrik Performa
         </Button>
-        <Button
-          variant={tab === "sessions" ? "default" : "outline"}
-          onClick={() => setTab("sessions")}
-        >
+        <Button variant={tab === "sessions" ? "default" : "outline"} onClick={() => setTab("sessions")}>
           Sesi Latihan
+        </Button>
+        <Button variant={tab === "trainings" ? "default" : "outline"} onClick={() => setTab("trainings")}>
+          Latihan
         </Button>
       </div>
 
-      {tab === "metrics" && (
-        <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {metrics.map((m) => (
-              <Card key={m.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{m.name}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-xs text-muted-foreground">Terbaru</span>
-                      <span className="font-semibold">{m.latest} {m.unit}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-xs text-muted-foreground">Target</span>
-                      <span className="text-sm">{m.target} {m.unit}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-secondary overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.min((m.latest / m.target) * 100, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
+      {/* ═══════════════════════════════════════════════════════════════
+          TAB: Matrik Performa (Spider Chart)
+          ═══════════════════════════════════════════════════════════════ */}
+      {tab === "matrix" && (
+        <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Daftar Metrik</CardTitle>
+              <CardTitle>Pilih Atlet</CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama Metrik</TableHead>
-                    <TableHead>Tipe</TableHead>
-                    <TableHead>Satuan</TableHead>
-                    <TableHead>Nilai Terbaru</TableHead>
-                    <TableHead>Target</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {metrics.map((m) => {
-                    const achieved = m.type === "QUANTITATIVE" && m.unit === "s"
-                      ? m.latest <= m.target
-                      : m.latest >= m.target;
-                    return (
-                      <TableRow key={m.id}>
-                        <TableCell className="font-medium">{m.name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{m.type}</Badge>
-                        </TableCell>
-                        <TableCell>{m.unit}</TableCell>
-                        <TableCell className="font-semibold">{m.latest}</TableCell>
-                        <TableCell>{m.target}</TableCell>
-                        <TableCell>
-                          <Badge variant={achieved ? "success" : "warning"}>
-                            {achieved ? "Tercapai" : "Belum"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+            <CardContent>
+              <Select
+                value={selectedAthlete}
+                onChange={(e) => setSelectedAthlete(e.target.value)}
+              >
+                <option value="">— Pilih Atlet —</option>
+                {athletes.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.full_name} {a.nim ? `(${a.nim})` : ""}
+                  </option>
+                ))}
+              </Select>
             </CardContent>
           </Card>
-        </>
+
+          {selectedAthlete && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Statistik Kategori Latihan</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {scoresLoading ? (
+                  <p className="text-center text-muted-foreground py-8">Memuat data...</p>
+                ) : athleteScores.length > 0 ? (
+                  <div className="flex flex-col items-center gap-6">
+                    <SpiderChart
+                      data={athleteScores.map((s) => ({
+                        category: s.category,
+                        value: s.avg_score,
+                      }))}
+                      size={350}
+                    />
+                    <div className="w-full max-w-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Kategori</TableHead>
+                            <TableHead className="text-right">Skor Rata-rata</TableHead>
+                            <TableHead className="text-right">Jumlah Penilaian</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {athleteScores.map((s) => (
+                            <TableRow key={s.category}>
+                              <TableCell className="font-medium">
+                                {CATEGORY_LABELS[s.category] || s.category}
+                              </TableCell>
+                              <TableCell className="text-right">{s.avg_score}</TableCell>
+                              <TableCell className="text-right">{s.assessment_count}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">Tidak ada data skor.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
+      {/* ═══════════════════════════════════════════════════════════════
+          TAB: Sesi Latihan
+          ═══════════════════════════════════════════════════════════════ */}
       {tab === "sessions" && (
         <>
-          {/* Search */}
           <div className="flex gap-3">
             <Input
               placeholder="Cari sesi latihan..."
@@ -271,22 +416,23 @@ export default function AthleticsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tanggal</TableHead>
-                    <TableHead>Jenis Sesi</TableHead>
+                    <TableHead>Jenis Latihan</TableHead>
                     <TableHead>Pelatih</TableHead>
                     <TableHead>Durasi</TableHead>
                     <TableHead>Intensitas</TableHead>
+                    <TableHead>Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         Memuat data...
                       </TableCell>
                     </TableRow>
                   ) : sessions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         Belum ada sesi latihan.
                       </TableCell>
                     </TableRow>
@@ -294,7 +440,7 @@ export default function AthleticsPage() {
                     sessions.map((s) => (
                       <TableRow key={s.id}>
                         <TableCell className="text-sm">{formatDate(s.date)}</TableCell>
-                        <TableCell className="font-medium">{s.session_type}</TableCell>
+                        <TableCell className="font-medium">{s.session_type || s.trainings?.name || "-"}</TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {s.profiles?.full_name || "-"}
                         </TableCell>
@@ -304,6 +450,11 @@ export default function AthleticsPage() {
                             {s.intensity || "-"}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          <Link href={`/athletics/${s.id}`}>
+                            <Button variant="outline" size="sm">Detail</Button>
+                          </Link>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -311,28 +462,16 @@ export default function AthleticsPage() {
               </Table>
             </CardContent>
 
-            {/* Pagination */}
             {meta.total !== undefined && meta.total > limit && (
               <div className="p-4 border-t border-border flex items-center justify-between bg-muted/50">
                 <p className="text-xs text-muted-foreground">
-                  Menampilkan {(page - 1) * limit + 1} -{" "}
-                  {Math.min(page * limit, meta.total)} dari {meta.total} sesi
+                  Menampilkan {(page - 1) * limit + 1} - {Math.min(page * limit, meta.total)} dari {meta.total} sesi
                 </p>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
+                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                     Prev
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
+                  <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
                     Next
                   </Button>
                 </div>
@@ -342,128 +481,236 @@ export default function AthleticsPage() {
         </>
       )}
 
-      {/* Modal "+ Sesi Latihan Baru" */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setShowModal(false)}
-          />
+      {/* ═══════════════════════════════════════════════════════════════
+          TAB: Latihan (Master Data)
+          ═══════════════════════════════════════════════════════════════ */}
+      {tab === "trainings" && (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nama Latihan</TableHead>
+                  <TableHead>Kategori</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {trainingsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                      Memuat data...
+                    </TableCell>
+                  </TableRow>
+                ) : trainings.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                      Belum ada data latihan.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  trainings.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell className="font-medium">{t.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{CATEGORY_LABELS[t.category] || t.category}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingTraining(t);
+                            setTrainingName(t.name);
+                            setTrainingCategory(t.category);
+                            setShowTrainingModal(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteTraining(t.id)}
+                        >
+                          Hapus
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
+      {/* ═══════════════════════════════════════════════════════════════
+          MODAL: Sesi Latihan Baru
+          ═══════════════════════════════════════════════════════════════ */}
+      {showSessionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowSessionModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-lg font-bold">Sesi Latihan Baru</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Catat sesi latihan atlet
-                  </p>
+                  <p className="text-sm text-muted-foreground">Catat sesi latihan atlet</p>
                 </div>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="p-1 hover:bg-muted rounded-lg"
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
+                <button onClick={() => setShowSessionModal(false)} className="p-1 hover:bg-muted rounded-lg">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Tanggal & Jenis */}
-                <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSessionSubmit} className="space-y-4">
+                {/* Jenis Latihan (from trainings) */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Jenis Latihan <span className="text-red-500">*</span></label>
+                  <Select value={formTrainingId} onChange={(e) => setFormTrainingId(e.target.value)}>
+                    <option value="">— Pilih Latihan —</option>
+                    {trainingsList.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({CATEGORY_LABELS[t.category] || t.category})
+                      </option>
+                    ))}
+                  </Select>
+                  {errors.training_id && <p className="text-sm text-red-500">{errors.training_id}</p>}
+                </div>
+
+                {/* Multiple Dates */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Tanggal Latihan <span className="text-red-500">*</span></label>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="date">
-                      Tanggal <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      id="date"
-                      type="date"
-                      value={formDate}
-                      onChange={(e) => setFormDate(e.target.value)}
-                    />
-                    {errors.date && (
-                      <p className="text-sm text-red-500">{errors.date}</p>
-                    )}
+                    {formDates.map((d, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          type="date"
+                          value={d}
+                          onChange={(e) => {
+                            const newDates = [...formDates];
+                            newDates[i] = e.target.value;
+                            setFormDates(newDates);
+                          }}
+                          className="flex-1"
+                        />
+                        {formDates.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFormDates(formDates.filter((_, idx) => idx !== i))}
+                          >
+                            Hapus
+                          </Button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="session_type">
-                      Jenis Latihan <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      id="session_type"
-                      placeholder="Contoh: Kardio & Teknik"
-                      value={formType}
-                      onChange={(e) => setFormType(e.target.value)}
-                    />
-                    {errors.session_type && (
-                      <p className="text-sm text-red-500">{errors.session_type}</p>
-                    )}
-                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFormDates([...formDates, new Date().toISOString().split("T")[0]])}
+                  >
+                    + Tambah Tanggal
+                  </Button>
+                  {errors.dates && <p className="text-sm text-red-500">{errors.dates}</p>}
                 </div>
 
                 {/* Durasi & Intensitas */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="duration">
-                      Durasi (menit) <span className="text-red-500">*</span>
-                    </label>
+                    <label className="text-sm font-medium">Durasi (menit) <span className="text-red-500">*</span></label>
                     <Input
-                      id="duration"
                       type="number"
                       min="1"
                       placeholder="60"
                       value={formDuration}
                       onChange={(e) => setFormDuration(e.target.value)}
                     />
-                    {errors.duration_minutes && (
-                      <p className="text-sm text-red-500">{errors.duration_minutes}</p>
-                    )}
+                    {errors.duration_minutes && <p className="text-sm text-red-500">{errors.duration_minutes}</p>}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="intensity">
-                      Intensitas <span className="text-red-500">*</span>
-                    </label>
-                    <Select
-                      id="intensity"
-                      value={formIntensity}
-                      onChange={(e) => setFormIntensity(e.target.value)}
-                    >
+                    <label className="text-sm font-medium">Intensitas <span className="text-red-500">*</span></label>
+                    <Select value={formIntensity} onChange={(e) => setFormIntensity(e.target.value)}>
                       <option value="LOW">Rendah</option>
                       <option value="MEDIUM">Sedang</option>
                       <option value="HIGH">Tinggi</option>
                     </Select>
-                    {errors.intensity && (
-                      <p className="text-sm text-red-500">{errors.intensity}</p>
-                    )}
+                    {errors.intensity && <p className="text-sm text-red-500">{errors.intensity}</p>}
                   </div>
                 </div>
 
-                {errors._form && (
-                  <p className="text-sm text-red-500 text-center">
-                    {errors._form}
-                  </p>
-                )}
+                {errors._form && <p className="text-sm text-red-500 text-center">{errors._form}</p>}
 
                 <div className="flex gap-3 pt-2">
                   <Button type="submit" disabled={formLoading} className="flex-1">
                     {formLoading ? "Menyimpan..." : "Simpan Sesi Latihan"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowModal(false)}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setShowSessionModal(false)}>
+                    Batal
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MODAL: Latihan Baru / Edit
+          ═══════════════════════════════════════════════════════════════ */}
+      {showTrainingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowTrainingModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-bold">{editingTraining ? "Edit Latihan" : "Latihan Baru"}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {editingTraining ? "Ubah data latihan" : "Tambah data latihan baru"}
+                  </p>
+                </div>
+                <button onClick={() => setShowTrainingModal(false)} className="p-1 hover:bg-muted rounded-lg">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleTrainingSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Nama Latihan <span className="text-red-500">*</span></label>
+                  <Input
+                    placeholder="Contoh: Sprint 100m"
+                    value={trainingName}
+                    onChange={(e) => setTrainingName(e.target.value)}
+                  />
+                  {trainingErrors.name && <p className="text-sm text-red-500">{trainingErrors.name}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Kategori <span className="text-red-500">*</span></label>
+                  <Select value={trainingCategory} onChange={(e) => setTrainingCategory(e.target.value)}>
+                    <option value="">— Pilih Kategori —</option>
+                    {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </Select>
+                  {trainingErrors.category && <p className="text-sm text-red-500">{trainingErrors.category}</p>}
+                </div>
+
+                {trainingErrors._form && <p className="text-sm text-red-500 text-center">{trainingErrors._form}</p>}
+
+                <div className="flex gap-3 pt-2">
+                  <Button type="submit" disabled={trainingFormLoading} className="flex-1">
+                    {trainingFormLoading ? "Menyimpan..." : editingTraining ? "Simpan Perubahan" : "Simpan Latihan"}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setShowTrainingModal(false)}>
                     Batal
                   </Button>
                 </div>

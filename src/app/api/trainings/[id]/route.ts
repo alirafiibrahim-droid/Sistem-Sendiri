@@ -9,10 +9,11 @@ import {
   getUserRole,
 } from "@/lib/api-response";
 import { requireRole } from "@/lib/authz";
+import { trainingFormSchema } from "@/lib/validations/training";
 import { NextRequest } from "next/server";
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -20,8 +21,8 @@ export async function GET(
     const supabase = await createSupabaseServer();
 
     const { data, error } = await supabase
-      .from("training_sessions")
-      .select("*, profiles(id, full_name), trainings(id, name, category), training_session_attendants(*, profiles(id, full_name, nim, avatar_url))")
+      .from("trainings")
+      .select("*")
       .eq("id", id)
       .single();
 
@@ -40,47 +41,33 @@ export async function PATCH(
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    if (role !== "coach") {
-      const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
-      if (forbidden) return forbidden;
-    }
+
+    const forbidden = requireRole(role, [
+      "ADMIN",
+      "PENGURUS_INTI",
+      "KABID",
+      "PELATIH",
+    ]);
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const body = await request.json();
-    const { athlete_ids, ...sessionData } = body;
+    const parsed = trainingFormSchema.partial().safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
+    }
 
     const supabase = await createSupabaseServer();
-
     const { data, error } = await supabase
-      .from("training_sessions")
-      .update(sessionData)
+      .from("trainings")
+      .update(parsed.data)
       .eq("id", id)
       .select()
       .single();
 
     if (error) return apiInternalError();
     if (!data) return apiNotFound();
-
-    if (athlete_ids !== undefined) {
-      await supabase
-        .from("training_session_attendants")
-        .delete()
-        .eq("session_id", id);
-
-      if (athlete_ids.length > 0) {
-        const attendants = athlete_ids.map((athlete_id: string) => ({
-          session_id: id,
-          athlete_id,
-        }));
-
-        const { error: attError } = await supabase
-          .from("training_session_attendants")
-          .insert(attendants);
-
-        if (attError) return apiInternalError();
-      }
-    }
-
     return apiOk(data);
   } catch {
     return apiInternalError();
@@ -88,31 +75,21 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const uid = getUid(request);
-    const role = getUserRole(request);
+    const uid = getUid(_request);
+    const role = getUserRole(_request);
     if (!uid) return apiUnauthorized();
-    if (role !== "coach") {
-      const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
-      if (forbidden) return forbidden;
-    }
+
+    const forbidden = requireRole(role, ["ADMIN", "PENGURUS_INTI"]);
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
-    await supabase
-      .from("training_session_attendants")
-      .delete()
-      .eq("session_id", id);
-
-    const { error } = await supabase
-      .from("training_sessions")
-      .delete()
-      .eq("id", id);
-
+    const { error } = await supabase.from("trainings").delete().eq("id", id);
     if (error) return apiInternalError();
     return apiOk({ deleted: true });
   } catch {

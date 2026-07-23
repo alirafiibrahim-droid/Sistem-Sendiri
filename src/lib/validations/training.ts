@@ -1,11 +1,31 @@
 import { z } from "zod";
 
+export const trainingCategoryEnum = z.enum([
+  "STRENGTH", "POWER", "SPEED", "AGILITY",
+  "ENDURANCE", "FLEXIBILITY", "TEKNIK", "MENTAL", "GAME_INTELLIGENCE",
+]);
+
+export const trainingFormSchema = z.object({
+  name: z
+    .string()
+    .min(2, "Nama latihan minimal 2 karakter.")
+    .max(100, "Nama latihan maksimal 100 karakter."),
+  category: trainingCategoryEnum,
+});
+
+export type TrainingFormValues = z.infer<typeof trainingFormSchema>;
+
 export const trainingSessionSchema = z.object({
-  date: z.string().min(1, "Tanggal wajib diisi."),
+  dates: z
+    .array(z.string().min(1, "Tanggal wajib diisi."))
+    .min(1, "Minimal satu tanggal harus dipilih."),
+  training_id: z.string().uuid().optional().or(z.literal("")),
   session_type: z
     .string()
     .min(2, "Jenis latihan minimal 2 karakter.")
-    .max(50, "Jenis latihan maksimal 50 karakter."),
+    .max(50, "Jenis latihan maksimal 50 karakter.")
+    .optional()
+    .or(z.literal("")),
   duration_minutes: z.coerce
     .number()
     .int("Durasi harus bilangan bulat.")

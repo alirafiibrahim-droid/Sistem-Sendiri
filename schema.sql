@@ -58,6 +58,11 @@ CREATE TYPE public.handover_status AS ENUM ('DRAFT', 'SIGNED', 'COMPLETED');
 -- A3: Tipe metrik keatletan & intensitas latihan
 CREATE TYPE public.metric_type AS ENUM ('QUANTITATIVE', 'QUALITATIVE');
 CREATE TYPE public.intensity_level AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+CREATE TYPE public.training_category AS ENUM (
+  'STRENGTH', 'POWER', 'SPEED', 'AGILITY',
+  'ENDURANCE', 'FLEXIBILITY', 'TEKNIK', 'MENTAL', 'GAME_INTELLIGENCE'
+);
+CREATE TYPE public.attendance_method AS ENUM ('MANUAL', 'QR');
 
 -- A8: Tipe & status prestasi
 CREATE TYPE public.achievement_type AS ENUM ('ORGANIZATION', 'INDIVIDUAL');
@@ -335,10 +340,23 @@ CREATE TABLE public.athletic_metrics (
     name       VARCHAR(100) NOT NULL,
     type       public.metric_type NOT NULL,
     unit       VARCHAR(20),
+    category   public.training_category,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE public.athletic_metrics IS 'Definisi metrik kemampuan atlet (A3)';
+
+-- ----------------------------------------------------------------------------
+-- A3: TRAININGS (Master data latihan)
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.trainings (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name       VARCHAR(100) NOT NULL,
+    category   public.training_category NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.trainings IS 'Master data latihan — nama + kategori (A3)';
 
 -- ----------------------------------------------------------------------------
 -- A3: ATHLETE-COACH MAPPING (Relasi pelatih-atlet)
@@ -359,6 +377,7 @@ COMMENT ON TABLE public.athlete_coach_mapping IS 'Mapping relasi pelatih dengan 
 CREATE TABLE public.training_sessions (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     coach_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    training_id      UUID REFERENCES public.trainings(id) ON DELETE SET NULL,
     date             DATE NOT NULL,
     session_type     VARCHAR(50),
     duration_minutes INTEGER,
@@ -375,10 +394,12 @@ CREATE TABLE public.training_session_attendants (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL REFERENCES public.training_sessions(id) ON DELETE CASCADE,
     athlete_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    method     public.attendance_method NOT NULL DEFAULT 'MANUAL',
+    scanned_at TIMESTAMPTZ,
     UNIQUE(session_id, athlete_id)
 );
 
-COMMENT ON TABLE public.training_session_attendants IS 'Daftar atlet yang hadir dalam sesi latihan (A3)';
+COMMENT ON TABLE public.training_session_attendants IS 'Daftar kehadiran atlet dalam sesi latihan (A3)';
 
 -- ----------------------------------------------------------------------------
 -- A3: ASSESSMENTS (Hasil penilaian hybrid atlet)
@@ -717,6 +738,7 @@ ALTER TABLE public.athletic_metrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.training_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assessments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.athlete_targets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.training_session_attendants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.incidental_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_funds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_team ENABLE ROW LEVEL SECURITY;
@@ -1015,6 +1037,23 @@ CREATE POLICY "training_sessions_insert_coach"
         OR coach_id = auth.uid()
     );
 
+-- Trainings: all authenticated can read, core/coach can manage
+ALTER TABLE public.trainings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "trainings_select_all"
+    ON public.trainings FOR SELECT
+    TO authenticated USING (true);
+
+CREATE POLICY "trainings_manage_core"
+    ON public.trainings FOR ALL
+    TO authenticated USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE profiles.id = auth.uid()
+              AND profiles.role IN ('ADMIN', 'PENGURUS_INTI', 'KABID', 'PELATIH')
+        )
+    );
+
 -- Assessments: atlet lihat milik sendiri, coach lihat atlet bimbingan
 CREATE POLICY "assessments_select_own_or_coach"
     ON public.assessments FOR SELECT
@@ -1059,6 +1098,23 @@ CREATE POLICY "athlete_targets_manage_core"
     USING (
         (SELECT role FROM public.profiles WHERE id = auth.uid())
         IN ('ADMIN', 'PENGURUS_INTI')
+    );
+
+-- Training session attendants: all auth read, insert own attendance or coach manage
+CREATE POLICY "tsa_select_all"
+    ON public.training_session_attendants FOR SELECT
+    TO authenticated USING (true);
+
+CREATE POLICY "tsa_insert_own"
+    ON public.training_session_attendants FOR INSERT
+    TO authenticated
+    WITH CHECK (athlete_id = auth.uid());
+
+CREATE POLICY "tsa_manage_core"
+    ON public.training_session_attendants FOR ALL
+    TO authenticated USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID', 'PELATIH')
     );
 
 -- ----------------------------------------------------------------------------

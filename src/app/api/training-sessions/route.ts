@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServer();
     let query = supabase
       .from("training_sessions")
-      .select("*", { count: "exact" });
+      .select("*, trainings(id, name, category)", { count: "exact" });
 
     if (start_date) query = query.gte("date", start_date);
     if (end_date) query = query.lte("date", end_date);
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
 
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID", "PELATIH"]);
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -98,32 +98,37 @@ export async function POST(request: NextRequest) {
       return apiBadRequest(msg);
     }
 
-    const { date, session_type, duration_minutes, intensity, athlete_ids } = parsed.data;
+    const { dates, training_id, session_type, duration_minutes, intensity, athlete_ids } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
-    const { data: session, error: sessionError } = await supabase
+    const sessionsToInsert = dates.map((date) => ({
+      coach_id: uid,
+      training_id: training_id || null,
+      date,
+      session_type: session_type || null,
+      duration_minutes,
+      intensity,
+    }));
+
+    const { data: sessions, error: sessionError } = await supabase
       .from("training_sessions")
-      .insert({
-        coach_id: uid,
-        date,
-        session_type,
-        duration_minutes,
-        intensity,
-      })
-      .select()
-      .single();
+      .insert(sessionsToInsert)
+      .select();
 
     if (sessionError) {
       console.error("TRAINING SESSIONS INSERT ERROR:", sessionError);
       return apiInternalError(sessionError.message);
     }
 
-    if (athlete_ids && athlete_ids.length > 0) {
-      const attendants = athlete_ids.map((athlete_id: string) => ({
-        session_id: session.id,
-        athlete_id,
-      }));
+    if (athlete_ids && athlete_ids.length > 0 && sessions) {
+      const attendants = sessions.flatMap((s) =>
+        athlete_ids.map((athlete_id: string) => ({
+          session_id: s.id,
+          athlete_id,
+          method: "MANUAL" as const,
+        }))
+      );
 
       const { error: attError } = await supabase
         .from("training_session_attendants")
@@ -134,7 +139,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return apiCreated(session);
+    return apiCreated(sessions);
   } catch (e) {
     console.error("TRAINING SESSIONS POST ERROR:", e);
     return apiInternalError();

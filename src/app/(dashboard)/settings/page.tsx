@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
 import type { OrganizationSettings, Division, Fakultas, Jurusan, Profile, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
+import SpiderChart from "@/components/charts/spider-chart";
 
 type FormErrors = Record<string, string>;
 type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan" | "kas-bank" | "dompet";
@@ -45,6 +46,9 @@ export default function SettingsPage() {
   const [profileAvatarPreview, setProfileAvatarPreview] = useState("");
   const [profileErrors, setProfileErrors] = useState<FormErrors>({});
   const [profileLoading, setProfileLoading] = useState(false);
+
+  // ─── Athlete Spider Chart ───
+  const [athleteScores, setAthleteScores] = useState<Array<{ category: string; avg_score: number; assessment_count: number }>>([]);
 
   // ─── Organization Tab ───
   const [orgData, setOrgData] = useState<OrganizationSettings | null>(null);
@@ -164,6 +168,16 @@ export default function SettingsPage() {
       }
     });
   }, [supabase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Fetch Athlete Scores (for spider chart) ───
+  useEffect(() => {
+    if (!user) return;
+    fetch(`/api/athlete-scores?athlete_id=${user.id}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success) setAthleteScores(j.data);
+      });
+  }, [user]);
 
   // ─── Fetch All Users (for Pengaturan User) ───
   const fetchAllUsers = useCallback(async () => {
@@ -787,6 +801,27 @@ export default function SettingsPage() {
             ) : (
               <p className="text-muted-foreground">Memuat data...</p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Athlete Spider Chart (visible on profile tab) */}
+      {activeTab === "profile" && user && athleteScores.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Statistik Kategori Latihan</CardTitle>
+            <CardDescription>Skor rata-rata berdasarkan data penilaian</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-center">
+              <SpiderChart
+                data={athleteScores.map((s) => ({
+                  category: s.category,
+                  value: s.avg_score,
+                }))}
+                size={320}
+              />
+            </div>
           </CardContent>
         </Card>
       )}
