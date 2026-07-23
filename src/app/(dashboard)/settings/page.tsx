@@ -19,6 +19,7 @@ import {
 import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
 import type { OrganizationSettings, Division, Fakultas, Jurusan, Profile, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
 import SpiderChart from "@/components/charts/spider-chart";
+import Link from "next/link";
 
 type FormErrors = Record<string, string>;
 type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan" | "kas-bank" | "dompet";
@@ -796,7 +797,12 @@ export default function SettingsPage() {
                 </div>
 
                 {profileErrors._form && <p className="text-sm text-red-500 text-center">{profileErrors._form}</p>}
-                <Button type="button" disabled={profileLoading} onClick={handleProfileSubmit}>{profileLoading ? "Menyimpan..." : "Simpan Profil"}</Button>
+                <div className="flex gap-3">
+                  <Button type="button" disabled={profileLoading} onClick={handleProfileSubmit}>{profileLoading ? "Menyimpan..." : "Simpan Profil"}</Button>
+                  <Link href="/athletics/scan">
+                    <Button type="button" variant="outline">Absensi QR Code</Button>
+                  </Link>
+                </div>
               </div>
             ) : (
               <p className="text-muted-foreground">Memuat data...</p>
@@ -806,7 +812,7 @@ export default function SettingsPage() {
       )}
 
       {/* Athlete Spider Chart (visible on profile tab) */}
-      {activeTab === "profile" && user && athleteScores.length > 0 && (
+      {activeTab === "profile" && user && athleteScores.filter((s) => s.assessment_count > 0).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Statistik Kategori Latihan</CardTitle>
@@ -815,10 +821,12 @@ export default function SettingsPage() {
           <CardContent>
             <div className="flex justify-center">
               <SpiderChart
-                data={athleteScores.map((s) => ({
-                  category: s.category,
-                  value: s.avg_score,
-                }))}
+                data={athleteScores
+                  .filter((s) => s.assessment_count > 0)
+                  .map((s) => ({
+                    category: s.category,
+                    value: s.avg_score,
+                  }))}
                 size={320}
               />
             </div>

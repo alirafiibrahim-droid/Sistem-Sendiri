@@ -51,9 +51,9 @@ export default function SpiderChart({
   const cy = size / 2;
   const radius = (size / 2) * 0.7;
   const n = data.length;
-  if (n < 3) return null;
+  if (n === 0) return null;
 
-  const angleStep = 360 / n;
+  const angleStep = 360 / Math.max(n, 3);
   const levels = 5;
 
   // Grid polygons

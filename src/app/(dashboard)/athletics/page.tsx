@@ -136,19 +136,21 @@ export default function AthleticsPage() {
   }, [tab]);
 
   // ─── Fetch athlete scores ───
-  useEffect(() => {
+  const fetchScores = useCallback(async () => {
     if (!selectedAthlete) {
       setAthleteScores([]);
       return;
     }
     setScoresLoading(true);
-    fetch(`/api/athlete-scores?athlete_id=${selectedAthlete}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.success) setAthleteScores(j.data);
-        setScoresLoading(false);
-      });
+    const res = await fetch(`/api/athlete-scores?athlete_id=${selectedAthlete}`);
+    const j = await res.json();
+    if (j.success) setAthleteScores(j.data);
+    setScoresLoading(false);
   }, [selectedAthlete]);
+
+  useEffect(() => {
+    fetchScores();
+  }, [fetchScores, tab]);
 
   // ─── Session form ───
   const resetSessionForm = () => {
@@ -352,40 +354,57 @@ export default function AthleticsPage() {
               <CardContent>
                 {scoresLoading ? (
                   <p className="text-center text-muted-foreground py-8">Memuat data...</p>
-                ) : athleteScores.length > 0 ? (
-                  <div className="flex flex-col items-center gap-6">
-                    <SpiderChart
-                      data={athleteScores.map((s) => ({
-                        category: s.category,
-                        value: s.avg_score,
-                      }))}
-                      size={350}
-                    />
-                    <div className="w-full max-w-lg">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Kategori</TableHead>
-                            <TableHead className="text-right">Skor Rata-rata</TableHead>
-                            <TableHead className="text-right">Jumlah Penilaian</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {athleteScores.map((s) => (
-                            <TableRow key={s.category}>
-                              <TableCell className="font-medium">
-                                {CATEGORY_LABELS[s.category] || s.category}
-                              </TableCell>
-                              <TableCell className="text-right">{s.avg_score}</TableCell>
-                              <TableCell className="text-right">{s.assessment_count}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
+                ) : athleteScores.filter((s) => s.assessment_count > 0).length > 0 ? (
+                  (() => {
+                    const scored = athleteScores.filter((s) => s.assessment_count > 0);
+                    const totalAssess = scored.reduce((s, c) => s + c.assessment_count, 0);
+                    const overallAvg = scored.reduce((s, c) => s + c.avg_score, 0) / scored.length;
+                    return (
+                      <div className="flex flex-col items-center gap-6">
+                        <SpiderChart
+                          data={scored.map((s) => ({
+                            category: s.category,
+                            value: s.avg_score,
+                          }))}
+                          size={350}
+                        />
+                        <div className="flex gap-6 text-sm">
+                          <div className="text-center">
+                            <p className="text-2xl font-bold">{totalAssess}</p>
+                            <p className="text-muted-foreground">Total Penilaian</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-2xl font-bold">{overallAvg.toFixed(1)}</p>
+                            <p className="text-muted-foreground">Rata-rata Keseluruhan</p>
+                          </div>
+                        </div>
+                        <div className="w-full max-w-lg">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Kategori</TableHead>
+                                <TableHead className="text-right">Skor Rata-rata</TableHead>
+                                <TableHead className="text-right">Jumlah Penilaian</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {scored.map((s) => (
+                                <TableRow key={s.category}>
+                                  <TableCell className="font-medium">
+                                    {CATEGORY_LABELS[s.category] || s.category}
+                                  </TableCell>
+                                  <TableCell className="text-right">{s.avg_score}</TableCell>
+                                  <TableCell className="text-right">{s.assessment_count}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    );
+                  })()
                 ) : (
-                  <p className="text-center text-muted-foreground py-8">Tidak ada data skor.</p>
+                  <p className="text-center text-muted-foreground py-8">Belum ada data penilaian untuk atlet ini. Berikan penilaian melalui Detail Sesi Latihan.</p>
                 )}
               </CardContent>
             </Card>
