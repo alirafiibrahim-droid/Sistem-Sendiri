@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { inventoryItemFormSchema } from "@/lib/validations/inventory";
+import type { WalletWithOwner } from "@/lib/types/database";
 
 type FormErrors = Record<string, string>;
 
@@ -25,6 +26,24 @@ export default function NewInventoryItemPage() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+
+  // Purchase fields (optional)
+  const [includePurchase, setIncludePurchase] = useState(false);
+  const [purchaseDate, setPurchaseDate] = useState("");
+  const [purchaseAmount, setPurchaseAmount] = useState("");
+  const [purchaseSource, setPurchaseSource] = useState("");
+  const [purchaseDesc, setPurchaseDesc] = useState("");
+  const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
+
+  const fetchWallets = useCallback(async () => {
+    const res = await fetch("/api/wallets");
+    const json = await res.json();
+    if (json.success) setWalletsList(json.data);
+  }, []);
+
+  useEffect(() => {
+    fetchWallets();
+  }, [fetchWallets]);
 
   const validate = (): boolean => {
     const result = inventoryItemFormSchema.safeParse({
@@ -64,16 +83,21 @@ export default function NewInventoryItemPage() {
       return;
     }
 
-    const { error: insertError } = await supabase.from("inventory_items").insert({
-      name,
-      category,
-      stock: Number(stock),
-      condition,
-      location,
-      description: description || "",
-      photo_url: photoUrl || null,
-      created_by: user.id,
-    });
+    // Create inventory item
+    const { data: newItem, error: insertError } = await supabase
+      .from("inventory_items")
+      .insert({
+        name,
+        category,
+        stock: Number(stock),
+        condition,
+        location,
+        description: description || "",
+        photo_url: photoUrl || null,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
       setErrors({ _form: insertError.message });
@@ -81,7 +105,41 @@ export default function NewInventoryItemPage() {
       return;
     }
 
-    router.push("/inventory");
+    // If purchase data is provided, create purchase record
+    if (includePurchase && purchaseDate && purchaseAmount && purchaseSource) {
+      let walletId = "";
+      let bankId = "";
+      let cashAccountId = "";
+      if (purchaseSource.startsWith("bank:")) {
+        bankId = purchaseSource.replace("bank:", "");
+      } else if (purchaseSource.startsWith("cash:")) {
+        cashAccountId = purchaseSource.replace("cash:", "");
+      } else if (purchaseSource) {
+        walletId = purchaseSource;
+      }
+
+      const purchaseRes = await fetch(`/api/inventory/${newItem.id}/purchases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: Number(purchaseAmount),
+          date: purchaseDate,
+          wallet_id: walletId || undefined,
+          bank_id: bankId || undefined,
+          cash_account_id: cashAccountId || undefined,
+          description: purchaseDesc || undefined,
+        }),
+      });
+
+      if (!purchaseRes.ok) {
+        const purchaseJson = await purchaseRes.json();
+        setErrors({ _form: "Barang berhasil dibuat, tapi gagal menyimpan pembelian: " + (purchaseJson.error?.message || "Unknown error") });
+        setLoading(false);
+        return;
+      }
+    }
+
+    router.push(`/inventory/${newItem.id}`);
     router.refresh();
   };
 
@@ -202,13 +260,102 @@ export default function NewInventoryItemPage() {
               {errors.photo_url && <p className="text-sm text-red-500">{errors.photo_url}</p>}
             </div>
 
+            {/* ============================================================ */}
+            {/* DATA PEMBELIAN (Opsional) */}
+            {/* ============================================================ */}
+            <div className="border-t pt-4 mt-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includePurchase}
+                  onChange={(e) => setIncludePurchase(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span className="text-sm font-medium">Sertakan Data Pembelian</span>
+              </label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Centang untuk mencatat pembelian barang ini sekaligus
+              </p>
+            </div>
+
+            {includePurchase && (
+              <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="purchase-date">
+                      Tanggal Pembelian <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      id="purchase-date"
+                      type="date"
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="purchase-amount">
+                      Nominal (Rp) <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      id="purchase-amount"
+                      type="number"
+                      min="1"
+                      placeholder="0"
+                      value={purchaseAmount}
+                      onChange={(e) => setPurchaseAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="purchase-source">
+                    Sumber Dana <span className="text-red-500">*</span>
+                  </label>
+                  <Select id="purchase-source" value={purchaseSource} onChange={(e) => setPurchaseSource(e.target.value)}>
+                    <option value="">Pilih sumber dana...</option>
+                    {walletsList.some((w) => w.bank_id) && (
+                      <optgroup label="Bank">
+                        {walletsList.filter((w) => w.bank_id).map((w) => (
+                          <option key={w.id} value={`bank:${w.bank_id}`}>{w.banks?.name} ({w.name})</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {walletsList.some((w) => w.cash_account_id) && (
+                      <optgroup label="Kas">
+                        {walletsList.filter((w) => w.cash_account_id).map((w) => (
+                          <option key={w.id} value={`cash:${w.cash_account_id}`}>{w.cash_accounts?.name} ({w.name})</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {walletsList.length > 0 && (
+                      <optgroup label="Dompet">
+                        {walletsList.map((w) => (
+                          <option key={w.id} value={w.id}>{w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="purchase-desc">
+                    Deskripsi Pembelian
+                  </label>
+                  <Input
+                    id="purchase-desc"
+                    placeholder="Contoh: Pembelian 2 unit laptop untuk divisi IT"
+                    value={purchaseDesc}
+                    onChange={(e) => setPurchaseDesc(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
             {errors._form && (
               <p className="text-sm text-red-500 text-center">{errors._form}</p>
             )}
 
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={loading}>
-                {loading ? "Menyimpan..." : "Simpan Barang"}
+                {loading ? "Menyimpan..." : includePurchase ? "Simpan Barang & Pembelian" : "Simpan Barang"}
               </Button>
               <Button
                 type="button"
