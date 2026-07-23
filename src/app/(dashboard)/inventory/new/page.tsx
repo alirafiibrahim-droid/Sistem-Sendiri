@@ -30,10 +30,13 @@ export default function NewInventoryItemPage() {
   // Purchase fields (optional)
   const [includePurchase, setIncludePurchase] = useState(false);
   const [purchaseDate, setPurchaseDate] = useState("");
-  const [purchaseAmount, setPurchaseAmount] = useState("");
+  const [purchaseUnitPrice, setPurchaseUnitPrice] = useState("");
+  const [purchaseOtherCost, setPurchaseOtherCost] = useState("");
   const [purchaseSource, setPurchaseSource] = useState("");
   const [purchaseDesc, setPurchaseDesc] = useState("");
   const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
+
+  const purchaseTotal = (Number(stock) || 0) * (Number(purchaseUnitPrice) || 0) + (Number(purchaseOtherCost) || 0);
 
   const fetchWallets = useCallback(async () => {
     const res = await fetch("/api/wallets");
@@ -106,7 +109,7 @@ export default function NewInventoryItemPage() {
     }
 
     // If purchase data is provided, create purchase record
-    if (includePurchase && purchaseDate && purchaseAmount && purchaseSource) {
+    if (includePurchase && purchaseDate && purchaseUnitPrice && purchaseSource && purchaseTotal > 0) {
       let walletId = "";
       let bankId = "";
       let cashAccountId = "";
@@ -122,7 +125,7 @@ export default function NewInventoryItemPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: Number(purchaseAmount),
+          amount: purchaseTotal,
           date: purchaseDate,
           wallet_id: walletId || undefined,
           bank_id: bankId || undefined,
@@ -293,16 +296,42 @@ export default function NewInventoryItemPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="purchase-amount">
-                      Nominal (Rp) <span className="text-red-500">*</span>
+                    <label className="text-sm font-medium" htmlFor="purchase-unit-price">
+                      Harga Satuan (Rp) <span className="text-red-500">*</span>
                     </label>
                     <Input
-                      id="purchase-amount"
+                      id="purchase-unit-price"
                       type="number"
                       min="1"
                       placeholder="0"
-                      value={purchaseAmount}
-                      onChange={(e) => setPurchaseAmount(e.target.value)}
+                      value={purchaseUnitPrice}
+                      onChange={(e) => setPurchaseUnitPrice(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="purchase-other-cost">
+                      Biaya Lainnya (Rp)
+                    </label>
+                    <Input
+                      id="purchase-other-cost"
+                      type="number"
+                      min="0"
+                      placeholder="0 (ongkir, dll)"
+                      value={purchaseOtherCost}
+                      onChange={(e) => setPurchaseOtherCost(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Total <span className="text-muted-foreground font-normal">(Stok &times; Harga Satuan + Biaya Lain)</span>
+                    </label>
+                    <Input
+                      type="text"
+                      readOnly
+                      value={new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(purchaseTotal)}
+                      className="bg-muted font-bold"
                     />
                   </div>
                 </div>

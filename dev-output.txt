@@ -143,3 +143,18 @@ https://react.dev/link/hydration-mismatch
  GET /api/finances/dashboard 200 in 1108ms (next.js: 15ms, proxy.ts: 280ms, application-code: 813ms)
 ✓ Compiled in 359ms
  GET /finances 200 in 210ms (next.js: 120ms, application-code: 90ms)
+ GET /inventory 200 in 135ms (next.js: 65ms, application-code: 70ms)
+ GET /inventory 200 in 867ms (next.js: 10ms, application-code: 857ms)
+ GET /api/settings 200 in 906ms (next.js: 190ms, proxy.ts: 515ms, application-code: 201ms)
+ GET /inventory/new 200 in 400ms (next.js: 318ms, application-code: 82ms)
+ GET /api/wallets 200 in 826ms (next.js: 255ms, proxy.ts: 406ms, application-code: 165ms)
+ GET /api/wallets 200 in 469ms (next.js: 6ms, proxy.ts: 308ms, application-code: 155ms)
+✓ Compiled in 516ms
+ GET /inventory/new 200 in 837ms (next.js: 298ms, application-code: 538ms)
+ GET /api/wallets 200 in 2.3s (next.js: 249ms, proxy.ts: 1631ms, application-code: 408ms)
+✓ Compiled in 217ms
+ GET /inventory/new 200 in 628ms (next.js: 270ms, application-code: 359ms)
+ GET /api/wallets 200 in 1157ms (next.js: 266ms, proxy.ts: 646ms, application-code: 245ms)
+✓ Compiled in 193ms
+ GET /inventory/new 200 in 632ms (next.js: 278ms, application-code: 354ms)
+ GET /api/wallets 200 in 1377ms (next.js: 274ms, proxy.ts: 926ms, application-code: 177ms)
