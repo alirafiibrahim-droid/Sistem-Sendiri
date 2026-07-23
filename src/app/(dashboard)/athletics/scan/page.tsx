@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, useCallback, Suspense, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,7 @@ function formatDate(dateStr: string) {
 
 function ScanPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const preselectedSession = searchParams.get("session") || "";
 
   const [mode, setMode] = useState<"select" | "manual" | "qr">(
@@ -39,6 +40,14 @@ function ScanPageInner() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [attendedSessions, setAttendedSessions] = useState<Set<string>>(new Set());
+
+  // Camera state
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState("");
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -52,18 +61,114 @@ function ScanPageInner() {
     fetchSessions();
   }, [fetchSessions]);
 
-  // Auto-submit if session param is provided (from QR scan)
+  // Auto-submit if session param is provided
   useEffect(() => {
     if (!preselectedSession || submitting || message) return;
-
-    // Check if already attended
     if (attendedSessions.has(preselectedSession)) {
       setMessage({ type: "success", text: "Anda sudah tercatat hadir di sesi ini." });
       return;
     }
-
     handleAttendance(preselectedSession, "QR");
-  }, [preselectedSession, attendedSessions]);
+  }, [preselectedSession, attendedSessions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Start camera
+  const startCamera = useCallback(async () => {
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setCameraActive(true);
+        startScanning();
+      }
+    } catch (err) {
+      console.error("Camera error:", err);
+      setCameraError(
+        err instanceof DOMException && err.name === "NotAllowedError"
+          ? "Akses kamera ditolak. Berikan izin kamera di browser Anda."
+          : "Tidak dapat mengakses kamera. Pastikan browser mendukung kamera."
+      );
+    }
+  }, []);
+
+  // Stop camera
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  // Scan QR from video frames
+  const startScanning = useCallback(() => {
+    if (scanIntervalRef.current) return;
+
+    // Try native BarcodeDetector first
+    if ("BarcodeDetector" in window) {
+      const detector = new BarcodeDetector({ formats: ["qr_code"] });
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0) {
+            const value = barcodes[0].rawValue;
+            handleQrDetected(value);
+          }
+        } catch {
+          // ignore detection errors
+        }
+      }, 500);
+    } else {
+      // Fallback: canvas-based detection not available, prompt manual
+      setCameraError("Browser tidak mendukung QR scanner otomatis. Gunakan mode manual atau salin link absensi.");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle QR code detected
+  const handleQrDetected = useCallback((value: string) => {
+    stopCamera();
+
+    // Extract session ID from URL like /athletics/scan?session=<id>
+    let sessionId = "";
+    try {
+      const url = new URL(value);
+      sessionId = url.searchParams.get("session") || "";
+    } catch {
+      // Maybe it's just a raw UUID
+      if (/^[0-9a-f-]{36}$/i.test(value)) {
+        sessionId = value;
+      }
+    }
+
+    if (sessionId) {
+      handleAttendance(sessionId, "QR");
+    } else {
+      setMessage({ type: "error", text: "QR Code tidak valid. Bukan link absensi yang dikenali." });
+    }
+  }, [stopCamera]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
+
+  // Stop camera when switching away from QR mode
+  useEffect(() => {
+    if (mode !== "qr" && cameraActive) {
+      stopCamera();
+    }
+  }, [mode, cameraActive, stopCamera]);
 
   const handleAttendance = async (sessionId: string, method: "MANUAL" | "QR") => {
     setSubmitting(true);
@@ -112,20 +217,25 @@ function ScanPageInner() {
       {/* Mode selector */}
       <div className="flex gap-3">
         <Button
-          variant={mode === "select" || mode === "manual" ? "default" : "outline"}
+          variant={mode === "manual" ? "default" : "outline"}
           onClick={() => setMode("manual")}
         >
           Absensi Manual
         </Button>
         <Button
           variant={mode === "qr" ? "default" : "outline"}
-          onClick={() => setMode("qr")}
+          onClick={() => {
+            setMode("qr");
+            if (!cameraActive && !cameraError) {
+              setTimeout(() => startCamera(), 100);
+            }
+          }}
         >
           Scan QR Code
         </Button>
       </div>
 
-      {/* Manual mode: list sessions, click to attend */}
+      {/* Manual mode */}
       {mode === "manual" && (
         <Card>
           <CardHeader>
@@ -187,32 +297,67 @@ function ScanPageInner() {
         </Card>
       )}
 
-      {/* QR mode: shows if preselectedSession is set, otherwise prompt to scan */}
+      {/* QR mode with camera */}
       {mode === "qr" && (
         <Card>
           <CardHeader>
-            <CardTitle>Scan QR Code</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Scan QR Code</span>
+              {cameraActive && (
+                <Button variant="outline" size="sm" onClick={stopCamera}>
+                  Matikan Kamera
+                </Button>
+              )}
+            </CardTitle>
           </CardHeader>
-          <CardContent className="text-center space-y-4">
-            {preselectedSession ? (
+          <CardContent className="space-y-4">
+            {preselectedSession && !cameraActive ? (
               submitting ? (
-                <p className="text-muted-foreground">Mencatat kehadiran...</p>
+                <p className="text-muted-foreground text-center">Mencatat kehadiran...</p>
               ) : (
-                <p className="text-muted-foreground">
-                  {message?.type === "success"
-                    ? "Kehadiran sudah tercatat."
-                    : "Memproses absensi..."}
+                <p className="text-muted-foreground text-center">
+                  {message?.type === "success" ? "Kehadiran sudah tercatat." : "Memproses absensi..."}
                 </p>
               )
             ) : (
-              <div className="space-y-4">
-                <p className="text-muted-foreground">
-                  Buka kamera HP Anda dan scan QR Code yang ditampilkan oleh pelatih.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  QR Code berisi link yang akan membuka halaman ini dan otomatis mencatat kehadiran Anda.
-                </p>
-              </div>
+              <>
+                {/* Video element for camera */}
+                <div className="relative w-full max-w-md mx-auto aspect-[4/3] bg-black rounded-lg overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    className="w-full h-full object-cover"
+                    playsInline
+                    muted
+                  />
+                  <canvas ref={canvasRef} className="hidden" />
+                  {cameraActive && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-48 h-48 border-2 border-white/70 rounded-lg" />
+                    </div>
+                  )}
+                </div>
+
+                {cameraError && (
+                  <p className="text-sm text-red-500 text-center">{cameraError}</p>
+                )}
+
+                {!cameraActive && !cameraError && (
+                  <div className="text-center">
+                    <Button onClick={startCamera}>
+                      Aktifkan Kamera
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Arahkan kamera ke QR Code yang ditampilkan oleh pelatih
+                    </p>
+                  </div>
+                )}
+
+                {cameraActive && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    Arahkan kamera ke QR Code... otomatis terdeteksi.
+                  </p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
