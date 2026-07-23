@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServer();
     let query = supabase
       .from("training_sessions")
-      .select("*, trainings(id, name, category)", { count: "exact" });
+      .select("*", { count: "exact" });
 
     if (start_date) query = query.gte("date", start_date);
     if (end_date) query = query.lte("date", end_date);
@@ -69,7 +69,21 @@ export async function GET(request: NextRequest) {
       return apiInternalError();
     }
 
-    const result = await attachProfiles(data as TrainingSessionWithCoach[], supabase);
+    let result = await attachProfiles(data as TrainingSessionWithCoach[], supabase);
+
+    // Attach trainings if training_id column exists
+    const trainingIds = [...new Set(result.map((s) => s.training_id).filter(Boolean) as string[])];
+    if (trainingIds.length > 0) {
+      const { data: trainingsData } = await supabase
+        .from("trainings")
+        .select("id, name, category")
+        .in("id", trainingIds);
+      const trainingMap = new Map((trainingsData || []).map((t) => [t.id, t]));
+      result = result.map((s) => ({
+        ...s,
+        trainings: s.training_id ? trainingMap.get(s.training_id) || null : null,
+      }));
+    }
 
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);

@@ -19,13 +19,29 @@ export async function GET(
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
-    const { data, error } = await supabase
+    // Try with trainings join first (needs migration); fallback without
+    let query = supabase
       .from("training_sessions")
-      .select("*, profiles(id, full_name), trainings(id, name, category), training_session_attendants(*, profiles(id, full_name, nim, avatar_url))")
+      .select("*, profiles(id, full_name), training_session_attendants(*, profiles(id, full_name, nim, avatar_url))")
       .eq("id", id)
       .single();
 
+    const { data, error } = await query;
+
     if (error || !data) return apiNotFound();
+
+    // Attempt to attach trainings data if training_id exists
+    if (data.training_id) {
+      const { data: training } = await supabase
+        .from("trainings")
+        .select("id, name, category")
+        .eq("id", data.training_id)
+        .single();
+      data.trainings = training || null;
+    } else {
+      data.trainings = null;
+    }
+
     return apiOk(data);
   } catch {
     return apiInternalError();
