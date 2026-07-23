@@ -1076,7 +1076,7 @@ CREATE POLICY "assessments_insert_coach"
         EXISTS (
             SELECT 1 FROM public.athlete_coach_mapping acm
             WHERE acm.coach_id = auth.uid()
-              AND acm.athlete_id = NEW.athlete_id
+              AND acm.athlete_id = assessments.athlete_id
         )
         OR (SELECT role FROM public.profiles WHERE id = auth.uid())
            IN ('ADMIN', 'PENGURUS_INTI', 'PELATIH', 'KABID')
