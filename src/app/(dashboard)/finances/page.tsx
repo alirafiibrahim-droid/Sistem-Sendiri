@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { financeFormSchema } from "@/lib/validations/finance";
-import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount } from "@/lib/types/database";
+import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount, IncidentalProject } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
@@ -112,12 +112,13 @@ export default function FinancesPage() {
   const [formDate, setFormDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-  const [formProgramId, setFormProgramId] = useState("");
+  const [formSubjectId, setFormSubjectId] = useState("");
   const [formReceiptUrl, setFormReceiptUrl] = useState("");
   const [formWalletId, setFormWalletId] = useState("");
 
   // Dropdown data
   const [programs, setPrograms] = useState<Pick<Program, "id" | "name">[]>([]);
+  const [projects, setProjects] = useState<Pick<IncidentalProject, "id" | "name">[]>([]);
   const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
   const [banksList, setBanksList] = useState<Pick<Bank, "id" | "name" | "account_number">[]>([]);
   const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
@@ -160,6 +161,16 @@ export default function FinancesPage() {
       .order("name")
       .then(({ data }) => {
         if (data) setPrograms(data);
+      });
+  }, [supabase]);
+
+  useEffect(() => {
+    supabase
+      .from("incidental_projects")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => {
+        if (data) setProjects(data);
       });
   }, [supabase]);
 
@@ -217,7 +228,7 @@ export default function FinancesPage() {
     setFormAmount("");
     setFormDescription("");
     setFormDate(new Date().toISOString().split("T")[0]);
-    setFormProgramId("");
+    setFormSubjectId("");
     setFormReceiptUrl("");
     setFormWalletId("");
     setErrors({});
@@ -243,12 +254,21 @@ export default function FinancesPage() {
       walletId = formWalletId;
     }
 
+    let formProgramId = "";
+    let formProjectId = "";
+    if (formSubjectId.startsWith("project:")) {
+      formProjectId = formSubjectId.replace("project:", "");
+    } else if (formSubjectId) {
+      formProgramId = formSubjectId;
+    }
+
     const result = financeFormSchema.safeParse({
       type: formType,
       amount: formAmount,
       description: formDescription,
       date: formDate,
       program_id: formProgramId || undefined,
+      project_id: formProjectId || undefined,
       receipt_url: formReceiptUrl || undefined,
       wallet_id: walletId || undefined,
       bank_id: bankId || undefined,
@@ -277,6 +297,7 @@ export default function FinancesPage() {
         description: formDescription,
         date: formDate,
         program_id: formProgramId || undefined,
+        project_id: formProjectId || undefined,
         receipt_url: formReceiptUrl || undefined,
         wallet_id: walletId || undefined,
         bank_id: bankId || undefined,
@@ -497,7 +518,7 @@ export default function FinancesPage() {
                 <TableHead>Tipe</TableHead>
                 <TableHead>Deskripsi</TableHead>
                 <TableHead>Dompet</TableHead>
-                <TableHead>Program</TableHead>
+                <TableHead>Program / Proyek</TableHead>
                 <TableHead>Dicatat Oleh</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
               </TableRow>
@@ -537,7 +558,7 @@ export default function FinancesPage() {
                       {t.wallets?.name || t.banks?.name || t.cash_accounts?.name || "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {t.programs?.name || "-"}
+                      {t.programs?.name || t.incidental_projects?.name || "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {t.profiles?.full_name || "-"}
@@ -760,25 +781,41 @@ export default function FinancesPage() {
                   )}
                 </div>
 
-                {/* Program Terkait */}
+                {/* Program / Proyek Terkait */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="program">
-                    Program Terkait
+                    Program / Proyek Terkait
                   </label>
                   <Select
                     id="program"
-                    value={formProgramId}
-                    onChange={(e) => setFormProgramId(e.target.value)}
+                    value={formSubjectId}
+                    onChange={(e) => setFormSubjectId(e.target.value)}
                   >
-                    <option value="">Tidak terkait program</option>
-                    {programs.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
+                    <option value="">Tidak terkait program/proyek</option>
+                    {programs.length > 0 && (
+                      <optgroup label="Program">
+                        {programs.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {projects.length > 0 && (
+                      <optgroup label="Proyek Insidental">
+                        {projects.map((p) => (
+                          <option key={p.id} value={`project:${p.id}`}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </Select>
                   {errors.program_id && (
                     <p className="text-sm text-red-500">{errors.program_id}</p>
+                  )}
+                  {errors.project_id && (
+                    <p className="text-sm text-red-500">{errors.project_id}</p>
                   )}
                 </div>
 

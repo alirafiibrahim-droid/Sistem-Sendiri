@@ -216,6 +216,7 @@ CREATE TABLE public.finances (
     description TEXT NOT NULL,
     date        DATE NOT NULL,
     program_id  UUID REFERENCES public.programs(id) ON DELETE SET NULL,
+    project_id  UUID REFERENCES public.incidental_projects(id) ON DELETE SET NULL,
     receipt_url TEXT NOT NULL,
     created_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()

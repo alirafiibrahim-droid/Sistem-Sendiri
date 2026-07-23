@@ -134,6 +134,7 @@ export interface CreateFinanceRequest {
   description: string;
   date: string;
   program_id?: string;
+  project_id?: string;
   receipt_url: string;
   wallet_id?: string;
   bank_id?: string;

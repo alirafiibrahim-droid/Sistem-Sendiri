@@ -207,6 +207,7 @@ export interface Finance {
   description: string;
   date: string;
   program_id: string | null;
+  project_id: string | null;
   receipt_url: string;
   wallet_id: string | null;
   bank_id: string | null;
@@ -218,6 +219,7 @@ export interface Finance {
 export interface FinanceWithDetails extends Finance {
   profiles: Pick<Profile, "id" | "full_name"> | null;
   programs: Pick<Program, "id" | "name"> | null;
+  incidental_projects: Pick<IncidentalProject, "id" | "name"> | null;
   wallets: Pick<Wallet, "id" | "name"> | null;
   banks: Pick<Bank, "id" | "name"> | null;
   cash_accounts: Pick<CashAccount, "id" | "name"> | null;

@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("finances")
-      .select("*, programs(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)", { count: "exact" });
+      .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)", { count: "exact" });
 
     if (type) query = query.eq("type", type);
     if (programId) query = query.eq("program_id", programId);
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       return apiBadRequest(msg);
     }
 
-    const { type, amount, description, date, program_id, receipt_url, wallet_id, bank_id, cash_account_id } = parsed.data;
+    const { type, amount, description, date, program_id, project_id, receipt_url, wallet_id, bank_id, cash_account_id } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
@@ -108,13 +108,14 @@ export async function POST(request: NextRequest) {
         description,
         date,
         program_id: program_id || null,
+        project_id: project_id || null,
         receipt_url: receipt_url || "",
         wallet_id: wallet_id || null,
         bank_id: bank_id || null,
         cash_account_id: cash_account_id || null,
         created_by: uid,
       })
-      .select("*, programs(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
+      .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
       .single();
 
     if (error) {
