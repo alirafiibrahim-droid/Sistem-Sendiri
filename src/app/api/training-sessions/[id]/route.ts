@@ -19,30 +19,63 @@ export async function GET(
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
-    // Try with trainings join first (needs migration); fallback without
-    let query = supabase
+    // Step 1: fetch session (no joins)
+    const { data: session, error } = await supabase
       .from("training_sessions")
-      .select("*, profiles(id, full_name), training_session_attendants(*, profiles(id, full_name, nim, avatar_url))")
+      .select("*")
       .eq("id", id)
       .single();
 
-    const { data, error } = await query;
+    if (error || !session) return apiNotFound();
 
-    if (error || !data) return apiNotFound();
-
-    // Attempt to attach trainings data if training_id exists
-    if (data.training_id) {
-      const { data: training } = await supabase
-        .from("trainings")
-        .select("id, name, category")
-        .eq("id", data.training_id)
+    // Step 2: attach coach profile
+    let profiles = null;
+    if (session.coach_id) {
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("id", session.coach_id)
         .single();
-      data.trainings = training || null;
-    } else {
-      data.trainings = null;
+      profiles = p || null;
     }
 
-    return apiOk(data);
+    // Step 3: attach training data
+    let trainings = null;
+    if (session.training_id) {
+      const { data: t } = await supabase
+        .from("trainings")
+        .select("id, name, category")
+        .eq("id", session.training_id)
+        .single();
+      trainings = t || null;
+    }
+
+    // Step 4: attach attendants + their profiles
+    const { data: attendantsRaw } = await supabase
+      .from("training_session_attendants")
+      .select("*")
+      .eq("session_id", id);
+
+    let attendants: Array<Record<string, unknown>> = attendantsRaw || [];
+    if (attendants.length > 0) {
+      const athleteIds = [...new Set(attendants.map((a) => a.athlete_id))];
+      const { data: attProfiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, nim, avatar_url")
+        .in("id", athleteIds);
+      const profileMap = new Map((attProfiles || []).map((p) => [p.id, p]));
+      attendants = attendants.map((a) => ({
+        ...a,
+        profiles: profileMap.get(a.athlete_id) || null,
+      }));
+    }
+
+    return apiOk({
+      ...session,
+      profiles,
+      trainings,
+      training_session_attendants: attendants,
+    });
   } catch {
     return apiInternalError();
   }
