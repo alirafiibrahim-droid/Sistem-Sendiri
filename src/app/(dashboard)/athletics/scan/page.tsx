@@ -113,8 +113,10 @@ function ScanPageInner() {
     if (scanIntervalRef.current) return;
 
     // Try native BarcodeDetector first
-    if ("BarcodeDetector" in window) {
-      const detector = new BarcodeDetector({ formats: ["qr_code"] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const BD = (globalThis as any).BarcodeDetector;
+    if (BD) {
+      const detector = new BD({ formats: ["qr_code"] });
       scanIntervalRef.current = setInterval(async () => {
         if (!videoRef.current || videoRef.current.readyState < 2) return;
         try {

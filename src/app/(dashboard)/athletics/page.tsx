@@ -128,7 +128,7 @@ export default function AthleticsPage() {
     supabase
       .from("profiles")
       .select("id, full_name, nim")
-      .in("role", ["ANGGOTA", "PELATIH"])
+      .not("role", "in", "(PELATIH,PEMBINA)")
       .order("full_name")
       .then(({ data }) => {
         if (data) setAthletes(data);
@@ -417,7 +417,6 @@ export default function AthleticsPage() {
                   <TableRow>
                     <TableHead>Tanggal</TableHead>
                     <TableHead>Jenis Latihan</TableHead>
-                    <TableHead>Pelatih</TableHead>
                     <TableHead>Durasi</TableHead>
                     <TableHead>Intensitas</TableHead>
                     <TableHead>Aksi</TableHead>
@@ -426,13 +425,13 @@ export default function AthleticsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         Memuat data...
                       </TableCell>
                     </TableRow>
                   ) : sessions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         Belum ada sesi latihan.
                       </TableCell>
                     </TableRow>
@@ -441,9 +440,6 @@ export default function AthleticsPage() {
                       <TableRow key={s.id}>
                         <TableCell className="text-sm">{formatDate(s.date)}</TableCell>
                         <TableCell className="font-medium">{s.session_type || s.trainings?.name || "-"}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {s.profiles?.full_name || "-"}
-                        </TableCell>
                         <TableCell>{s.duration_minutes} menit</TableCell>
                         <TableCell>
                           <Badge variant={intensityVariant[s.intensity || ""] || "secondary"}>

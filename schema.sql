@@ -1066,7 +1066,7 @@ CREATE POLICY "assessments_select_own_or_coach"
               AND acm.athlete_id = assessments.athlete_id
         )
         OR (SELECT role FROM public.profiles WHERE id = auth.uid())
-           IN ('ADMIN', 'PENGURUS_INTI')
+           IN ('ADMIN', 'PENGURUS_INTI', 'PELATIH', 'KABID')
     );
 
 CREATE POLICY "assessments_insert_coach"
@@ -1079,7 +1079,7 @@ CREATE POLICY "assessments_insert_coach"
               AND acm.athlete_id = NEW.athlete_id
         )
         OR (SELECT role FROM public.profiles WHERE id = auth.uid())
-           IN ('ADMIN', 'PENGURUS_INTI')
+           IN ('ADMIN', 'PENGURUS_INTI', 'PELATIH', 'KABID')
     );
 
 -- Athlete targets: atlet lihat milik sendiri, coach/admin kelola
