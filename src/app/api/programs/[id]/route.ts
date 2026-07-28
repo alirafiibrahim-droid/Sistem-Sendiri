@@ -4,11 +4,13 @@ import {
   apiUnauthorized,
   apiForbidden,
   apiNotFound,
+  apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
 import { isAdmin, isRoleAllowed } from "@/lib/authz";
+import { programUpdateSchema } from "@/lib/validations/program";
 
 // GET /api/programs/[id]
 export async function GET(
@@ -61,9 +63,16 @@ export async function PATCH(
     }
 
     const body = await request.json();
+
+    const validation = programUpdateSchema.safeParse(body);
+    if (!validation.success) {
+      const msg = validation.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
+    }
+
     const { data, error } = await supabase
       .from("programs")
-      .update(body)
+      .update(validation.data)
       .eq("id", id)
       .select("*, divisions(id, name)")
       .single();

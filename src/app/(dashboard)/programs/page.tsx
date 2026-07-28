@@ -120,7 +120,11 @@ export default function ProgramsPage() {
               ) : (
                 programs.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/programs/${p.id}`} className="hover:underline">
+                        {p.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>{p.divisions?.name ?? "-"}</TableCell>
                     <TableCell>
                       <Badge variant={statusVariant[p.status]}>{p.status}</Badge>
@@ -130,9 +134,11 @@ export default function ProgramsPage() {
                       {p.start_date} s/d {p.end_date}
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon">
-                        ...
-                      </Button>
+                      <Link href={`/programs/${p.id}`}>
+                        <Button variant="ghost" size="icon">
+                          ...
+                        </Button>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))
