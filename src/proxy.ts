@@ -19,7 +19,7 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
+          cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value);
           });
           supabaseResponse = NextResponse.next({ request });
@@ -36,10 +36,10 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Attach user info to headers for API route handlers
+  // Attach user info to request headers for API route handlers
   if (user) {
-    supabaseResponse.headers.set("x-user-id", user.id);
-    supabaseResponse.headers.set("x-user-email", user.email ?? "");
+    request.headers.set("x-user-id", user.id);
+    request.headers.set("x-user-email", user.email ?? "");
 
     // Fetch user role from profiles table
     const { data: profile } = await supabase
@@ -49,11 +49,17 @@ export async function proxy(request: NextRequest) {
       .single();
 
     if (profile) {
-      supabaseResponse.headers.set("x-user-role", profile.role);
-      supabaseResponse.headers.set("x-user-status", profile.status);
+      request.headers.set("x-user-role", profile.role);
+      request.headers.set("x-user-status", profile.status);
     }
   }
 
+  // Rebuild response so it picks up the request headers we just set
+  supabaseResponse = NextResponse.next({ request });
+
+  // Copy any cookies that were set during session refresh
+  // (the setAll callback already set them on request.cookies,
+  //  but we need to propagate them if setAll didn't fire)
   return supabaseResponse;
 }
 
