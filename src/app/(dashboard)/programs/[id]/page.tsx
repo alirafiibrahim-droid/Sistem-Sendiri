@@ -95,7 +95,8 @@ export default function ProgramDetailPage() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [submittingSessions, setSubmittingSessions] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [sessionDates, setSessionDates] = useState("");
+  const [sessionDateInput, setSessionDateInput] = useState(new Date().toISOString().split("T")[0]);
+  const [sessionDateList, setSessionDateList] = useState<string[]>([]);
   const [sessionTitle, setSessionTitle] = useState("");
   const [sessionMessage, setSessionMessage] = useState<{type: "success" | "error"; text: string} | null>(null);
 
@@ -175,20 +176,20 @@ export default function ProgramDetailPage() {
 
   const handleCreateSessions = async (e: React.FormEvent) => {
     e.preventDefault();
-    const dates = sessionDates.split("\n").map(d => d.trim()).filter(Boolean);
-    if (dates.length === 0) return;
+    if (sessionDateList.length === 0) return;
     setSubmittingSessions(true);
     setSessionMessage(null);
     try {
       const res = await fetch(`/api/programs/${id}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dates, title: sessionTitle || undefined }),
+        body: JSON.stringify({ dates: sessionDateList, title: sessionTitle || undefined }),
       });
       const json = await res.json();
       if (json.success) {
         setSessionMessage({ type: "success", text: "Sesi berhasil dibuat!" });
-        setSessionDates("");
+        setSessionDateList([]);
+        setSessionDateInput(new Date().toISOString().split("T")[0]);
         setSessionTitle("");
         setShowCreateForm(false);
         fetchSessions();
@@ -772,15 +773,45 @@ export default function ProgramDetailPage() {
                   <CardContent>
                     <form onSubmit={handleCreateSessions} className="space-y-4">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Tanggal (YYYY-MM-DD)</label>
-                        <textarea
-                          placeholder={"2024-01-15\n2024-01-22\n2024-01-29"}
-                          value={sessionDates}
-                          onChange={(e) => setSessionDates(e.target.value)}
-                          rows={4}
-                          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                        <p className="text-xs text-muted-foreground">Satu tanggal per baris</p>
+                        <label className="text-sm font-medium">Tanggal</label>
+                        <div className="flex gap-2">
+                          <Input
+                            type="date"
+                            value={sessionDateInput}
+                            onChange={(e) => setSessionDateInput(e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              if (sessionDateInput && !sessionDateList.includes(sessionDateInput)) {
+                                setSessionDateList([...sessionDateList, sessionDateInput]);
+                              }
+                            }}
+                          >
+                            Tambah Tanggal
+                          </Button>
+                        </div>
+                        {sessionDateList.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {sessionDateList.map((d, i) => (
+                              <span
+                                key={d}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-secondary text-secondary-foreground"
+                              >
+                                {new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                                <button
+                                  type="button"
+                                  className="hover:text-destructive ml-1"
+                                  onClick={() => setSessionDateList(sessionDateList.filter((_, j) => j !== i))}
+                                >
+                                  &times;
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Judul Sesi (opsional)</label>

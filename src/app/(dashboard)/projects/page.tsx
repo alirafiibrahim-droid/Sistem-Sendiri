@@ -93,7 +93,8 @@ export default function ProjectsPage() {
   const [projectSessions, setProjectSessions] = useState<ProjectSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionFormOpen, setSessionFormOpen] = useState(false);
-  const [sessionDates, setSessionDates] = useState("");
+  const [sessionDateInput, setSessionDateInput] = useState(new Date().toISOString().split("T")[0]);
+  const [sessionDateList, setSessionDateList] = useState<string[]>([]);
   const [sessionTitle, setSessionTitle] = useState("");
   const [sessionSubmitting, setSessionSubmitting] = useState(false);
   const [sessionMessage, setSessionMessage] = useState<SessionMessage | null>(null);
@@ -204,7 +205,8 @@ export default function ProjectsPage() {
   const openSessions = (p: IncidentalProject) => {
     setSelectedProject({ id: p.id, name: p.name });
     setSessionFormOpen(false);
-    setSessionDates("");
+    setSessionDateList([]);
+    setSessionDateInput(new Date().toISOString().split("T")[0]);
     setSessionTitle("");
     setSessionMessage(null);
     setQrSessionId(null);
@@ -221,12 +223,7 @@ export default function ProjectsPage() {
     e.preventDefault();
     if (!selectedProject) return;
 
-    const dates = sessionDates
-      .split("\n")
-      .map((d) => d.trim())
-      .filter(Boolean);
-
-    if (dates.length === 0) {
+    if (sessionDateList.length === 0) {
       setSessionMessage({ type: "error", text: "Minimal satu tanggal harus diisi." });
       return;
     }
@@ -238,7 +235,7 @@ export default function ProjectsPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        dates,
+        dates: sessionDateList,
         title: sessionTitle || undefined,
       }),
     });
@@ -255,7 +252,8 @@ export default function ProjectsPage() {
     }
 
     setSessionMessage({ type: "success", text: "Sesi berhasil dibuat." });
-    setSessionDates("");
+    setSessionDateList([]);
+    setSessionDateInput(new Date().toISOString().split("T")[0]);
     setSessionTitle("");
     setSessionFormOpen(false);
     setSessionSubmitting(false);
@@ -662,16 +660,45 @@ export default function ProjectsPage() {
                     <label className="text-sm font-medium">
                       Tanggal <span className="text-red-500">*</span>
                     </label>
-                    <textarea
-                      placeholder="Tiap baris = satu tanggal (contoh: 2025-01-15)"
-                      value={sessionDates}
-                      onChange={(e) => setSessionDates(e.target.value)}
-                      rows={4}
-                      className="flex w-full rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Satu tanggal tiap baris. Format: YYYY-MM-DD
-                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="date"
+                        value={sessionDateInput}
+                        onChange={(e) => setSessionDateInput(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (sessionDateInput && !sessionDateList.includes(sessionDateInput)) {
+                            setSessionDateList([...sessionDateList, sessionDateInput]);
+                          }
+                        }}
+                      >
+                        Tambah Tanggal
+                      </Button>
+                    </div>
+                    {sessionDateList.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {sessionDateList.map((d, i) => (
+                          <span
+                            key={d}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-secondary text-secondary-foreground"
+                          >
+                            {new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                            <button
+                              type="button"
+                              className="hover:text-destructive ml-1"
+                              onClick={() => setSessionDateList(sessionDateList.filter((_, j) => j !== i))}
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Judul (opsional)</label>
@@ -691,7 +718,8 @@ export default function ProjectsPage() {
                       size="sm"
                       onClick={() => {
                         setSessionFormOpen(false);
-                        setSessionDates("");
+                        setSessionDateList([]);
+                        setSessionDateInput(new Date().toISOString().split("T")[0]);
                         setSessionTitle("");
                       }}
                     >
