@@ -14,6 +14,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+type SessionType = "program" | "training" | "project";
+
+const SESSION_LABELS: Record<SessionType, string> = {
+  program: "Sesi Program Kerja",
+  training: "Sesi Latihan",
+  project: "Sesi Proyek Insidental",
+};
+
 const STATUS_LABELS: Record<string, string> = {
   PLANNED: "Direncanakan",
   ONGOING: "Berlangsung",
@@ -34,6 +42,16 @@ function formatDate(dateStr: string) {
   });
 }
 
+type SessionItem = {
+  id: string;
+  name: string;
+  start_date?: string;
+  end_date?: string;
+  date?: string;
+  status?: string;
+  session_type?: string | null;
+};
+
 function AttendanceInner() {
   const searchParams = useSearchParams();
   const preselectedProgram = searchParams.get("program") || "";
@@ -41,9 +59,8 @@ function AttendanceInner() {
   const [mode, setMode] = useState<"select" | "manual" | "qr">(
     preselectedProgram ? "qr" : "select"
   );
-  const [programs, setPrograms] = useState<
-    { id: string; name: string; start_date: string; end_date: string; status: string }[]
-  >([]);
+  const [sessionType, setSessionType] = useState<SessionType>("program");
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -56,17 +73,38 @@ function AttendanceInner() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
-  const fetchPrograms = useCallback(async () => {
+  const fetchSessions = useCallback(async (type: SessionType) => {
     setLoading(true);
-    const res = await fetch("/api/attendance/programs");
-    const json = await res.json();
-    if (json.success) setPrograms(json.data);
+    try {
+      let url = "";
+      if (type === "program") {
+        url = "/api/attendance/programs";
+      } else if (type === "training") {
+        const today = new Date().toISOString().split("T")[0];
+        url = `/api/training-sessions?sort=date&order=desc&limit=50&start_date=${today}`;
+      } else {
+        url = "/api/attendance/projects";
+      }
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.success) {
+        const items = type === "training"
+          ? (json.data || []).map((s: SessionItem) => ({
+              ...s,
+              name: s.session_type || `Latihan ${formatDate(s.date || "")}`,
+            }))
+          : json.data;
+        setSessions(items);
+      }
+    } catch {
+      // ignore
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchPrograms();
-  }, [fetchPrograms]);
+    fetchSessions(sessionType);
+  }, [sessionType, fetchSessions]);
 
   useEffect(() => {
     if (!preselectedProgram || submitting || message) return;
@@ -162,21 +200,32 @@ function AttendanceInner() {
     if (mode !== "qr" && cameraActive) stopCamera();
   }, [mode, cameraActive, stopCamera]);
 
-  const handleAttendance = async (programId: string, method: "MANUAL" | "QR") => {
+  const handleAttendance = async (id: string, method: "MANUAL" | "QR") => {
     setSubmitting(true);
     setMessage(null);
 
-    const res = await fetch("/api/attendance", {
+    let url = "/api/attendance";
+    let body: Record<string, string> = { program_id: id, method };
+
+    if (sessionType === "training") {
+      url = `/api/training-sessions/${id}/attendance`;
+      body = { method };
+    } else if (sessionType === "project") {
+      url = "/api/attendance/projects";
+      body = { project_id: id, method };
+    }
+
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ program_id: programId, method }),
+      body: JSON.stringify(body),
     });
 
     const json = await res.json();
 
     if (json.success) {
       setMessage({ type: "success", text: "Kehadiran berhasil dicatat!" });
-      setAttendedIds((prev) => new Set(prev).add(programId));
+      setAttendedIds((prev) => new Set(prev).add(id));
     } else {
       setMessage({
         type: "error",
@@ -187,11 +236,13 @@ function AttendanceInner() {
     setSubmitting(false);
   };
 
+  const sessionTypes: SessionType[] = ["program", "training", "project"];
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Absensi</h2>
-        <p className="text-muted-foreground">Catat kehadiran Anda pada program kerja</p>
+        <p className="text-muted-foreground">Catat kehadiran Anda</p>
       </div>
 
       {message && (
@@ -229,15 +280,28 @@ function AttendanceInner() {
       {mode === "manual" && (
         <Card>
           <CardHeader>
-            <CardTitle>Pilih Program Kerja</CardTitle>
+            <CardTitle>Pilih Sesi</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="space-y-4">
+            <div className="flex gap-2 flex-wrap">
+              {sessionTypes.map((st) => (
+                <Button
+                  key={st}
+                  variant={sessionType === st ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSessionType(st)}
+                >
+                  {SESSION_LABELS[st]}
+                </Button>
+              ))}
+            </div>
+
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Program</TableHead>
+                  <TableHead>{sessionType === "training" ? "Sesi" : "Nama"}</TableHead>
                   <TableHead>Tanggal</TableHead>
-                  <TableHead>Status</TableHead>
+                  {sessionType !== "training" && <TableHead>Status</TableHead>}
                   <TableHead>Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -248,32 +312,38 @@ function AttendanceInner() {
                       Memuat...
                     </TableCell>
                   </TableRow>
-                ) : programs.length === 0 ? (
+                ) : sessions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      Tidak ada program kerja tersedia.
+                      Tidak ada sesi tersedia.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  programs.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.name}</TableCell>
+                  sessions.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell className="text-sm">
-                        {formatDate(p.start_date)} — {formatDate(p.end_date)}
+                        {sessionType === "training" && s.date
+                          ? formatDate(s.date)
+                          : s.start_date
+                            ? `${formatDate(s.start_date)}${s.end_date ? ` — ${formatDate(s.end_date)}` : ""}`
+                            : "-"}
                       </TableCell>
+                      {sessionType !== "training" && (
+                        <TableCell>
+                          <Badge variant={STATUS_VARIANT[s.status || ""] || "secondary"}>
+                            {STATUS_LABELS[s.status || ""] || s.status || "-"}
+                          </Badge>
+                        </TableCell>
+                      )}
                       <TableCell>
-                        <Badge variant={STATUS_VARIANT[p.status] || "secondary"}>
-                          {STATUS_LABELS[p.status] || p.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {attendedIds.has(p.id) ? (
+                        {attendedIds.has(s.id) ? (
                           <Badge variant="success">Hadir</Badge>
                         ) : (
                           <Button
                             size="sm"
                             disabled={submitting}
-                            onClick={() => handleAttendance(p.id, "MANUAL")}
+                            onClick={() => handleAttendance(s.id, "MANUAL")}
                           >
                             {submitting ? "Mengirim..." : "Hadir"}
                           </Button>
