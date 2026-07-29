@@ -89,6 +89,20 @@ export default function ProgramDetailPage() {
   const [allProfiles, setAllProfiles] = useState<{ id: string; full_name: string; nim: string }[]>([]);
   const [newMemberId, setNewMemberId] = useState("");
 
+  const [activeTab, setActiveTab] = useState<"detail" | "anggota" | "sesi">("detail");
+
+  const [sessions, setSessions] = useState<Array<{id: string; date: string; title: string | null; created_at: string; program_session_attendants: Array<{count: number}>}>>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [submittingSessions, setSubmittingSessions] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [sessionDates, setSessionDates] = useState("");
+  const [sessionTitle, setSessionTitle] = useState("");
+  const [sessionMessage, setSessionMessage] = useState<{type: "success" | "error"; text: string} | null>(null);
+
+  const [qrSession, setQrSession] = useState<{id: string; date: string; title: string | null} | null>(null);
+  const [qrUrl, setQrUrl] = useState("");
+  const [loadingQr, setLoadingQr] = useState(false);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
 
@@ -144,6 +158,71 @@ export default function ProgramDetailPage() {
         if (data) setAllProfiles(data);
       });
   }, [supabase]);
+
+  const fetchSessions = useCallback(async () => {
+    setLoadingSessions(true);
+    try {
+      const res = await fetch(`/api/programs/${id}/sessions`);
+      const json = await res.json();
+      if (json.success) setSessions(json.data);
+    } catch {}
+    setLoadingSessions(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === "sesi") fetchSessions();
+  }, [activeTab, fetchSessions]);
+
+  const handleCreateSessions = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const dates = sessionDates.split("\n").map(d => d.trim()).filter(Boolean);
+    if (dates.length === 0) return;
+    setSubmittingSessions(true);
+    setSessionMessage(null);
+    try {
+      const res = await fetch(`/api/programs/${id}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dates, title: sessionTitle || undefined }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSessionMessage({ type: "success", text: "Sesi berhasil dibuat!" });
+        setSessionDates("");
+        setSessionTitle("");
+        setShowCreateForm(false);
+        fetchSessions();
+      } else {
+        setSessionMessage({ type: "error", text: json.error?.message || "Gagal membuat sesi." });
+      }
+    } catch {
+      setSessionMessage({ type: "error", text: "Gagal terhubung ke server." });
+    }
+    setSubmittingSessions(false);
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!confirm("Yakin ingin menghapus sesi ini?")) return;
+    try {
+      const res = await fetch(`/api/programs/${id}/sessions/${sessionId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (json.success) fetchSessions();
+    } catch {}
+  };
+
+  const handleViewQr = async (session: { id: string; date: string; title: string | null }) => {
+    setQrSession(session);
+    setLoadingQr(true);
+    setQrUrl("");
+    try {
+      const res = await fetch(`/api/programs/${id}/sessions/${session.id}/qr`);
+      const json = await res.json();
+      if (json.success) setQrUrl(json.data.scan_url);
+    } catch {}
+    setLoadingQr(false);
+  };
 
   const openEdit = () => {
     if (!program) return;
@@ -508,132 +587,317 @@ export default function ProgramDetailPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-6">
-          {/* Info Program */}
+        <>
+          {/* Tab Navigation */}
           <Card>
-            <CardHeader><CardTitle>Informasi Program</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Nama Program</span>
-                <span className="font-medium text-right max-w-[60%]">{program.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Status</span>
-                <Badge variant={statusVariant[program.status]}>{statusLabel[program.status]}</Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Divisi</span>
-                <span>{program.divisions?.name ?? "-"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Anggaran</span>
-                <span className="font-medium">{formatCurrency(program.budget_estimate)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tanggal Mulai</span>
-                <span>{formatDate(program.start_date)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tanggal Selesai</span>
-                <span>{formatDate(program.end_date)}</span>
-              </div>
-              {program.description && (
-                <div className="pt-2 border-t">
-                  <span className="text-muted-foreground text-sm">Deskripsi</span>
-                  <p className="text-sm mt-1">{program.description}</p>
-                </div>
-              )}
-              {program.proposal_url && (
-                <div className="pt-2 border-t">
-                  <span className="text-muted-foreground text-sm">Proposal</span>
-                  <a
-                    href={program.proposal_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:underline block mt-1 break-all"
-                  >
-                    {program.proposal_url}
-                  </a>
-                </div>
-              )}
-              {program.lpj_url && (
-                <div className="pt-2 border-t">
-                  <span className="text-muted-foreground text-sm">LPJ</span>
-                  <a
-                    href={program.lpj_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:underline block mt-1 break-all"
-                  >
-                    {program.lpj_url}
-                  </a>
-                </div>
-              )}
-            </CardContent>
+            <div className="flex border-b">
+              <button
+                onClick={() => setActiveTab("detail")}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "detail"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Detail Program
+              </button>
+              <button
+                onClick={() => setActiveTab("anggota")}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "anggota"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Anggota
+              </button>
+              <button
+                onClick={() => setActiveTab("sesi")}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "sesi"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Sesi Pertemuan
+              </button>
+            </div>
           </Card>
 
-          {/* Info Tambahan */}
-          <Card>
-            <CardHeader><CardTitle>Informasi Lainnya</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Dibuat pada</span>
-                <span className="text-sm">{formatDate(program.created_at)}</span>
+          {/* Detail Tab */}
+          {activeTab === "detail" && (
+            <div className="grid grid-cols-2 gap-6">
+              <Card>
+                <CardHeader><CardTitle>Informasi Program</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Nama Program</span>
+                    <span className="font-medium text-right max-w-[60%]">{program.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge variant={statusVariant[program.status]}>{statusLabel[program.status]}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Divisi</span>
+                    <span>{program.divisions?.name ?? "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Anggaran</span>
+                    <span className="font-medium">{formatCurrency(program.budget_estimate)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tanggal Mulai</span>
+                    <span>{formatDate(program.start_date)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tanggal Selesai</span>
+                    <span>{formatDate(program.end_date)}</span>
+                  </div>
+                  {program.description && (
+                    <div className="pt-2 border-t">
+                      <span className="text-muted-foreground text-sm">Deskripsi</span>
+                      <p className="text-sm mt-1">{program.description}</p>
+                    </div>
+                  )}
+                  {program.proposal_url && (
+                    <div className="pt-2 border-t">
+                      <span className="text-muted-foreground text-sm">Proposal</span>
+                      <a
+                        href={program.proposal_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:underline block mt-1 break-all"
+                      >
+                        {program.proposal_url}
+                      </a>
+                    </div>
+                  )}
+                  {program.lpj_url && (
+                    <div className="pt-2 border-t">
+                      <span className="text-muted-foreground text-sm">LPJ</span>
+                      <a
+                        href={program.lpj_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:underline block mt-1 break-all"
+                      >
+                        {program.lpj_url}
+                      </a>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Informasi Lainnya</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Dibuat pada</span>
+                    <span className="text-sm">{formatDate(program.created_at)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Terakhir diperbarui</span>
+                    <span className="text-sm">{formatDate(program.updated_at)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Anggota Tab */}
+          {activeTab === "anggota" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Anggota Tim Program
+                  {members.length > 0 && (
+                    <span className="text-sm font-normal text-muted-foreground ml-2">
+                      ({members.length} orang)
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>No.</TableHead>
+                      <TableHead>Nama</TableHead>
+                      <TableHead>NIM</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {members.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                          Belum ada anggota tim.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      members.map((m, idx) => (
+                        <TableRow key={m.id}>
+                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell className="font-medium">
+                            {m.profiles?.full_name || "-"}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {m.profiles?.nim || "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sesi Tab */}
+          {activeTab === "sesi" && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Sesi Pertemuan</h3>
+                <Button
+                  variant="outline"
+                  onClick={() => { setShowCreateForm(!showCreateForm); setSessionMessage(null); }}
+                >
+                  {showCreateForm ? "Tutup" : "+ Buat Sesi"}
+                </Button>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Terakhir diperbarui</span>
-                <span className="text-sm">{formatDate(program.updated_at)}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+
+              {showCreateForm && (
+                <Card>
+                  <CardHeader><CardTitle>Buat Sesi Baru</CardTitle></CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleCreateSessions} className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Tanggal (YYYY-MM-DD)</label>
+                        <textarea
+                          placeholder={"2024-01-15\n2024-01-22\n2024-01-29"}
+                          value={sessionDates}
+                          onChange={(e) => setSessionDates(e.target.value)}
+                          rows={4}
+                          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <p className="text-xs text-muted-foreground">Satu tanggal per baris</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Judul Sesi (opsional)</label>
+                        <Input
+                          placeholder="Contoh: Sosialisasi Program"
+                          value={sessionTitle}
+                          onChange={(e) => setSessionTitle(e.target.value)}
+                        />
+                      </div>
+                      {sessionMessage && (
+                        <p className={`text-sm ${sessionMessage.type === "success" ? "text-green-500" : "text-red-500"}`}>
+                          {sessionMessage.text}
+                        </p>
+                      )}
+                      <Button type="submit" disabled={submittingSessions}>
+                        {submittingSessions ? "Menyimpan..." : "Simpan"}
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card>
+                <CardContent className="p-0">
+                  {loadingSessions ? (
+                    <div className="text-center py-8 text-muted-foreground">Memuat sesi...</div>
+                  ) : sessions.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">Belum ada sesi pertemuan.</div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tanggal</TableHead>
+                          <TableHead>Judul</TableHead>
+                          <TableHead>Peserta</TableHead>
+                          <TableHead>Aksi</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sessions.map((session) => (
+                          <TableRow key={session.id}>
+                            <TableCell>{formatDate(session.date)}</TableCell>
+                            <TableCell>{session.title || "-"}</TableCell>
+                            <TableCell>{session.program_session_attendants?.[0]?.count ?? 0}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleViewQr({ id: session.id, date: session.date, title: session.title })}
+                                >
+                                  QR Code
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleDeleteSession(session.id)}
+                                >
+                                  Hapus
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* QR Code Modal */}
+              {qrSession && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+                  <Card className="w-full max-w-md mx-4">
+                    <CardHeader>
+                      <CardTitle>QR Code Presensi</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Tanggal</p>
+                        <p className="font-medium">{formatDate(qrSession.date)}</p>
+                      </div>
+                      {qrSession.title && (
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground">Judul</p>
+                          <p className="font-medium">{qrSession.title}</p>
+                        </div>
+                      )}
+                      <div className="text-center py-4">
+                        {loadingQr ? (
+                          <p className="text-muted-foreground">Memuat QR Code...</p>
+                        ) : (
+                          <>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              Arahkan kamera ke QR Code di bawah
+                            </p>
+                            <div className="bg-white p-4 rounded-lg inline-block max-w-full overflow-hidden">
+                              <p className="text-xs font-mono break-all">{qrUrl || "Tidak ada URL QR."}</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => { setQrSession(null); setQrUrl(""); }}
+                      >
+                        Tutup
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
-
-      {/* Members Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Anggota Tim Program
-            {members.length > 0 && (
-              <span className="text-sm font-normal text-muted-foreground ml-2">
-                ({members.length} orang)
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>No.</TableHead>
-                <TableHead>Nama</TableHead>
-                <TableHead>NIM</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                    Belum ada anggota tim.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                members.map((m, idx) => (
-                  <TableRow key={m.id}>
-                    <TableCell>{idx + 1}</TableCell>
-                    <TableCell className="font-medium">
-                      {m.profiles?.full_name || "-"}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {m.profiles?.nim || "-"}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 }
