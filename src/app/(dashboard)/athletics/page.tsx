@@ -36,18 +36,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   GAME_INTELLIGENCE: "Game Intelligence",
 };
 
-function getScoreColor(score: number): string {
-  if (score >= 7) return "bg-green-500";
-  if (score >= 4) return "bg-yellow-500";
-  return "bg-red-500";
-}
-
-function getScoreBg(score: number): string {
-  if (score >= 7) return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-  if (score >= 4) return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
-  return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
-}
-
 const intensityVariant: Record<string, "destructive" | "warning" | "secondary"> = {
   HIGH: "destructive",
   MEDIUM: "warning",
@@ -425,10 +413,19 @@ export default function AthleticsPage() {
                                     {CATEGORY_LABELS[s.category] || s.category}
                                   </TableCell>
                                   <TableCell className="text-right">
-                                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${getScoreBg(scoreMode === "average" ? s.avg_score : s.latest_score)}`}>
-                                      <span className={`w-2 h-2 rounded-full ${getScoreColor(scoreMode === "average" ? s.avg_score : s.latest_score)}`} />
-                                      {scoreMode === "average" ? s.avg_score : s.latest_score}
-                                    </span>
+                                    {(() => {
+                                      const val = scoreMode === "average" ? s.avg_score : s.latest_score;
+                                      const isGreen = val >= 7;
+                                      const isYellow = val >= 4 && val < 7;
+                                      const dotColor = isGreen ? "bg-green-500" : isYellow ? "bg-yellow-500" : "bg-red-500";
+                                      const pillBg = isGreen ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" : isYellow ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300" : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+                                      return (
+                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${pillBg}`}>
+                                          <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                                          {val}
+                                        </span>
+                                      );
+                                    })()}
                                   </TableCell>
                                   <TableCell className="text-right">{s.assessment_count}</TableCell>
                                 </TableRow>
