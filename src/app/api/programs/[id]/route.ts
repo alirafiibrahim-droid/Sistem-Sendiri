@@ -24,14 +24,35 @@ export async function GET(
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
-    const { data, error } = await supabase
+    const { data: program, error: programError } = await supabase
       .from("programs")
-      .select("*, divisions(id, name), program_members(*, profiles(id, full_name, nim, avatar_url))")
+      .select("*, divisions(id, name)")
       .eq("id", id)
       .single();
 
-    if (error || !data) return apiNotFound("Program");
-    return apiOk(data);
+    if (programError || !program) return apiNotFound("Program");
+
+    const { data: members } = await supabase
+      .from("program_members")
+      .select("*")
+      .eq("program_id", id);
+
+    let membersWithProfiles: unknown[] = [];
+    if (members && members.length > 0) {
+      const userIds = [...new Set(members.map((m) => m.user_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, nim, avatar_url")
+        .in("id", userIds);
+
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+      membersWithProfiles = members.map((m) => ({
+        ...m,
+        profiles: profileMap.get(m.user_id) || null,
+      }));
+    }
+
+    return apiOk({ ...program, program_members: membersWithProfiles });
   } catch {
     return apiInternalError();
   }

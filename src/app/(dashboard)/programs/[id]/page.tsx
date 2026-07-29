@@ -65,6 +65,7 @@ export default function ProgramDetailPage() {
   const [members, setMembers] = useState<ProgramMemberWithProfile[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [userRole, setUserRole] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
 
@@ -83,6 +84,10 @@ export default function ProgramDetailPage() {
   const [formLpjUrl, setFormLpjUrl] = useState("");
 
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const [formMembers, setFormMembers] = useState<{ user_id: string; full_name: string; nim: string }[]>([]);
+  const [allProfiles, setAllProfiles] = useState<{ id: string; full_name: string; nim: string }[]>([]);
+  const [newMemberId, setNewMemberId] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -104,9 +109,12 @@ export default function ProgramDetailPage() {
       if (json.success) {
         setProgram(json.data);
         setMembers(json.data.program_members || []);
+        setFetchError("");
+      } else {
+        setFetchError(json.error?.message || "Gagal memuat data program.");
       }
     } catch {
-      console.error("Failed to fetch program");
+      setFetchError("Gagal terhubung ke server.");
     }
 
     setLoading(false);
@@ -126,6 +134,17 @@ export default function ProgramDetailPage() {
       });
   }, [supabase]);
 
+  useEffect(() => {
+    supabase
+      .from("profiles")
+      .select("id, full_name, nim")
+      .eq("status", "AKTIF")
+      .order("full_name")
+      .then(({ data }) => {
+        if (data) setAllProfiles(data);
+      });
+  }, [supabase]);
+
   const openEdit = () => {
     if (!program) return;
     setFormName(program.name);
@@ -137,6 +156,14 @@ export default function ProgramDetailPage() {
     setFormDivisionId(program.division_id || "");
     setFormProposalUrl(program.proposal_url || "");
     setFormLpjUrl(program.lpj_url || "");
+    setFormMembers(
+      members.map((m) => ({
+        user_id: m.user_id,
+        full_name: m.profiles?.full_name || "",
+        nim: m.profiles?.nim || "",
+      }))
+    );
+    setNewMemberId("");
     setEditErrors({});
     setEditing(true);
   };
@@ -193,6 +220,35 @@ export default function ProgramDetailPage() {
       return;
     }
 
+    const { error: delErr } = await supabase
+      .from("program_members")
+      .delete()
+      .eq("program_id", id);
+
+    if (delErr) {
+      setEditErrors({ _form: "Gagal menyimpan anggota: " + delErr.message });
+      setEditLoading(false);
+      return;
+    }
+
+    if (formMembers.length > 0) {
+      const { error: insErr } = await supabase
+        .from("program_members")
+        .insert(
+          formMembers.map((m) => ({
+            program_id: id,
+            user_id: m.user_id,
+            role_in_program: "Anggota",
+          }))
+        );
+
+      if (insErr) {
+        setEditErrors({ _form: "Gagal menyimpan anggota: " + insErr.message });
+        setEditLoading(false);
+        return;
+      }
+    }
+
     setEditing(false);
     setEditLoading(false);
     fetchData();
@@ -220,7 +276,12 @@ export default function ProgramDetailPage() {
   }
 
   if (!program) {
-    return <div className="text-center py-8 text-muted-foreground">Program tidak ditemukan.</div>;
+    return (
+      <div className="text-center py-8 space-y-4">
+        <p className="text-muted-foreground">{fetchError || "Program tidak ditemukan."}</p>
+        <Button variant="outline" onClick={() => router.back()}>Kembali</Button>
+      </div>
+    );
   }
 
   return (
@@ -362,6 +423,75 @@ export default function ProgramDetailPage() {
                 {editErrors.lpj_url && <p className="text-sm text-red-500">{editErrors.lpj_url}</p>}
               </div>
 
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold mb-3">Anggota Tim Program</h3>
+
+                <div className="flex gap-2 mb-3">
+                  <div className="flex-1">
+                    <Select value={newMemberId} onChange={(e) => setNewMemberId(e.target.value)}>
+                      <option value="">Pilih anggota...</option>
+                      {allProfiles
+                        .filter((p) => !formMembers.some((m) => m.user_id === p.id))
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.full_name} — {p.nim}
+                          </option>
+                        ))}
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const profile = allProfiles.find((p) => p.id === newMemberId);
+                      if (profile) {
+                        setFormMembers([...formMembers, { user_id: profile.id, full_name: profile.full_name, nim: profile.nim }]);
+                        setNewMemberId("");
+                      }
+                    }}
+                    disabled={!newMemberId}
+                  >
+                    Tambah
+                  </Button>
+                </div>
+
+                {formMembers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Belum ada anggota.</p>
+                ) : (
+                  <div className="border rounded-md">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="px-3 py-2 text-left font-medium">No.</th>
+                          <th className="px-3 py-2 text-left font-medium">Nama</th>
+                          <th className="px-3 py-2 text-left font-medium">NIM</th>
+                          <th className="px-3 py-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {formMembers.map((m, idx) => (
+                          <tr key={m.user_id} className="border-b last:border-b-0">
+                            <td className="px-3 py-2">{idx + 1}</td>
+                            <td className="px-3 py-2 font-medium">{m.full_name}</td>
+                            <td className="px-3 py-2 font-mono text-xs">{m.nim}</td>
+                            <td className="px-3 py-2 text-right">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-500 hover:text-red-700"
+                                onClick={() => setFormMembers(formMembers.filter((fm) => fm.user_id !== m.user_id))}
+                              >
+                                Hapus
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               {editErrors._form && (
                 <p className="text-sm text-red-500 text-center">{editErrors._form}</p>
               )}
@@ -459,7 +589,7 @@ export default function ProgramDetailPage() {
         </div>
       )}
 
-      {/* Members Table */}
+      {/* Members Section */}
       <Card>
         <CardHeader>
           <CardTitle>
@@ -478,13 +608,12 @@ export default function ProgramDetailPage() {
                 <TableHead>No.</TableHead>
                 <TableHead>Nama</TableHead>
                 <TableHead>NIM</TableHead>
-                <TableHead>Peran dalam Program</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {members.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
                     Belum ada anggota tim.
                   </TableCell>
                 </TableRow>
@@ -497,9 +626,6 @@ export default function ProgramDetailPage() {
                     </TableCell>
                     <TableCell className="font-mono text-sm">
                       {m.profiles?.nim || "-"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{m.role_in_program}</Badge>
                     </TableCell>
                   </TableRow>
                 ))

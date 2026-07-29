@@ -19,8 +19,6 @@ import {
 import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
 import type { OrganizationSettings, Division, Fakultas, Jurusan, Profile, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
 import SpiderChart from "@/components/charts/spider-chart";
-import Link from "next/link";
-
 type FormErrors = Record<string, string>;
 type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan" | "kas-bank" | "dompet";
 
@@ -37,7 +35,7 @@ const allTabs: { id: TabId; label: string; adminOnly?: boolean }[] = [
 export default function SettingsPage() {
   const supabase = createSupabaseClient();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
-  const [user, setUser] = useState<Profile | null>(null);
+  const [user, setUser] = useState<ProfileWithDivision | null>(null);
 
   // ─── Profile Tab ───
   const [profileName, setProfileName] = useState("");
@@ -799,9 +797,6 @@ export default function SettingsPage() {
                 {profileErrors._form && <p className="text-sm text-red-500 text-center">{profileErrors._form}</p>}
                 <div className="flex gap-3">
                   <Button type="button" disabled={profileLoading} onClick={handleProfileSubmit}>{profileLoading ? "Menyimpan..." : "Simpan Profil"}</Button>
-                  <Link href="/athletics/scan">
-                    <Button type="button" variant="outline">Absensi QR Code</Button>
-                  </Link>
                 </div>
               </div>
             ) : (

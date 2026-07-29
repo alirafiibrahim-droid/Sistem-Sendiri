@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { label: "Program Kerja", href: "/programs", icon: "📋" },
   { label: "Keuangan", href: "/finances", icon: "💰" },
   { label: "Anggota", href: "/members", icon: "👥" },
+  { label: "Absensi", href: "/attendance", icon: "📌" },
   { label: "Keatletan", href: "/athletics", icon: "🏃" },
   { label: "Prestasi", href: "/achievements", icon: "🏆" },
   { label: "Inventaris", href: "/inventory", icon: "📦" },

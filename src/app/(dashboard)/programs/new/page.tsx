@@ -12,6 +12,12 @@ import { programFormSchema } from "@/lib/validations/program";
 
 type FormErrors = Record<string, string>;
 
+interface MemberItem {
+  user_id: string;
+  full_name: string;
+  nim: string;
+}
+
 export default function NewProgramPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
@@ -29,6 +35,10 @@ export default function NewProgramPage() {
   const [proposalUrl, setProposalUrl] = useState("");
   const [lpjUrl, setLpjUrl] = useState("");
 
+  const [allProfiles, setAllProfiles] = useState<{ id: string; full_name: string; nim: string }[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [members, setMembers] = useState<MemberItem[]>([]);
+
   useEffect(() => {
     supabase
       .from("divisions")
@@ -38,6 +48,32 @@ export default function NewProgramPage() {
         if (data) setDivisions(data);
       });
   }, [supabase]);
+
+  useEffect(() => {
+    supabase
+      .from("profiles")
+      .select("id, full_name, nim")
+      .eq("status", "AKTIF")
+      .order("full_name")
+      .then(({ data }) => {
+        if (data) setAllProfiles(data);
+      });
+  }, [supabase]);
+
+  function addMember() {
+    if (!selectedMemberId) return;
+    if (members.some((m) => m.user_id === selectedMemberId)) return;
+    const profile = allProfiles.find((p) => p.id === selectedMemberId);
+    if (!profile) return;
+    setMembers([...members, { user_id: profile.id, full_name: profile.full_name, nim: profile.nim }]);
+    setSelectedMemberId("");
+  }
+
+  function removeMember(userId: string) {
+    setMembers(members.filter((m) => m.user_id !== userId));
+  }
+
+  const availableProfiles = allProfiles.filter((p) => !members.some((m) => m.user_id === p.id));
 
   const validate = (): boolean => {
     const result = programFormSchema.safeParse({
@@ -80,22 +116,44 @@ export default function NewProgramPage() {
       return;
     }
 
-    const { error: insertError } = await supabase.from("programs").insert({
-      name,
-      description: description || "",
-      start_date: startDate,
-      end_date: endDate,
-      budget_estimate: budget ? Number(budget) : 0,
-      division_id: divisionId || null,
-      proposal_url: proposalUrl || null,
-      lpj_url: lpjUrl || null,
-      created_by: user.id,
-    });
+    const { data: newProgram, error: insertError } = await supabase
+      .from("programs")
+      .insert({
+        name,
+        description: description || "",
+        start_date: startDate,
+        end_date: endDate,
+        budget_estimate: budget ? Number(budget) : 0,
+        division_id: divisionId || null,
+        proposal_url: proposalUrl || null,
+        lpj_url: lpjUrl || null,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
       setErrors({ _form: insertError.message });
       setLoading(false);
       return;
+    }
+
+    if (members.length > 0 && newProgram) {
+      const memberInserts = members.map((m) => ({
+        program_id: newProgram.id,
+        user_id: m.user_id,
+        role_in_program: "Anggota",
+      }));
+
+      const { error: memberError } = await supabase
+        .from("program_members")
+        .insert(memberInserts);
+
+      if (memberError) {
+        setErrors({ _form: "Program tersimpan, tetapi gagal menambahkan anggota: " + memberError.message });
+        setLoading(false);
+        return;
+      }
     }
 
     router.push("/programs");
@@ -116,7 +174,6 @@ export default function NewProgramPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Nama Program */}
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="name">
                 Nama Program <span className="text-red-500">*</span>
@@ -130,7 +187,6 @@ export default function NewProgramPage() {
               {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
             </div>
 
-            {/* Deskripsi */}
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="description">
                 Deskripsi <span className="text-red-500">*</span>
@@ -146,7 +202,6 @@ export default function NewProgramPage() {
               {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
             </div>
 
-            {/* Tanggal Mulai & Selesai */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="startDate">
@@ -174,7 +229,6 @@ export default function NewProgramPage() {
               </div>
             </div>
 
-            {/* Anggaran & Divisi */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="budget">
@@ -210,7 +264,6 @@ export default function NewProgramPage() {
               </div>
             </div>
 
-            {/* URL Proposal */}
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="proposal">
                 URL Proposal
@@ -225,7 +278,6 @@ export default function NewProgramPage() {
               {errors.proposal_url && <p className="text-sm text-red-500">{errors.proposal_url}</p>}
             </div>
 
-            {/* URL LPJ */}
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="lpj">
                 URL LPJ (Laporan Pertanggungjawaban)
@@ -238,6 +290,66 @@ export default function NewProgramPage() {
                 onChange={(e) => setLpjUrl(e.target.value)}
               />
               {errors.lpj_url && <p className="text-sm text-red-500">{errors.lpj_url}</p>}
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-semibold mb-3">Anggota Tim Program</h3>
+
+              <div className="flex gap-2 mb-3">
+                <div className="flex-1">
+                  <Select
+                    value={selectedMemberId}
+                    onChange={(e) => setSelectedMemberId(e.target.value)}
+                  >
+                    <option value="">Pilih anggota...</option>
+                    {availableProfiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.full_name} — {p.nim}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Button type="button" onClick={addMember} disabled={!selectedMemberId}>
+                  Tambah
+                </Button>
+              </div>
+
+              {members.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Belum ada anggota ditambahkan.</p>
+              ) : (
+                <div className="border rounded-md">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="px-3 py-2 text-left font-medium">No.</th>
+                        <th className="px-3 py-2 text-left font-medium">Nama</th>
+                        <th className="px-3 py-2 text-left font-medium">NIM</th>
+                        <th className="px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {members.map((m, idx) => (
+                        <tr key={m.user_id} className="border-b last:border-b-0">
+                          <td className="px-3 py-2">{idx + 1}</td>
+                          <td className="px-3 py-2 font-medium">{m.full_name}</td>
+                          <td className="px-3 py-2 font-mono text-xs">{m.nim}</td>
+                          <td className="px-3 py-2 text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700"
+                              onClick={() => removeMember(m.user_id)}
+                            >
+                              Hapus
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {errors._form && (

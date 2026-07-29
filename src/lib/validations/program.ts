@@ -41,6 +41,7 @@ export const programUpdateSchema = z
     description: z
       .string()
       .min(10, "Deskripsi program minimal 10 karakter.")
+      .nullable()
       .optional(),
     start_date: z.coerce.date().optional(),
     end_date: z.coerce.date().optional(),
@@ -49,15 +50,17 @@ export const programUpdateSchema = z
       .min(0, "Anggaran tidak boleh negatif.")
       .optional(),
     status: z.enum(["PLANNED", "ONGOING", "COMPLETED", "CANCELLED"]).optional(),
-    division_id: z.string().uuid("ID divisi tidak valid.").optional(),
+    division_id: z.string().uuid("ID divisi tidak valid.").nullable().optional(),
     proposal_url: z
       .string()
       .url("URL proposal harus valid.")
+      .nullable()
       .optional()
       .or(z.literal("")),
     lpj_url: z
       .string()
       .url("URL LPJ harus valid.")
+      .nullable()
       .optional()
       .or(z.literal("")),
   })

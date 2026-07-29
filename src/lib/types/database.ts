@@ -260,11 +260,14 @@ export interface Attendance {
   program_id: string;
   user_id: string;
   status: AttendanceStatus;
+  method: AttendanceMethod;
   timestamp: string;
+  scanned_at: string | null;
 }
 
 export interface AttendanceWithProfile extends Attendance {
   profiles: Pick<Profile, "id" | "full_name" | "nim" | "avatar_url">;
+  programs?: Pick<ProgramWithDetails, "id" | "name">;
 }
 
 // A7: Persuratan
