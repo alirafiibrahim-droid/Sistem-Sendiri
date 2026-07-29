@@ -415,13 +415,13 @@ export default function AthleticsPage() {
                                   <TableCell className="text-right">
                                     {(() => {
                                       const val = scoreMode === "average" ? s.avg_score : s.latest_score;
-                                      const isGreen = val >= 7;
-                                      const isYellow = val >= 4 && val < 7;
-                                      const dotColor = isGreen ? "bg-green-500" : isYellow ? "bg-yellow-500" : "bg-red-500";
-                                      const pillBg = isGreen ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" : isYellow ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300" : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+                                      const color = val >= 7 ? "#22c55e" : val >= 4 ? "#f59e0b" : "#ef4444";
                                       return (
-                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${pillBg}`}>
-                                          <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                                        <span
+                                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+                                          style={{ backgroundColor: color + "20", color, fontWeight: 600 }}
+                                        >
+                                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
                                           {val}
                                         </span>
                                       );
@@ -434,13 +434,13 @@ export default function AthleticsPage() {
                           </Table>
                           <div className="flex justify-center gap-4 text-xs text-muted-foreground mt-4">
                             <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded-full bg-red-500" /> 0-3.9
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#ef4444" }} /> 0-3.9
                             </span>
                             <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded-full bg-yellow-500" /> 4-6.9
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#f59e0b" }} /> 4-6.9
                             </span>
                             <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded-full bg-green-500" /> 7-10
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#22c55e" }} /> 7-10
                             </span>
                           </div>
                         </div>
