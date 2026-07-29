@@ -373,14 +373,13 @@ export default function AthleticsPage() {
                   <p className="text-center text-muted-foreground py-8">Memuat data...</p>
                 ) : athleteScores.filter((s) => s.assessment_count > 0).length > 0 ? (
                   (() => {
-                    const scored = athleteScores.filter((s) => s.assessment_count > 0);
-                    const totalAssess = scored.reduce((s, c) => s + c.assessment_count, 0);
-                    const overallAvg = scored.reduce((s, c) => s + (scoreMode === "average" ? c.avg_score : c.latest_score), 0) / scored.length;
+                    const totalAssess = athleteScores.reduce((s, c) => s + c.assessment_count, 0);
+                    const overallAvg = athleteScores.reduce((s, c) => s + (scoreMode === "average" ? c.avg_score : c.latest_score), 0) / athleteScores.length;
                     const scoreLabel = scoreMode === "average" ? "Skor Rata-rata" : "Skor Terakhir";
                     return (
                       <div className="flex flex-col items-center gap-6">
                         <SpiderChart
-                          data={scored.map((s) => ({
+                          data={athleteScores.map((s) => ({
                             category: s.category,
                             value: scoreMode === "average" ? s.avg_score : s.latest_score,
                           }))}
@@ -408,7 +407,7 @@ export default function AthleticsPage() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {scored.map((s) => (
+                              {athleteScores.map((s) => (
                                 <TableRow key={s.category}>
                                   <TableCell className="font-medium">
                                     {CATEGORY_LABELS[s.category] || s.category}

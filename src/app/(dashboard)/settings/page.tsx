@@ -831,12 +831,10 @@ export default function SettingsPage() {
                 Riwayat Terakhir
               </Button>
             </div>
-            {athleteScores.filter((s) => s.assessment_count > 0).length > 0 ? (
+            {athleteScores.some((s) => s.assessment_count > 0) ? (
               <div className="flex justify-center">
                 <SpiderChart
-                  data={athleteScores
-                    .filter((s) => s.assessment_count > 0)
-                    .map((s) => ({
+                  data={athleteScores.map((s) => ({
                       category: s.category,
                       value: scoreMode === "average" ? s.avg_score : s.latest_score,
                     }))}
