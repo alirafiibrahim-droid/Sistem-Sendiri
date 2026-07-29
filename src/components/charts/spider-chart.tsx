@@ -16,7 +16,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   FLEXIBILITY: "Flexibility",
   TEKNIK: "Teknik",
   MENTAL: "Mental",
-  GAME_INTELLIGENCE: "Game Intel",
+  GAME_INTELLIGENCE: "Game Intelligence",
 };
 
 const CATEGORY_SHORT: Record<string, string> = {

@@ -17,7 +17,7 @@ interface CategoryScore {
 
 const ALL_CATEGORIES = [
   "STRENGTH", "POWER", "SPEED", "AGILITY",
-  "ENDURANCE", "FLEXIBILITY", "TEKNIK", "MENTAL", "GAME_INTELLIGENCE",
+  "ENDURANCE", "FLEXIBILITY", "GAME_INTELLIGENCE", "TEKNIK", "MENTAL",
 ];
 
 export async function GET(request: NextRequest) {
