@@ -172,11 +172,16 @@ export default function SettingsPage() {
   // ─── Fetch Athlete Scores (for spider chart) ───
   useEffect(() => {
     if (!user) return;
-    fetch(`/api/athlete-scores?athlete_id=${user.id}&mode=${scoreMode}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.success) setAthleteScores(j.data);
-      });
+    const doFetch = () => {
+      fetch(`/api/athlete-scores?athlete_id=${user.id}&mode=${scoreMode}`)
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.success) setAthleteScores(j.data);
+        });
+    };
+    doFetch();
+    const id = setInterval(doFetch, 15000);
+    return () => clearInterval(id);
   }, [user, scoreMode]);
 
   // ─── Fetch All Users (for Pengaturan User) ───

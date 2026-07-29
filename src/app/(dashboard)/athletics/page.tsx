@@ -151,6 +151,9 @@ export default function AthleticsPage() {
 
   useEffect(() => {
     fetchScores();
+    if (tab !== "matrix") return;
+    const id = setInterval(fetchScores, 15000);
+    return () => clearInterval(id);
   }, [fetchScores, tab]);
 
   // ─── Session form ───
