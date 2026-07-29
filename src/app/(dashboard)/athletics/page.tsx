@@ -36,6 +36,18 @@ const CATEGORY_LABELS: Record<string, string> = {
   GAME_INTELLIGENCE: "Game Intelligence",
 };
 
+function getScoreColor(score: number): string {
+  if (score >= 7) return "bg-green-500";
+  if (score >= 4) return "bg-yellow-500";
+  return "bg-red-500";
+}
+
+function getScoreBg(score: number): string {
+  if (score >= 7) return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
+  if (score >= 4) return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+  return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+}
+
 const intensityVariant: Record<string, "destructive" | "warning" | "secondary"> = {
   HIGH: "destructive",
   MEDIUM: "warning",
@@ -412,12 +424,28 @@ export default function AthleticsPage() {
                                   <TableCell className="font-medium">
                                     {CATEGORY_LABELS[s.category] || s.category}
                                   </TableCell>
-                                  <TableCell className="text-right">{scoreMode === "average" ? s.avg_score : s.latest_score}</TableCell>
+                                  <TableCell className="text-right">
+                                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${getScoreBg(scoreMode === "average" ? s.avg_score : s.latest_score)}`}>
+                                      <span className={`w-2 h-2 rounded-full ${getScoreColor(scoreMode === "average" ? s.avg_score : s.latest_score)}`} />
+                                      {scoreMode === "average" ? s.avg_score : s.latest_score}
+                                    </span>
+                                  </TableCell>
                                   <TableCell className="text-right">{s.assessment_count}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
                           </Table>
+                          <div className="flex justify-center gap-4 text-xs text-muted-foreground mt-4">
+                            <span className="flex items-center gap-1">
+                              <span className="w-3 h-3 rounded-full bg-red-500" /> 0-3.9
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-3 h-3 rounded-full bg-yellow-500" /> 4-6.9
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-3 h-3 rounded-full bg-green-500" /> 7-10
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
