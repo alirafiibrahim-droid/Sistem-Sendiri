@@ -47,7 +47,8 @@ export default function SettingsPage() {
   const [profileLoading, setProfileLoading] = useState(false);
 
   // ─── Athlete Spider Chart ───
-  const [athleteScores, setAthleteScores] = useState<Array<{ category: string; avg_score: number; assessment_count: number }>>([]);
+  const [athleteScores, setAthleteScores] = useState<Array<{ category: string; avg_score: number; latest_score: number; assessment_count: number }>>([]);
+  const [scoreMode, setScoreMode] = useState<"average" | "latest">("average");
 
   // ─── Organization Tab ───
   const [orgData, setOrgData] = useState<OrganizationSettings | null>(null);
@@ -171,12 +172,12 @@ export default function SettingsPage() {
   // ─── Fetch Athlete Scores (for spider chart) ───
   useEffect(() => {
     if (!user) return;
-    fetch(`/api/athlete-scores?athlete_id=${user.id}`)
+    fetch(`/api/athlete-scores?athlete_id=${user.id}&mode=${scoreMode}`)
       .then((r) => r.json())
       .then((j) => {
         if (j.success) setAthleteScores(j.data);
       });
-  }, [user]);
+  }, [user, scoreMode]);
 
   // ─── Fetch All Users (for Pengaturan User) ───
   const fetchAllUsers = useCallback(async () => {
@@ -807,24 +808,46 @@ export default function SettingsPage() {
       )}
 
       {/* Athlete Spider Chart (visible on profile tab) */}
-      {activeTab === "profile" && user && athleteScores.filter((s) => s.assessment_count > 0).length > 0 && (
+      {activeTab === "profile" && user && (
         <Card>
           <CardHeader>
-            <CardTitle>Statistik Kategori Latihan</CardTitle>
-            <CardDescription>Skor rata-rata berdasarkan data penilaian</CardDescription>
+            <CardTitle>Matrik Performa</CardTitle>
+            <CardDescription>Visualisasi kemampuan berdasarkan kategori latihan</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex justify-center">
-              <SpiderChart
-                data={athleteScores
-                  .filter((s) => s.assessment_count > 0)
-                  .map((s) => ({
-                    category: s.category,
-                    value: s.avg_score,
-                  }))}
-                size={320}
-              />
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <Button
+                variant={scoreMode === "average" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScoreMode("average")}
+              >
+                Rata-rata
+              </Button>
+              <Button
+                variant={scoreMode === "latest" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setScoreMode("latest")}
+              >
+                Riwayat Terakhir
+              </Button>
             </div>
+            {athleteScores.filter((s) => s.assessment_count > 0).length > 0 ? (
+              <div className="flex justify-center">
+                <SpiderChart
+                  data={athleteScores
+                    .filter((s) => s.assessment_count > 0)
+                    .map((s) => ({
+                      category: s.category,
+                      value: scoreMode === "average" ? s.avg_score : s.latest_score,
+                    }))}
+                  size={320}
+                />
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">
+                Belum ada data penilaian.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

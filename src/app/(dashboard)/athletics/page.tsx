@@ -86,8 +86,9 @@ export default function AthleticsPage() {
   // ─── Matrix state ───
   const [athletes, setAthletes] = useState<Pick<Profile, "id" | "full_name" | "nim">[]>([]);
   const [selectedAthlete, setSelectedAthlete] = useState("");
-  const [athleteScores, setAthleteScores] = useState<Array<{ category: string; avg_score: number; assessment_count: number }>>([]);
+  const [athleteScores, setAthleteScores] = useState<Array<{ category: string; avg_score: number; latest_score: number; assessment_count: number }>>([]);
   const [scoresLoading, setScoresLoading] = useState(false);
+  const [scoreMode, setScoreMode] = useState<"average" | "latest">("average");
 
   // ─── Fetch sessions ───
   const fetchSessions = useCallback(async () => {
@@ -142,11 +143,11 @@ export default function AthleticsPage() {
       return;
     }
     setScoresLoading(true);
-    const res = await fetch(`/api/athlete-scores?athlete_id=${selectedAthlete}`);
+    const res = await fetch(`/api/athlete-scores?athlete_id=${selectedAthlete}&mode=${scoreMode}`);
     const j = await res.json();
     if (j.success) setAthleteScores(j.data);
     setScoresLoading(false);
-  }, [selectedAthlete]);
+  }, [selectedAthlete, scoreMode]);
 
   useEffect(() => {
     fetchScores();
@@ -351,20 +352,37 @@ export default function AthleticsPage() {
               <CardHeader>
                 <CardTitle>Statistik Kategori Latihan</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Button
+                    variant={scoreMode === "average" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setScoreMode("average")}
+                  >
+                    Rata-rata
+                  </Button>
+                  <Button
+                    variant={scoreMode === "latest" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setScoreMode("latest")}
+                  >
+                    Riwayat Terakhir
+                  </Button>
+                </div>
                 {scoresLoading ? (
                   <p className="text-center text-muted-foreground py-8">Memuat data...</p>
                 ) : athleteScores.filter((s) => s.assessment_count > 0).length > 0 ? (
                   (() => {
                     const scored = athleteScores.filter((s) => s.assessment_count > 0);
                     const totalAssess = scored.reduce((s, c) => s + c.assessment_count, 0);
-                    const overallAvg = scored.reduce((s, c) => s + c.avg_score, 0) / scored.length;
+                    const overallAvg = scored.reduce((s, c) => s + (scoreMode === "average" ? c.avg_score : c.latest_score), 0) / scored.length;
+                    const scoreLabel = scoreMode === "average" ? "Skor Rata-rata" : "Skor Terakhir";
                     return (
                       <div className="flex flex-col items-center gap-6">
                         <SpiderChart
                           data={scored.map((s) => ({
                             category: s.category,
-                            value: s.avg_score,
+                            value: scoreMode === "average" ? s.avg_score : s.latest_score,
                           }))}
                           size={350}
                         />
@@ -375,7 +393,9 @@ export default function AthleticsPage() {
                           </div>
                           <div className="text-center">
                             <p className="text-2xl font-bold">{overallAvg.toFixed(1)}</p>
-                            <p className="text-muted-foreground">Rata-rata Keseluruhan</p>
+                            <p className="text-muted-foreground">
+                              {scoreMode === "average" ? "Rata-rata Keseluruhan" : "Rata-rata Terakhir"}
+                            </p>
                           </div>
                         </div>
                         <div className="w-full max-w-lg">
@@ -383,7 +403,7 @@ export default function AthleticsPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Kategori</TableHead>
-                                <TableHead className="text-right">Skor Rata-rata</TableHead>
+                                <TableHead className="text-right">{scoreLabel}</TableHead>
                                 <TableHead className="text-right">Jumlah Penilaian</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -393,7 +413,7 @@ export default function AthleticsPage() {
                                   <TableCell className="font-medium">
                                     {CATEGORY_LABELS[s.category] || s.category}
                                   </TableCell>
-                                  <TableCell className="text-right">{s.avg_score}</TableCell>
+                                  <TableCell className="text-right">{scoreMode === "average" ? s.avg_score : s.latest_score}</TableCell>
                                   <TableCell className="text-right">{s.assessment_count}</TableCell>
                                 </TableRow>
                               ))}

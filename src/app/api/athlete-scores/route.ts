@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 interface CategoryScore {
   category: string;
   avg_score: number;
+  latest_score: number;
   assessment_count: number;
 }
 
@@ -26,10 +27,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const athlete_id = searchParams.get("athlete_id") || uid;
+    const mode = searchParams.get("mode") || "average";
+
+    if (!["average", "latest"].includes(mode)) {
+      return apiBadRequest("Mode harus 'average' atau 'latest'.");
+    }
 
     const supabase = await createSupabaseServer();
 
-    // Get metrics with categories
     const { data: metrics, error: mErr } = await supabase
       .from("athletic_metrics")
       .select("id, category");
@@ -45,6 +50,7 @@ export async function GET(request: NextRequest) {
         ALL_CATEGORIES.map((c) => ({
           category: c,
           avg_score: 0,
+          latest_score: 0,
           assessment_count: 0,
         }))
       );
@@ -55,7 +61,37 @@ export async function GET(request: NextRequest) {
       metricsWithCategory.map((m) => [m.id, m.category])
     );
 
-    // Get assessments for this athlete
+    if (mode === "latest") {
+      const { data: assessments, error: aErr } = await supabase
+        .from("assessments")
+        .select("metric_id, value, created_at")
+        .eq("athlete_id", athlete_id)
+        .in("metric_id", metricIds)
+        .order("created_at", { ascending: false });
+
+      if (aErr) return apiInternalError();
+
+      const latestPerCategory = new Map<string, number>();
+      for (const a of assessments || []) {
+        const cat = metricCategoryMap.get(a.metric_id);
+        if (cat && !latestPerCategory.has(cat)) {
+          latestPerCategory.set(cat, Number(a.value));
+        }
+      }
+
+      const scores: CategoryScore[] = ALL_CATEGORIES.map((cat) => {
+        const val = latestPerCategory.get(cat) || 0;
+        return {
+          category: cat,
+          avg_score: 0,
+          latest_score: Math.round(val * 100) / 100,
+          assessment_count: latestPerCategory.has(cat) ? 1 : 0,
+        };
+      });
+
+      return apiOk(scores);
+    }
+
     const { data: assessments, error: aErr } = await supabase
       .from("assessments")
       .select("metric_id, value")
@@ -64,7 +100,6 @@ export async function GET(request: NextRequest) {
 
     if (aErr) return apiInternalError();
 
-    // Group by category and compute average
     const categoryMap = new Map<string, number[]>();
     for (const a of assessments || []) {
       const cat = metricCategoryMap.get(a.metric_id);
@@ -76,13 +111,13 @@ export async function GET(request: NextRequest) {
 
     const scores: CategoryScore[] = ALL_CATEGORIES.map((cat) => {
       const values = categoryMap.get(cat) || [];
-      const avg =
-        values.length > 0
-          ? values.reduce((sum, v) => sum + v, 0) / values.length
-          : 0;
+      const avg = values.length > 0
+        ? values.reduce((sum, v) => sum + v, 0) / values.length
+        : 0;
       return {
         category: cat,
         avg_score: Math.round(avg * 100) / 100,
+        latest_score: values.length > 0 ? values[values.length - 1] : 0,
         assessment_count: values.length,
       };
     });
