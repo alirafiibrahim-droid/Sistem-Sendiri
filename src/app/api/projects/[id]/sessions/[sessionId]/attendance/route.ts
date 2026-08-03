@@ -30,11 +30,21 @@ export async function POST(
 
     const { data: session, error: sErr } = await supabase
       .from("project_sessions")
-      .select("id")
+      .select("id, date")
       .eq("id", sessionId)
       .single();
 
     if (sErr || !session) return apiNotFound("Sesi tidak ditemukan.");
+
+    const sessionDate = new Date(session.date);
+    const limitDate = new Date(sessionDate.getTime() + 3 * 86400000);
+    limitDate.setHours(0, 0, 0, 0);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    if (now >= limitDate) {
+      return apiBadRequest("Batas absensi sesi ini sudah lewat (maksimal H+2 dari tanggal sesi).");
+    }
 
     const { data, error } = await supabase
       .from("project_session_attendants")

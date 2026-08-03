@@ -28,14 +28,24 @@ export async function POST(
 
     const supabase = await createSupabaseServer();
 
-    // Verify session exists
+    // Verify session exists and check H+2
     const { data: session, error: sErr } = await supabase
       .from("training_sessions")
-      .select("id")
+      .select("id, date")
       .eq("id", id)
       .single();
 
     if (sErr || !session) return apiNotFound("Sesi latihan tidak ditemukan.");
+
+    const sessionDate = new Date(session.date);
+    const limitDate = new Date(sessionDate.getTime() + 3 * 86400000);
+    limitDate.setHours(0, 0, 0, 0);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    if (now >= limitDate) {
+      return apiBadRequest("Batas absensi sesi ini sudah lewat (maksimal H+2 dari tanggal sesi).");
+    }
 
     // Upsert attendance
     const { data, error } = await supabase

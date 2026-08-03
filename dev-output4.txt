@@ -1,0 +1,10 @@
+﻿
+> siorg@0.1.0 dev
+> next dev --port 3000 --hostname 127.0.0.1 --webpack
+
+Γû▓ Next.js 16.2.10 (webpack)
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+- Environments: .env.local
+Γ£ô Ready in 470ms
+

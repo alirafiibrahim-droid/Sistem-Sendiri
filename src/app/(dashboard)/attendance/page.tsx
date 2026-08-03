@@ -22,20 +22,6 @@ const SESSION_LABELS: Record<SessionType, string> = {
   project: "Sesi Proyek Insidental",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  PLANNED: "Direncanakan",
-  ONGOING: "Berlangsung",
-  COMPLETED: "Selesai",
-  CANCELLED: "Dibatalkan",
-};
-
-const STATUS_VARIANT: Record<string, "success" | "warning" | "secondary" | "destructive"> = {
-  ONGOING: "success",
-  PLANNED: "secondary",
-  COMPLETED: "warning",
-  CANCELLED: "destructive",
-};
-
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit", month: "short", year: "numeric",
@@ -44,20 +30,26 @@ function formatDate(dateStr: string) {
 
 type SessionItem = {
   id: string;
-  name: string;
-  start_date?: string;
-  end_date?: string;
-  date?: string;
-  status?: string;
+  date: string;
+  title: string | null;
+  has_attended: boolean;
+  program_name?: string;
   session_type?: string | null;
+  project_name?: string;
+  training_name?: string | null;
+  trainings?: { name: string } | null;
 };
 
 function AttendanceInner() {
   const searchParams = useSearchParams();
-  const preselectedProgram = searchParams.get("program") || "";
+  const preselectedSession = searchParams.get("session") || "";
+  const preselectedProgramSession = searchParams.get("program_session") || "";
+  const preselectedProjectSession = searchParams.get("project_session") || "";
+  const preselectedTrainingSession = searchParams.get("training_session") || "";
+  const preselected = preselectedSession || preselectedProgramSession || preselectedProjectSession || preselectedTrainingSession;
 
   const [mode, setMode] = useState<"select" | "manual" | "qr">(
-    preselectedProgram ? "qr" : "select"
+    preselected ? "qr" : "select"
   );
   const [sessionType, setSessionType] = useState<SessionType>("program");
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -78,23 +70,24 @@ function AttendanceInner() {
     try {
       let url = "";
       if (type === "program") {
-        url = "/api/attendance/programs";
+        url = "/api/attendance/program-sessions";
       } else if (type === "training") {
-        const today = new Date().toISOString().split("T")[0];
-        url = `/api/training-sessions?sort=date&order=desc&limit=50&start_date=${today}`;
+        url = "/api/attendance/training-sessions";
       } else {
-        url = "/api/attendance/projects";
+        url = "/api/attendance/project-sessions";
       }
       const res = await fetch(url);
       const json = await res.json();
       if (json.success) {
-        const items = type === "training"
-          ? (json.data || []).map((s: SessionItem) => ({
-              ...s,
-              name: s.session_type || `Latihan ${formatDate(s.date || "")}`,
-            }))
-          : json.data;
+        const items = json.data.map((s: SessionItem) => ({
+          ...s,
+        }));
         setSessions(items);
+        const attended = new Set<string>();
+        for (const s of items) {
+          if (s.has_attended) attended.add(s.id);
+        }
+        setAttendedIds(attended);
       }
     } catch {
       // ignore
@@ -107,13 +100,13 @@ function AttendanceInner() {
   }, [sessionType, fetchSessions]);
 
   useEffect(() => {
-    if (!preselectedProgram || submitting || message) return;
-    if (attendedIds.has(preselectedProgram)) {
-      setMessage({ type: "success", text: "Anda sudah tercatat hadir di program ini." });
+    if (!preselected || submitting || message) return;
+    if (attendedIds.has(preselected)) {
+      setMessage({ type: "success", text: "Anda sudah tercatat hadir di sesi ini." });
       return;
     }
-    handleAttendance(preselectedProgram, "QR");
-  }, [preselectedProgram, attendedIds]); // eslint-disable-line react-hooks/exhaustive-deps
+    handleAttendance(preselected, "QR");
+  }, [preselected, attendedIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startCamera = useCallback(async () => {
     setCameraError("");
@@ -176,17 +169,30 @@ function AttendanceInner() {
 
   const handleQrDetected = useCallback((value: string) => {
     stopCamera();
-    let programId = "";
+    let sessionId = "";
     try {
       const url = new URL(value);
-      programId = url.searchParams.get("program") || "";
+      sessionId = url.searchParams.get("session")
+        || url.searchParams.get("program_session")
+        || url.searchParams.get("project_session")
+        || url.searchParams.get("training_session")
+        || "";
     } catch {
       if (/^[0-9a-f-]{36}$/i.test(value)) {
-        programId = value;
+        sessionId = value;
       }
     }
-    if (programId) {
-      handleAttendance(programId, "QR");
+    if (sessionId) {
+      // Determine session type from URL param to call correct endpoint
+      let detectedType: SessionType | null = null;
+      try {
+        const url = new URL(value);
+        if (url.searchParams.has("program_session")) detectedType = "program";
+        else if (url.searchParams.has("project_session")) detectedType = "project";
+        else if (url.searchParams.has("training_session")) detectedType = "training";
+      } catch {}
+      if (detectedType) setSessionType(detectedType);
+      handleAttendance(sessionId, "QR");
     } else {
       setMessage({ type: "error", text: "QR Code tidak valid." });
     }
@@ -204,15 +210,18 @@ function AttendanceInner() {
     setSubmitting(true);
     setMessage(null);
 
-    let url = "/api/attendance";
-    let body: Record<string, string> = { program_id: id, method };
+    let url = "";
+    let body: Record<string, string> = {};
 
-    if (sessionType === "training") {
-      url = `/api/training-sessions/${id}/attendance`;
-      body = { method };
-    } else if (sessionType === "project") {
-      url = "/api/attendance/projects";
-      body = { project_id: id, method };
+    if (sessionType === "program") {
+      url = "/api/attendance/program-sessions";
+      body = { session_id: id, method };
+    } else if (sessionType === "training") {
+      url = "/api/attendance/training-sessions";
+      body = { session_id: id, method };
+    } else {
+      url = "/api/attendance/project-sessions";
+      body = { session_id: id, method };
     }
 
     const res = await fetch(url, {
@@ -242,7 +251,7 @@ function AttendanceInner() {
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Absensi</h2>
-        <p className="text-muted-foreground">Catat kehadiran Anda</p>
+        <p className="text-muted-foreground">Catat kehadiran Anda pada sesi pertemuan</p>
       </div>
 
       {message && (
@@ -299,58 +308,56 @@ function AttendanceInner() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{sessionType === "training" ? "Sesi" : "Nama"}</TableHead>
+                  <TableHead>Nama Sesi</TableHead>
                   <TableHead>Tanggal</TableHead>
-                  {sessionType !== "training" && <TableHead>Status</TableHead>}
                   <TableHead>Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
                       Memuat...
                     </TableCell>
                   </TableRow>
                 ) : sessions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
                       Tidak ada sesi tersedia.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sessions.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-medium">{s.name}</TableCell>
-                      <TableCell className="text-sm">
-                        {sessionType === "training" && s.date
-                          ? formatDate(s.date)
-                          : s.start_date
-                            ? `${formatDate(s.start_date)}${s.end_date ? ` — ${formatDate(s.end_date)}` : ""}`
-                            : "-"}
-                      </TableCell>
-                      {sessionType !== "training" && (
-                        <TableCell>
-                          <Badge variant={STATUS_VARIANT[s.status || ""] || "secondary"}>
-                            {STATUS_LABELS[s.status || ""] || s.status || "-"}
-                          </Badge>
+                  sessions.map((s) => {
+                    const name =
+                      sessionType === "program"
+                        ? s.program_name || "Sesi Program Kerja"
+                        : sessionType === "training"
+                          ? s.session_type || "Sesi Latihan"
+                          : s.project_name || "Sesi Proyek Insidental";
+                    return (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-medium text-sm max-w-[200px] truncate">
+                          {name}
                         </TableCell>
-                      )}
-                      <TableCell>
-                        {attendedIds.has(s.id) ? (
-                          <Badge variant="success">Hadir</Badge>
-                        ) : (
-                          <Button
-                            size="sm"
-                            disabled={submitting}
-                            onClick={() => handleAttendance(s.id, "MANUAL")}
-                          >
-                            {submitting ? "Mengirim..." : "Hadir"}
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        <TableCell className="text-sm">
+                          {formatDate(s.date)}
+                        </TableCell>
+                        <TableCell>
+                          {attendedIds.has(s.id) ? (
+                            <Badge variant="success">Hadir</Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              disabled={submitting}
+                              onClick={() => handleAttendance(s.id, "MANUAL")}
+                            >
+                              {submitting ? "Mengirim..." : "Hadir"}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -371,7 +378,7 @@ function AttendanceInner() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {preselectedProgram && !cameraActive ? (
+            {preselected && !cameraActive ? (
               submitting ? (
                 <p className="text-muted-foreground text-center">Mencatat kehadiran...</p>
               ) : (

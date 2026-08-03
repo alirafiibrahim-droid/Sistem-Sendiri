@@ -97,12 +97,15 @@ export default function ProgramDetailPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [sessionDateInput, setSessionDateInput] = useState(new Date().toISOString().split("T")[0]);
   const [sessionDateList, setSessionDateList] = useState<string[]>([]);
-  const [sessionTitle, setSessionTitle] = useState("");
   const [sessionMessage, setSessionMessage] = useState<{type: "success" | "error"; text: string} | null>(null);
 
-  const [qrSession, setQrSession] = useState<{id: string; date: string; title: string | null} | null>(null);
+  const [qrSession, setQrSession] = useState<{id: string; date: string} | null>(null);
   const [qrUrl, setQrUrl] = useState("");
   const [loadingQr, setLoadingQr] = useState(false);
+
+  const [attendeeSessionId, setAttendeeSessionId] = useState<string | null>(null);
+  const [attendees, setAttendees] = useState<Array<{id: string; method: string; scanned_at: string | null; created_at: string; profiles: {id: string; full_name: string; nim: string; avatar_url: string | null} | null}>>([]);
+  const [loadingAttendees, setLoadingAttendees] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -183,14 +186,13 @@ export default function ProgramDetailPage() {
       const res = await fetch(`/api/programs/${id}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dates: sessionDateList, title: sessionTitle || undefined }),
+        body: JSON.stringify({ dates: sessionDateList }),
       });
       const json = await res.json();
       if (json.success) {
         setSessionMessage({ type: "success", text: "Sesi berhasil dibuat!" });
         setSessionDateList([]);
         setSessionDateInput(new Date().toISOString().split("T")[0]);
-        setSessionTitle("");
         setShowCreateForm(false);
         fetchSessions();
       } else {
@@ -213,7 +215,7 @@ export default function ProgramDetailPage() {
     } catch {}
   };
 
-  const handleViewQr = async (session: { id: string; date: string; title: string | null }) => {
+  const handleViewQr = async (session: { id: string; date: string }) => {
     setQrSession(session);
     setLoadingQr(true);
     setQrUrl("");
@@ -223,6 +225,18 @@ export default function ProgramDetailPage() {
       if (json.success) setQrUrl(json.data.scan_url);
     } catch {}
     setLoadingQr(false);
+  };
+
+  const handleViewAttendees = async (sessionId: string) => {
+    setAttendeeSessionId(sessionId);
+    setAttendees([]);
+    setLoadingAttendees(true);
+    try {
+      const res = await fetch(`/api/programs/${id}/sessions/${sessionId}/attendance`);
+      const json = await res.json();
+      if (json.success) setAttendees(json.data);
+    } catch {}
+    setLoadingAttendees(false);
   };
 
   const openEdit = () => {
@@ -813,14 +827,7 @@ export default function ProgramDetailPage() {
                           </div>
                         )}
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Judul Sesi (opsional)</label>
-                        <Input
-                          placeholder="Contoh: Sosialisasi Program"
-                          value={sessionTitle}
-                          onChange={(e) => setSessionTitle(e.target.value)}
-                        />
-                      </div>
+
                       {sessionMessage && (
                         <p className={`text-sm ${sessionMessage.type === "success" ? "text-green-500" : "text-red-500"}`}>
                           {sessionMessage.text}
@@ -845,8 +852,6 @@ export default function ProgramDetailPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Tanggal</TableHead>
-                          <TableHead>Judul</TableHead>
-                          <TableHead>Peserta</TableHead>
                           <TableHead>Aksi</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -854,14 +859,19 @@ export default function ProgramDetailPage() {
                         {sessions.map((session) => (
                           <TableRow key={session.id}>
                             <TableCell>{formatDate(session.date)}</TableCell>
-                            <TableCell>{session.title || "-"}</TableCell>
-                            <TableCell>{session.program_session_attendants?.[0]?.count ?? 0}</TableCell>
                             <TableCell>
                               <div className="flex gap-2">
                                 <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleViewAttendees(session.id)}
+                                >
+                                  {session.program_session_attendants?.[0]?.count ?? 0} Peserta
+                                </Button>
+                                <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleViewQr({ id: session.id, date: session.date, title: session.title })}
+                                  onClick={() => handleViewQr({ id: session.id, date: session.date })}
                                 >
                                   QR Code
                                 </Button>
@@ -872,7 +882,60 @@ export default function ProgramDetailPage() {
                                 >
                                   Hapus
                                 </Button>
-                              </div>
+              {/* Attendee List Modal */}
+              {attendeeSessionId && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+                  <Card className="w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
+                    <CardHeader>
+                      <CardTitle>Daftar Hadir</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingAttendees ? (
+                        <p className="text-center py-8 text-muted-foreground">Memuat...</p>
+                      ) : attendees.length === 0 ? (
+                        <p className="text-center py-8 text-muted-foreground">Belum ada peserta yang hadir.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Nama</TableHead>
+                              <TableHead>NIM</TableHead>
+                              <TableHead>Metode</TableHead>
+                              <TableHead>Waktu</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {attendees.map((a) => (
+                              <TableRow key={a.id}>
+                                <TableCell className="font-medium">
+                                  {a.profiles?.full_name || "Unknown"}
+                                </TableCell>
+                                <TableCell>{a.profiles?.nim || "-"}</TableCell>
+                                <TableCell>
+                                  <Badge variant={a.method === "QR" ? "default" : "secondary"}>
+                                    {a.method}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {new Date(a.created_at).toLocaleString("id-ID")}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                      <Button
+                        variant="outline"
+                        className="w-full mt-4"
+                        onClick={() => { setAttendeeSessionId(null); setAttendees([]); }}
+                      >
+                        Tutup
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -894,12 +957,6 @@ export default function ProgramDetailPage() {
                         <p className="text-sm text-muted-foreground">Tanggal</p>
                         <p className="font-medium">{formatDate(qrSession.date)}</p>
                       </div>
-                      {qrSession.title && (
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground">Judul</p>
-                          <p className="font-medium">{qrSession.title}</p>
-                        </div>
-                      )}
                       <div className="text-center py-4">
                         {loadingQr ? (
                           <p className="text-muted-foreground">Memuat QR Code...</p>
