@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { inventoryItemFormSchema } from "@/lib/validations/inventory";
-import type { WalletWithOwner } from "@/lib/types/database";
+import type { WalletWithOwner, Bank, CashAccount } from "@/lib/types/database";
 
 type FormErrors = Record<string, string>;
 
@@ -35,18 +35,32 @@ export default function NewInventoryItemPage() {
   const [purchaseSource, setPurchaseSource] = useState("");
   const [purchaseDesc, setPurchaseDesc] = useState("");
   const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
+  const [banksList, setBanksList] = useState<Pick<Bank, "id" | "name" | "account_number">[]>([]);
+  const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
 
   const purchaseTotal = (Number(stock) || 0) * (Number(purchaseUnitPrice) || 0) + (Number(purchaseOtherCost) || 0);
 
-  const fetchWallets = useCallback(async () => {
-    const res = await fetch("/api/wallets");
-    const json = await res.json();
-    if (json.success) setWalletsList(json.data);
+  useEffect(() => {
+    Promise.all([fetch("/api/wallets"), fetch("/api/banks"), fetch("/api/cash")])
+      .then(([wRes, bRes, cRes]) =>
+        Promise.all([wRes.json(), bRes.json(), cRes.json()]).then(
+          ([wJson, bJson, cJson]) => {
+            if (wJson.success) setWalletsList(wJson.data);
+            if (bJson.success) setBanksList(bJson.data);
+            if (cJson.success) setCashList(cJson.data);
+          }
+        )
+      );
   }, []);
 
-  useEffect(() => {
-    fetchWallets();
-  }, [fetchWallets]);
+  const bankIdsWithWallet = new Set(
+    walletsList.filter((w) => w.bank_id).map((w) => w.bank_id as string)
+  );
+  const cashIdsWithWallet = new Set(
+    walletsList.filter((w) => w.cash_account_id).map((w) => w.cash_account_id as string)
+  );
+  const banksWithoutWallet = banksList.filter((b) => !bankIdsWithWallet.has(b.id));
+  const cashWithoutWallet = cashList.filter((c) => !cashIdsWithWallet.has(c.id));
 
   const validate = (): boolean => {
     const result = inventoryItemFormSchema.safeParse({
@@ -93,6 +107,7 @@ export default function NewInventoryItemPage() {
         name,
         category,
         stock: Number(stock),
+        unit_price: purchaseUnitPrice === "" ? 0 : Number(purchaseUnitPrice),
         condition,
         location,
         description: description || "",
@@ -341,17 +356,17 @@ export default function NewInventoryItemPage() {
                   </label>
                   <Select id="purchase-source" value={purchaseSource} onChange={(e) => setPurchaseSource(e.target.value)}>
                     <option value="">Pilih sumber dana...</option>
-                    {walletsList.some((w) => w.bank_id) && (
+                    {banksWithoutWallet.length > 0 && (
                       <optgroup label="Bank">
-                        {walletsList.filter((w) => w.bank_id).map((w) => (
-                          <option key={w.id} value={`bank:${w.bank_id}`}>{w.banks?.name} ({w.name})</option>
+                        {banksWithoutWallet.map((b) => (
+                          <option key={`bank-${b.id}`} value={`bank:${b.id}`}>{b.name} - {b.account_number}</option>
                         ))}
                       </optgroup>
                     )}
-                    {walletsList.some((w) => w.cash_account_id) && (
+                    {cashWithoutWallet.length > 0 && (
                       <optgroup label="Kas">
-                        {walletsList.filter((w) => w.cash_account_id).map((w) => (
-                          <option key={w.id} value={`cash:${w.cash_account_id}`}>{w.cash_accounts?.name} ({w.name})</option>
+                        {cashWithoutWallet.map((c) => (
+                          <option key={`cash-${c.id}`} value={`cash:${c.id}`}>{c.name}</option>
                         ))}
                       </optgroup>
                     )}

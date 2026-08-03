@@ -9,7 +9,6 @@ import {
   getUserRole,
 } from "@/lib/api-response";
 import { requireRole } from "@/lib/authz";
-import type { PaginationParams } from "@/lib/types/api";
 
 // GET /api/inventory?page=1&limit=25&search=&category=&condition=
 export async function GET(request: Request) {
@@ -69,7 +68,7 @@ export async function POST(request: Request) {
     if (forbidden) return forbidden;
 
     const body = await request.json();
-    const { name, category, stock, condition, location, description, photo_url } = body;
+    const { name, category, stock, unit_price, condition, location, description, photo_url } = body;
 
     if (!name || !category || !stock || !location) {
       return apiBadRequest("Nama, kategori, stok, dan lokasi wajib diisi.");
@@ -82,6 +81,7 @@ export async function POST(request: Request) {
         name,
         category,
         stock: Number(stock),
+        unit_price: unit_price !== undefined && unit_price !== "" ? Number(unit_price) : 0,
         condition: condition || "GOOD",
         location,
         description: description || "",

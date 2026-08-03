@@ -21,7 +21,10 @@ import type {
   InventoryLoan,
   InventoryDamageLog,
   InventoryPurchase,
+  InventoryDisposalWithDetails,
   WalletWithOwner,
+  Bank,
+  CashAccount,
 } from "@/lib/types/database";
 
 const categoryLabel: Record<string, string> = {
@@ -68,7 +71,7 @@ const damageTypeLabel: Record<string, string> = {
   MAINTENANCE: "Pemeliharaan",
 };
 
-type Tab = "info" | "loans" | "damage" | "purchases";
+type Tab = "info" | "loans" | "damage" | "purchases" | "disposals";
 
 export default function InventoryDetailPage() {
   const router = useRouter();
@@ -79,8 +82,22 @@ export default function InventoryDetailPage() {
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [loans, setLoans] = useState<InventoryLoan[]>([]);
   const [damageLogs, setDamageLogs] = useState<InventoryDamageLog[]>([]);
+  const [disposals, setDisposals] = useState<InventoryDisposalWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("info");
+
+  // Disposal form
+  const [showDisposalForm, setShowDisposalForm] = useState(false);
+  const [disposalQty, setDisposalQty] = useState("1");
+  const [disposalReason, setDisposalReason] = useState("");
+  const [disposalDate, setDisposalDate] = useState(new Date().toISOString().split("T")[0]);
+  const [disposalLoading, setDisposalLoading] = useState(false);
+  const [disposalError, setDisposalError] = useState("");
+
+  // Price edit
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceInput, setPriceInput] = useState("");
+  const [priceLoading, setPriceLoading] = useState(false);
 
   // Loan form
   const [showLoanForm, setShowLoanForm] = useState(false);
@@ -107,6 +124,8 @@ export default function InventoryDetailPage() {
   // Purchase form
   const [purchases, setPurchases] = useState<InventoryPurchase[]>([]);
   const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
+  const [banksList, setBanksList] = useState<Pick<Bank, "id" | "name" | "account_number">[]>([]);
+  const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [purchaseDate, setPurchaseDate] = useState("");
   const [purchaseAmount, setPurchaseAmount] = useState("");
@@ -116,14 +135,17 @@ export default function InventoryDetailPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [{ data: itemData }, { data: loanData }, { data: logData }] = await Promise.all([
-      supabase.from("inventory_items").select("*").eq("id", id).single(),
-      supabase.from("inventory_loans").select("*, profiles(id, full_name, nim)").eq("item_id", id).order("created_at", { ascending: false }),
-      supabase.from("inventory_damage_logs").select("*, profiles(id, full_name)").eq("item_id", id).order("created_at", { ascending: false }),
-    ]);
+    const [{ data: itemData }, { data: loanData }, { data: logData }, { data: disposalData }] =
+      await Promise.all([
+        supabase.from("inventory_items").select("*").eq("id", id).single(),
+        supabase.from("inventory_loans").select("*, profiles(id, full_name, nim)").eq("item_id", id).order("created_at", { ascending: false }),
+        supabase.from("inventory_damage_logs").select("*, profiles(id, full_name)").eq("item_id", id).order("created_at", { ascending: false }),
+        supabase.from("inventory_disposals").select("*, inventory_items(id, code, name), profiles(id, full_name)").eq("item_id", id).order("disposal_date", { ascending: false }),
+      ]);
     if (itemData) setItem(itemData as InventoryItem);
     if (loanData) setLoans(loanData as InventoryLoan[]);
     if (logData) setDamageLogs(logData as InventoryDamageLog[]);
+    if (disposalData) setDisposals(disposalData as InventoryDisposalWithDetails[]);
     setLoading(false);
   }, [supabase, id]);
 
@@ -139,11 +161,28 @@ export default function InventoryDetailPage() {
     if (json.success) setWalletsList(json.data);
   }, []);
 
+  const fetchBanksCash = useCallback(async () => {
+    const [bRes, cRes] = await Promise.all([fetch("/api/banks"), fetch("/api/cash")]);
+    const [bJson, cJson] = await Promise.all([bRes.json(), cRes.json()]);
+    if (bJson.success) setBanksList(bJson.data);
+    if (cJson.success) setCashList(cJson.data);
+  }, []);
+
   useEffect(() => {
     fetchData();
     fetchPurchases();
     fetchWallets();
-  }, [fetchData, fetchPurchases, fetchWallets]);
+    fetchBanksCash();
+  }, [fetchData, fetchPurchases, fetchWallets, fetchBanksCash]);
+
+  const bankIdsWithWallet = new Set(
+    walletsList.filter((w) => w.bank_id).map((w) => w.bank_id as string)
+  );
+  const cashIdsWithWallet = new Set(
+    walletsList.filter((w) => w.cash_account_id).map((w) => w.cash_account_id as string)
+  );
+  const banksWithoutWallet = banksList.filter((b) => !bankIdsWithWallet.has(b.id));
+  const cashWithoutWallet = cashList.filter((c) => !cashIdsWithWallet.has(c.id));
 
   const handleLoan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,6 +311,51 @@ export default function InventoryDetailPage() {
     setPurchaseLoading(false);
   };
 
+  const handleDisposal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDisposalLoading(true);
+    setDisposalError("");
+
+    const res = await fetch(`/api/inventory/${id}/disposals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quantity: Number(disposalQty),
+        reason: disposalReason,
+        disposal_date: disposalDate,
+      }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      setDisposalError(json.error?.message || "Gagal menghapus inventaris.");
+      setDisposalLoading(false);
+      return;
+    }
+
+    setShowDisposalForm(false);
+    setDisposalQty("1");
+    setDisposalReason("");
+    setDisposalDate(new Date().toISOString().split("T")[0]);
+    setDisposalLoading(false);
+    fetchData();
+  };
+
+  const savePrice = async () => {
+    setPriceLoading(true);
+    const res = await fetch(`/api/inventory/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unit_price: Number(priceInput) || 0 }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      setEditingPrice(false);
+      fetchData();
+    }
+    setPriceLoading(false);
+  };
+
   if (loading) {
     return <div className="text-center py-8 text-muted-foreground">Memuat data...</div>;
   }
@@ -295,7 +379,7 @@ export default function InventoryDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {([["info", "Info"], ["loans", "Peminjaman"], ["damage", "Kerusakan"], ["purchases", "Pembelian"]] as const).map(([key, label]) => (
+        {([["info", "Info"], ["loans", "Peminjaman"], ["damage", "Kerusakan"], ["purchases", "Pembelian"], ["disposals", "Penghapusan"]] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
@@ -327,6 +411,43 @@ export default function InventoryDetailPage() {
             <CardHeader><CardTitle>Status</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between"><span className="text-muted-foreground">Stok Total</span><span className="font-bold">{item.stock} unit</span></div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Harga Satuan</span>
+                {editingPrice ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      min="0"
+                      className="w-32 h-8 text-right"
+                      value={priceInput}
+                      onChange={(e) => setPriceInput(e.target.value)}
+                    />
+                    <Button size="sm" onClick={savePrice} disabled={priceLoading}>
+                      OK
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingPrice(false)}>
+                      Batal
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">
+                      {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(item.unit_price || 0)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setPriceInput(String(item.unit_price || 0));
+                        setEditingPrice(true);
+                      }}
+                    >
+                      Ubah
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Total Nilai</span><span className="font-bold">{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(item.stock * (item.unit_price || 0))}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Kondisi</span><Badge variant={conditionVariant[item.condition]}>{conditionLabel[item.condition]}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Status Aktif</span><span>{item.is_active ? "Ya" : "Tidak"}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Dibuat</span><span className="text-sm">{new Date(item.created_at).toLocaleDateString("id-ID")}</span></div>
@@ -553,17 +674,17 @@ export default function InventoryDetailPage() {
                     <label className="text-sm font-medium">Sumber Dana</label>
                     <Select value={purchaseSource} onChange={(e) => setPurchaseSource(e.target.value)} required>
                       <option value="">Pilih sumber dana...</option>
-                      {walletsList.some((w) => w.bank_id) && (
+                      {banksWithoutWallet.length > 0 && (
                         <optgroup label="Bank">
-                          {walletsList.filter((w) => w.bank_id).map((w) => (
-                            <option key={w.id} value={`bank:${w.bank_id}`}>{w.banks?.name} ({w.name})</option>
+                          {banksWithoutWallet.map((b) => (
+                            <option key={`bank-${b.id}`} value={`bank:${b.id}`}>{b.name} - {b.account_number}</option>
                           ))}
                         </optgroup>
                       )}
-                      {walletsList.some((w) => w.cash_account_id) && (
+                      {cashWithoutWallet.length > 0 && (
                         <optgroup label="Kas">
-                          {walletsList.filter((w) => w.cash_account_id).map((w) => (
-                            <option key={w.id} value={`cash:${w.cash_account_id}`}>{w.cash_accounts?.name} ({w.name})</option>
+                          {cashWithoutWallet.map((c) => (
+                            <option key={`cash-${c.id}`} value={`cash:${c.id}`}>{c.name}</option>
                           ))}
                         </optgroup>
                       )}
@@ -620,6 +741,104 @@ export default function InventoryDetailPage() {
                             ? ((p as unknown as Record<string, unknown>).profiles as Record<string, string>).full_name
                             : "-"}
                         </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Disposals */}
+      {activeTab === "disposals" && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button variant="destructive" onClick={() => setShowDisposalForm(true)}>Hapus Inventaris</Button>
+          </div>
+
+          {showDisposalForm && (
+            <Card>
+              <CardHeader><CardTitle>Form Penghapusan Aset</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handleDisposal} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Jumlah Dihapus</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max={item.stock}
+                        value={disposalQty}
+                        onChange={(e) => setDisposalQty(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Tanggal Penghapusan</label>
+                      <Input
+                        type="date"
+                        value={disposalDate}
+                        onChange={(e) => setDisposalDate(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Alasan Penghapusan</label>
+                    <textarea
+                      placeholder="Contoh: rusak berat dan tidak dapat diperbaiki"
+                      value={disposalReason}
+                      onChange={(e) => setDisposalReason(e.target.value)}
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      required
+                    />
+                  </div>
+                  {disposalError && (
+                    <p className="text-sm text-red-500">{disposalError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button type="submit" variant="destructive" disabled={disposalLoading}>
+                      {disposalLoading ? "Menyimpan..." : "Simpan Penghapusan"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setShowDisposalForm(false)}>
+                      Batal
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Jumlah</TableHead>
+                    <TableHead>Nilai (Rp)</TableHead>
+                    <TableHead>Alasan</TableHead>
+                    <TableHead>Oleh</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {disposals.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Belum ada penghapusan aset.</TableCell>
+                    </TableRow>
+                  ) : (
+                    disposals.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="text-sm">{d.disposal_date}</TableCell>
+                        <TableCell>{d.quantity} unit</TableCell>
+                        <TableCell className="text-sm font-medium">
+                          {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(d.value_removed)}
+                        </TableCell>
+                        <TableCell className="text-sm max-w-xs truncate">{d.reason}</TableCell>
+                        <TableCell className="text-sm">{d.profiles?.full_name || "-"}</TableCell>
                       </TableRow>
                     ))
                   )}

@@ -483,6 +483,7 @@ export interface InventoryItem {
   name: string;
   category: InventoryItemCategory;
   stock: number;
+  unit_price: number;
   condition: InventoryItemCondition;
   location: string;
   description: string;
@@ -491,6 +492,22 @@ export interface InventoryItem {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface InventoryDisposal {
+  id: string;
+  item_id: string;
+  quantity: number;
+  reason: string;
+  disposal_date: string;
+  value_removed: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface InventoryDisposalWithDetails extends InventoryDisposal {
+  inventory_items: Pick<InventoryItem, "id" | "code" | "name"> | null;
+  profiles: Pick<Profile, "id" | "full_name"> | null;
 }
 
 export interface InventoryLoan {

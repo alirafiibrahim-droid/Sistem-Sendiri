@@ -211,6 +211,15 @@ export default function FinancesPage() {
       )
     : walletsList;
 
+  const bankIdsWithWallet = new Set(
+    walletsList.filter((w) => w.bank_id).map((w) => w.bank_id as string)
+  );
+  const cashIdsWithWallet = new Set(
+    walletsList.filter((w) => w.cash_account_id).map((w) => w.cash_account_id as string)
+  );
+  const banksWithoutWallet = banksList.filter((b) => !bankIdsWithWallet.has(b.id));
+  const cashWithoutWallet = cashList.filter((c) => !cashIdsWithWallet.has(c.id));
+
   // Build label for bank/cash selector
   const bankCashOptions = [
     ...(dashboard?.banks.map((b) => ({
@@ -501,7 +510,7 @@ export default function FinancesPage() {
           }}
           className="w-56"
         >
-          <option value="">Semua Dompet</option>
+          <option value="">Semua Sumber</option>
           {availableWallets.map((w) => (
             <option key={w.id} value={w.id}>{w.name}</option>
           ))}
@@ -517,7 +526,7 @@ export default function FinancesPage() {
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Tipe</TableHead>
                 <TableHead>Deskripsi</TableHead>
-                <TableHead>Dompet</TableHead>
+                <TableHead>Sumber</TableHead>
                 <TableHead>Program / Proyek</TableHead>
                 <TableHead>Dicatat Oleh</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
@@ -737,29 +746,29 @@ export default function FinancesPage() {
                   )}
                 </div>
 
-                {/* Dompet */}
+                {/* Sumber */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="wallet">
-                    Dompet / Rekening
+                    Sumber
                   </label>
                   <Select
                     id="wallet"
                     value={formWalletId}
                     onChange={(e) => setFormWalletId(e.target.value)}
                   >
-                    <option value="">Tanpa dompet tertentu</option>
-                    {banksList.length > 0 && (
-                      <optgroup label="Bank (Tanpa Dompet)">
-                        {banksList.map((b) => (
+                    <option value="">Tanpa sumber tertentu</option>
+                    {banksWithoutWallet.length > 0 && (
+                      <optgroup label="Bank">
+                        {banksWithoutWallet.map((b) => (
                           <option key={`bank-${b.id}`} value={`bank:${b.id}`}>
                             {b.name} - {b.account_number}
                           </option>
                         ))}
                       </optgroup>
                     )}
-                    {cashList.length > 0 && (
-                      <optgroup label="Kas (Tanpa Dompet)">
-                        {cashList.map((c) => (
+                    {cashWithoutWallet.length > 0 && (
+                      <optgroup label="Kas">
+                        {cashWithoutWallet.map((c) => (
                           <option key={`cash-${c.id}`} value={`cash:${c.id}`}>
                             {c.name}
                           </option>

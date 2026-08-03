@@ -51,7 +51,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, category, stock, condition, location, description, photo_url, is_active } = body;
+    const { name, category, stock, unit_price, condition, location, description, photo_url, is_active } = body;
 
     const supabase = await createSupabaseServer();
 
@@ -59,6 +59,7 @@ export async function PATCH(
     if (name !== undefined) updateData.name = name;
     if (category !== undefined) updateData.category = category;
     if (stock !== undefined) updateData.stock = Number(stock);
+    if (unit_price !== undefined) updateData.unit_price = Number(unit_price);
     if (condition !== undefined) updateData.condition = condition;
     if (location !== undefined) updateData.location = location;
     if (description !== undefined) updateData.description = description;

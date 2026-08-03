@@ -12,6 +12,10 @@ export const inventoryItemFormSchema = z.object({
     .number()
     .int("Jumlah stok harus bilangan bulat.")
     .positive("Jumlah stok minimal 1 unit."),
+  unit_price: z.coerce
+    .number()
+    .min(0, "Harga satuan tidak boleh negatif.")
+    .optional(),
   condition: z.enum(["GOOD", "DAMAGED_LIGHT", "DAMAGED_HEAVY", "LOST"], {
     message: "Kondisi barang wajib dipilih.",
   }),
@@ -60,6 +64,19 @@ export const inventoryDamageLogFormSchema = z.object({
     .min(10, "Deskripsi insiden minimal 10 karakter.")
     .max(500, "Deskripsi maksimal 500 karakter."),
   estimated_cost: z.coerce.number().min(0, "Biaya estimasi tidak boleh negatif.").optional(),
+});
+
+export const inventoryDisposalFormSchema = z.object({
+  item_id: z.string().uuid("ID barang tidak valid."),
+  quantity: z.coerce
+    .number()
+    .int("Jumlah harus bilangan bulat.")
+    .positive("Jumlah minimal 1 unit."),
+  reason: z
+    .string()
+    .min(5, "Alasan penghapusan minimal 5 karakter.")
+    .max(500, "Alasan penghapusan maksimal 500 karakter."),
+  disposal_date: z.string().min(1, "Tanggal penghapusan wajib diisi."),
 });
 
 export const inventoryPurchaseFormSchema = z
