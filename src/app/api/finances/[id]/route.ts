@@ -9,7 +9,7 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, requireRole } from "@/lib/authz";
+import { requireRole } from "@/lib/authz";
 import { financeFormSchema } from "@/lib/validations/finance";
 import { NextRequest } from "next/server";
 import type { FinanceWithDetails, Profile } from "@/lib/types/database";
@@ -38,6 +38,11 @@ async function attachProfiles(
   }));
 }
 
+/** Transaksi dari modul lain (bukan '+ Catat Transaksi') tidak boleh diubah. */
+function isExternal(source: string | null): boolean {
+  return (source || "keuangan") !== "keuangan";
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -58,6 +63,7 @@ export async function GET(
     if (error || !data) return apiNotFound();
 
     const result = (await attachProfiles([data as FinanceWithDetails], supabase))[0];
+    result.is_external = isExternal(data.source);
 
     return apiOk(result);
   } catch {
@@ -82,11 +88,17 @@ export async function PATCH(
 
     const { data: existing } = await supabase
       .from("finances")
-      .select("id")
+      .select("id, source")
       .eq("id", id)
       .single();
 
     if (!existing) return apiNotFound();
+
+    if (isExternal(existing.source)) {
+      return apiForbidden(
+        "Transaksi berasal dari modul lain dan tidak dapat diubah dari modul Keuangan. Ubah di modul asalnya."
+      );
+    }
 
     const body = await request.json();
 
@@ -151,18 +163,25 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!isAdmin(role)) return apiForbidden();
+    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
     const { data: existing } = await supabase
       .from("finances")
-      .select("id")
+      .select("id, source")
       .eq("id", id)
       .single();
 
     if (!existing) return apiNotFound();
+
+    if (isExternal(existing.source)) {
+      return apiForbidden(
+        "Transaksi berasal dari modul lain dan tidak dapat dihapus dari modul Keuangan. Hapus di modul asalnya."
+      );
+    }
 
     const { error } = await supabase.from("finances").delete().eq("id", id);
 

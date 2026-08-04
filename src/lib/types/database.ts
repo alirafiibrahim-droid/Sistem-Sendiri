@@ -216,6 +216,7 @@ export interface Finance {
   cash_account_id: string | null;
   created_by: string | null;
   created_at: string;
+  source: string | null;
 }
 
 export interface FinanceWithDetails extends Finance {
@@ -225,6 +226,7 @@ export interface FinanceWithDetails extends Finance {
   wallets: Pick<Wallet, "id" | "name"> | null;
   banks: Pick<Bank, "id" | "name"> | null;
   cash_accounts: Pick<CashAccount, "id" | "name"> | null;
+  is_external?: boolean;
 }
 
 export interface DuesTemplate {

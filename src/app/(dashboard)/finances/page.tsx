@@ -109,6 +109,12 @@ export default function FinancesPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [editingTx, setEditingTx] = useState<FinanceWithDetails | null>(null);
 
+  // Delete state
+  const [confirmDelete, setConfirmDelete] = useState<FinanceWithDetails | null>(
+    null
+  );
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   // User role (to show/hide edit actions)
   const [userRole, setUserRole] = useState<UserRole | null>(null);
 
@@ -372,6 +378,23 @@ export default function FinancesPage() {
 
     setShowModal(false);
     setFormLoading(false);
+    fetchTransactions();
+    fetchDashboard();
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    setDeletingId(confirmDelete.id);
+    const res = await fetch(`/api/finances/${confirmDelete.id}`, {
+      method: "DELETE",
+    });
+    const json = await res.json();
+    setDeletingId(null);
+    setConfirmDelete(null);
+    if (!json.success) {
+      alert(json.error?.message || "Gagal menghapus transaksi.");
+      return;
+    }
     fetchTransactions();
     fetchDashboard();
   };
@@ -659,14 +682,30 @@ export default function FinancesPage() {
                       </span>
                     </TableCell>
                     {canEdit && (
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEdit(t)}
-                        >
-                          Edit
-                        </Button>
+                      <TableCell className="text-right whitespace-nowrap">
+                        {t.is_external ? (
+                          <Badge variant="outline" className="text-xs">
+                            Dari modul lain
+                          </Badge>
+                        ) : (
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEdit(t)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => setConfirmDelete(t)}
+                            >
+                              Hapus
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     )}
                   </TableRow>
@@ -957,6 +996,47 @@ export default function FinancesPage() {
                   </Button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Transaksi */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setConfirmDelete(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-bold mb-2">Hapus Transaksi</h3>
+            <p className="text-sm text-muted-foreground mb-1">
+              Apakah Anda yakin ingin menghapus transaksi berikut?
+            </p>
+            <div className="rounded-xl border border-border p-3 mb-4">
+              <p className="text-sm font-medium">{confirmDelete.description}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatDate(confirmDelete.date)} ·{" "}
+                {confirmDelete.type === "INCOME" ? "Pemasukan" : "Pengeluaran"} ·{" "}
+                {formatCurrency(Number(confirmDelete.amount))}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="destructive"
+                disabled={deletingId === confirmDelete.id}
+                onClick={handleDelete}
+                className="flex-1"
+              >
+                {deletingId === confirmDelete.id ? "Menghapus..." : "Hapus"}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={deletingId === confirmDelete.id}
+                onClick={() => setConfirmDelete(null)}
+              >
+                Batal
+              </Button>
             </div>
           </div>
         </div>

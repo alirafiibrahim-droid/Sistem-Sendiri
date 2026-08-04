@@ -122,6 +122,7 @@ export async function POST(
         bank_id: bank_id || null,
         cash_account_id: cash_account_id || null,
         created_by: uid,
+        source: "inventory",
       })
       .select("id")
       .single();

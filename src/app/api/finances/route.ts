@@ -76,7 +76,14 @@ export async function GET(request: NextRequest) {
 
     const result = await attachProfiles(data as FinanceWithDetails[], supabase);
 
-    return apiOk(result, { total, page, limit, totalPages });
+    // Transaksi eksternal (dari modul lain) tidak boleh di-edit/di-hapus
+    // dari modul Keuangan.
+    const resultWithSource = result.map((f) => ({
+      ...f,
+      is_external: (f.source || "keuangan") !== "keuangan",
+    }));
+
+    return apiOk(resultWithSource, { total, page, limit, totalPages });
   } catch (e) {
     console.error("FINANCES GET ERROR:", e);
     return apiInternalError();
@@ -114,6 +121,7 @@ export async function POST(request: NextRequest) {
         bank_id: bank_id || null,
         cash_account_id: cash_account_id || null,
         created_by: uid,
+        source: "keuangan",
       })
       .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
       .single();

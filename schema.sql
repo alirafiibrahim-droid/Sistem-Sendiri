@@ -212,7 +212,11 @@ COMMENT ON TABLE public.tasks IS 'Tugas-tugas pada program kerja / Kanban Board 
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- A4: FINANCES (Buku besar kas / Jurnal transaksi - IMMUTABLE)
+-- A4: FINANCES (Buku besar kas / Jurnal transaksi)
+--     source: 'keuangan' (manual via '+ Catat Transaksi'),
+--             'inventory' (pembelian inventori), 'dues' (iuran).
+--     Transaksi dengan source != 'keuangan' hanya dapat diubah/dihapus
+--     di modul asalnya.
 -- ----------------------------------------------------------------------------
 CREATE TABLE public.finances (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -224,10 +228,13 @@ CREATE TABLE public.finances (
     project_id  UUID REFERENCES public.incidental_projects(id) ON DELETE SET NULL,
     receipt_url TEXT NOT NULL,
     created_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    source      TEXT NOT NULL DEFAULT 'keuangan'
 );
 
-COMMENT ON TABLE public.finances IS 'Jurnal transaksi keuangan - IMMUTABLE, tidak boleh diubah/dihapus (A4)';
+COMMENT ON TABLE public.finances IS 'Jurnal transaksi keuangan (A4)';
+COMMENT ON COLUMN public.finances.source
+    IS 'Asal transaksi: keuangan (manual), inventory (pembelian inventori), dues (iuran)';
 
 -- ----------------------------------------------------------------------------
 -- A4: DUES TEMPLATES (Template tagihan iuran bulanan)
@@ -1460,14 +1467,15 @@ BEGIN
         SELECT full_name INTO v_member_name
         FROM public.profiles WHERE id = new.user_id;
 
-        INSERT INTO public.finances (type, amount, description, date, receipt_url, created_by)
+        INSERT INTO public.finances (type, amount, description, date, receipt_url, created_by, source)
         VALUES (
             'INCOME'::public.finance_type,
             v_amount,
             'Pelunasan Iuran: ' || v_member_name || ' - ' || v_title,
             CURRENT_DATE,
             COALESCE(new.proof_url, 'system_verified'),
-            new.verified_by
+            new.verified_by,
+            'dues'
         );
     END IF;
     RETURN NEW;
@@ -1481,14 +1489,22 @@ CREATE OR REPLACE TRIGGER on_dues_payment_verified
 
 
 -- ----------------------------------------------------------------------------
--- A4: Trigger proteksi jurnal keuangan (UPDATE diizinkan, DELETE diblokir)
+-- A4: Trigger proteksi jurnal keuangan
+--     UPDATE diizinkan untuk transaksi manual ('+ Catat Transaksi').
+--     DELETE diizinkan HANYA untuk transaksi manual (source = 'keuangan');
+--     transaksi yang berasal dari modul lain (inventory, dues) diblokir
+--     karena hanya dapat dihapus di modul asalnya.
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.protect_finances_immutable()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    RAISE EXCEPTION 'Jurnal transaksi keuangan tidak dapat dihapus.';
+    IF OLD.source IS DISTINCT FROM 'keuangan' THEN
+        RAISE EXCEPTION
+            'Transaksi berasal dari modul lain dan hanya dapat dihapus di modul asalnya.';
+    END IF;
+    RETURN OLD;
 END;
 $$;
 
