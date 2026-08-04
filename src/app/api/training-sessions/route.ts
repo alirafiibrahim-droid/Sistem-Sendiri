@@ -11,7 +11,7 @@ import {
 import { requireRole } from "@/lib/authz";
 import { trainingSessionSchema } from "@/lib/validations/training";
 import { NextRequest } from "next/server";
-import type { Profile, TrainingSessionWithCoach } from "@/lib/types/database";
+import type { Profile, Training, TrainingSessionWithCoach } from "@/lib/types/database";
 
 async function attachProfiles(
   sessions: TrainingSessionWithCoach[],
@@ -58,7 +58,11 @@ export async function GET(request: NextRequest) {
 
     if (start_date) query = query.gte("date", start_date);
     if (end_date) query = query.lte("date", end_date);
-    if (search) query = query.ilike("session_type", `%${search}%`);
+    if (search) {
+      query = query.or(
+        `name.ilike.%${search}%,session_type.ilike.%${search}%`
+      );
+    }
 
     query = query.order(sort, { ascending: order === "asc" });
     query = query.range(from, to);
@@ -71,18 +75,39 @@ export async function GET(request: NextRequest) {
 
     let result = await attachProfiles(data as TrainingSessionWithCoach[], supabase);
 
-    // Attach trainings if training_id column exists
-    const trainingIds = [...new Set(result.map((s) => s.training_id).filter(Boolean) as string[])];
-    if (trainingIds.length > 0) {
-      const { data: trainingsData } = await supabase
-        .from("trainings")
-        .select("id, name, category")
-        .in("id", trainingIds);
-      const trainingMap = new Map((trainingsData || []).map((t) => [t.id, t]));
-      result = result.map((s) => ({
-        ...s,
-        trainings: s.training_id ? trainingMap.get(s.training_id) || null : null,
-      }));
+    // Attach trainings (banyak latihan per sesi via junction)
+    const sessionIds = result.map((s) => s.id);
+    const trainingMap = new Map<string, Pick<Training, "id" | "name" | "category">>();
+    if (sessionIds.length > 0) {
+      const { data: links } = await supabase
+        .from("training_session_trainings")
+        .select("session_id, training_id")
+        .in("session_id", sessionIds);
+
+      const trainingIds = [...new Set((links || []).map((l) => l.training_id))];
+      if (trainingIds.length > 0) {
+        const { data: trainingsData } = await supabase
+          .from("trainings")
+          .select("id, name, category")
+          .in("id", trainingIds);
+        for (const t of trainingsData || []) trainingMap.set(t.id, t);
+      }
+
+      result = result.map((s) => {
+        const linked =
+          (links || [])
+            .filter((l) => l.session_id === s.id)
+            .map((l) => trainingMap.get(l.training_id))
+            .filter((t): t is Pick<Training, "id" | "name" | "category"> => !!t);
+
+        // Legacy: sesi lama memakai kolom training_id langsung
+        if (s.training_id && !linked.some((t) => t.id === s.training_id)) {
+          const legacy = trainingMap.get(s.training_id);
+          if (legacy) linked.unshift(legacy);
+        }
+
+        return { ...s, trainings: linked };
+      });
     }
 
     const total = count || 0;
@@ -112,15 +137,15 @@ export async function POST(request: NextRequest) {
       return apiBadRequest(msg);
     }
 
-    const { dates, training_id, session_type, duration_minutes, intensity, athlete_ids } = parsed.data;
+    const { name, dates, training_ids, duration_minutes, intensity, athlete_ids } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
     const sessionsToInsert = dates.map((date) => ({
       coach_id: uid,
-      training_id: training_id || null,
+      name,
       date,
-      session_type: session_type || null,
+      session_type: name,
       duration_minutes,
       intensity,
     }));
@@ -133,6 +158,24 @@ export async function POST(request: NextRequest) {
     if (sessionError) {
       console.error("TRAINING SESSIONS INSERT ERROR:", sessionError);
       return apiInternalError(sessionError.message);
+    }
+
+    if (sessions) {
+      const trainingLinks = sessions.flatMap((s) =>
+        training_ids.map((training_id: string) => ({
+          session_id: s.id,
+          training_id,
+        }))
+      );
+
+      const { error: linkError } = await supabase
+        .from("training_session_trainings")
+        .insert(trainingLinks);
+
+      if (linkError) {
+        console.error("TRAINING SESSION TRAININGS INSERT ERROR:", linkError);
+        return apiInternalError(linkError.message);
+      }
     }
 
     if (athlete_ids && athlete_ids.length > 0 && sessions) {

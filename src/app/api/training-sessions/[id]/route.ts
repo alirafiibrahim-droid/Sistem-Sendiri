@@ -3,7 +3,6 @@ import {
   apiOk,
   apiUnauthorized,
   apiNotFound,
-  apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
@@ -39,15 +38,27 @@ export async function GET(
       profiles = p || null;
     }
 
-    // Step 3: attach training data
-    let trainings = null;
-    if (session.training_id) {
+    // Step 3: attach trainings (banyak latihan per sesi via junction)
+    const { data: links } = await supabase
+      .from("training_session_trainings")
+      .select("training_id")
+      .eq("session_id", id);
+
+    const trainings: Array<{ id: string; name: string; category: string }> = [];
+    const trainingIds = (links || []).map((l) => l.training_id);
+    if (session.training_id && !trainingIds.includes(session.training_id)) {
+      trainingIds.push(session.training_id);
+    }
+    if (trainingIds.length > 0) {
       const { data: t } = await supabase
         .from("trainings")
         .select("id, name, category")
-        .eq("id", session.training_id)
-        .single();
-      trainings = t || null;
+        .in("id", trainingIds);
+      const trainingMap = new Map((t || []).map((tr) => [tr.id, tr]));
+      for (const tid of trainingIds) {
+        const item = trainingMap.get(tid);
+        if (item) trainings.push(item);
+      }
     }
 
     // Step 4: attach attendants + their profiles
@@ -96,7 +107,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { athlete_ids, ...sessionData } = body;
+    const { athlete_ids, training_ids, ...sessionData } = body;
 
     const supabase = await createSupabaseServer();
 
@@ -109,6 +120,26 @@ export async function PATCH(
 
     if (error) return apiInternalError();
     if (!data) return apiNotFound();
+
+    if (training_ids !== undefined) {
+      await supabase
+        .from("training_session_trainings")
+        .delete()
+        .eq("session_id", id);
+
+      if (training_ids.length > 0) {
+        const links = training_ids.map((training_id: string) => ({
+          session_id: id,
+          training_id,
+        }));
+
+        const { error: linkError } = await supabase
+          .from("training_session_trainings")
+          .insert(links);
+
+        if (linkError) return apiInternalError();
+      }
+    }
 
     if (athlete_ids !== undefined) {
       await supabase

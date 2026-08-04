@@ -15,12 +15,6 @@ import {
 } from "@/components/ui/table";
 import type { TrainingSessionWithCoach } from "@/lib/types/database";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  STRENGTH: "Strength", POWER: "Power", SPEED: "Speed", AGILITY: "Agility",
-  ENDURANCE: "Endurance", FLEXIBILITY: "Flexibility", TEKNIK: "Teknik",
-  MENTAL: "Mental", GAME_INTELLIGENCE: "Game Intelligence",
-};
-
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit", month: "short", year: "numeric",
@@ -270,11 +264,15 @@ function ScanPageInner() {
                     <TableRow key={s.id}>
                       <TableCell className="text-sm">{formatDate(s.date)}</TableCell>
                       <TableCell className="font-medium">
-                        {s.trainings?.name || s.session_type || "-"}
-                        {s.trainings?.category && (
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            {CATEGORY_LABELS[s.trainings.category] || s.trainings.category}
-                          </Badge>
+                        {s.name || s.session_type || "-"}
+                        {(s.trainings || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {(s.trainings || []).map((t) => (
+                              <Badge key={t.id} variant="outline" className="text-[10px]">
+                                {t.name}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>

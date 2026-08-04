@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import SpiderChart from "@/components/charts/spider-chart";
+import LineChart, { type LineChartSeries } from "@/components/charts/line-chart";
 import { trainingSessionSchema, trainingFormSchema } from "@/lib/validations/training";
 import type { TrainingSessionWithCoach, Training, Profile } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
@@ -68,7 +69,10 @@ export default function AthleticsPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [formDates, setFormDates] = useState<string[]>([new Date().toISOString().split("T")[0]]);
-  const [formTrainingId, setFormTrainingId] = useState("");
+  const [formSessionName, setFormSessionName] = useState("");
+  const [formTrainingIds, setFormTrainingIds] = useState<string[]>([]);
+  const [trainingDropdownOpen, setTrainingDropdownOpen] = useState(false);
+  const trainingDropdownRef = useRef<HTMLDivElement>(null);
   const [formDuration, setFormDuration] = useState("");
   const [formIntensity, setFormIntensity] = useState("MEDIUM");
   const [trainingsList, setTrainingsList] = useState<Training[]>([]);
@@ -89,6 +93,9 @@ export default function AthleticsPage() {
   const [athleteScores, setAthleteScores] = useState<Array<{ category: string; avg_score: number; latest_score: number; assessment_count: number }>>([]);
   const [scoresLoading, setScoresLoading] = useState(false);
   const [scoreMode, setScoreMode] = useState<"average" | "latest">("average");
+  const [progressSeries, setProgressSeries] = useState<LineChartSeries[]>([]);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [selectedProgressCategories, setSelectedProgressCategories] = useState<string[]>([]);
 
   // ─── Fetch sessions ───
   const fetchSessions = useCallback(async () => {
@@ -156,22 +163,78 @@ export default function AthleticsPage() {
     return () => clearInterval(id);
   }, [fetchScores, tab]);
 
+  // ─── Fetch athlete progress (line chart) ───
+  const fetchProgress = useCallback(async () => {
+    if (!selectedAthlete) {
+      setProgressSeries([]);
+      setSelectedProgressCategories([]);
+      return;
+    }
+    setProgressLoading(true);
+    const res = await fetch(`/api/athlete-progress?athlete_id=${selectedAthlete}`);
+    const j = await res.json();
+    if (j.success) {
+      setProgressSeries(j.data);
+      setSelectedProgressCategories((prev) => {
+        const available = (j.data as LineChartSeries[]).map((s) => s.category);
+        if (prev.length === 0) return available;
+        return prev.filter((c) => available.includes(c));
+      });
+    }
+    setProgressLoading(false);
+  }, [selectedAthlete]);
+
+  useEffect(() => {
+    fetchProgress();
+  }, [fetchProgress]);
+
+  const toggleProgressCategory = (category: string) => {
+    setSelectedProgressCategories((prev) =>
+      prev.includes(category)
+        ? prev.filter((c) => c !== category)
+        : [...prev, category]
+    );
+  };
+
+  const filteredProgressSeries = progressSeries.filter((s) =>
+    selectedProgressCategories.includes(s.category)
+  );
+
   // ─── Session form ───
   const resetSessionForm = () => {
     setFormDates([new Date().toISOString().split("T")[0]]);
-    setFormTrainingId("");
+    setFormSessionName("");
+    setFormTrainingIds([]);
     setFormDuration("");
     setFormIntensity("MEDIUM");
     setErrors({});
   };
 
+  const toggleFormTraining = (id: string) => {
+    setFormTrainingIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  // Close training dropdown on outside click
+  useEffect(() => {
+    if (!trainingDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (trainingDropdownRef.current && !trainingDropdownRef.current.contains(e.target as Node)) {
+        setTrainingDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [trainingDropdownOpen]);
+
   const handleSessionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const result = trainingSessionSchema.safeParse({
+      name: formSessionName,
       dates: formDates,
-      training_id: formTrainingId || undefined,
-      session_type: trainingsList.find((t) => t.id === formTrainingId)?.name || "",
+      training_ids: formTrainingIds,
       duration_minutes: formDuration,
       intensity: formIntensity,
     });
@@ -193,9 +256,9 @@ export default function AthleticsPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        name: formSessionName,
         dates: formDates,
-        training_id: formTrainingId || undefined,
-        session_type: trainingsList.find((t) => t.id === formTrainingId)?.name || undefined,
+        training_ids: formTrainingIds,
         duration_minutes: Number(formDuration),
         intensity: formIntensity,
       }),
@@ -456,6 +519,55 @@ export default function AthleticsPage() {
               </CardContent>
             </Card>
           )}
+
+          {selectedAthlete && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Progres Nilai Performa</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {progressSeries.length > 0 ? (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {progressSeries.map((s) => {
+                        const active = selectedProgressCategories.includes(s.category);
+                        return (
+                          <button
+                            key={s.category}
+                            type="button"
+                            onClick={() => toggleProgressCategory(s.category)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                              active
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground hover:bg-muted/70"
+                            }`}
+                          >
+                            {CATEGORY_LABELS[s.category] || s.category}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Klik variabel matrik untuk menampilkan atau menyembunyikannya pada grafik.
+                    </p>
+                    {progressLoading ? (
+                      <p className="text-center text-muted-foreground py-8">Memuat data...</p>
+                    ) : filteredProgressSeries.length > 0 ? (
+                      <LineChart series={filteredProgressSeries} maxScore={10} />
+                    ) : (
+                      <p className="text-center text-muted-foreground py-8">
+                        Tidak ada kategori yang dipilih. Pilih minimal satu variabel di atas.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">
+                    Belum ada riwayat penilaian untuk atlet ini.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -466,7 +578,7 @@ export default function AthleticsPage() {
         <>
           <div className="flex gap-3">
             <Input
-              placeholder="Cari sesi latihan..."
+              placeholder="Cari nama sesi latihan..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -505,7 +617,18 @@ export default function AthleticsPage() {
                     sessions.map((s) => (
                       <TableRow key={s.id}>
                         <TableCell className="text-sm">{formatDate(s.date)}</TableCell>
-                        <TableCell className="font-medium">{s.session_type || s.trainings?.name || "-"}</TableCell>
+                        <TableCell>
+                          <p className="font-medium">{s.name || s.session_type || "-"}</p>
+                          {(s.trainings || []).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {(s.trainings || []).map((t) => (
+                                <Badge key={t.id} variant="outline" className="text-[10px]">
+                                  {t.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell>{s.duration_minutes} menit</TableCell>
                         <TableCell>
                           <Badge variant={intensityVariant[s.intensity || ""] || "secondary"}>
@@ -628,18 +751,102 @@ export default function AthleticsPage() {
               </div>
 
               <form onSubmit={handleSessionSubmit} className="space-y-4">
-                {/* Jenis Latihan (from trainings) */}
+                {/* Nama Sesi Latihan */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Jenis Latihan <span className="text-red-500">*</span></label>
-                  <Select value={formTrainingId} onChange={(e) => setFormTrainingId(e.target.value)}>
-                    <option value="">— Pilih Latihan —</option>
-                    {trainingsList.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({CATEGORY_LABELS[t.category] || t.category})
-                      </option>
-                    ))}
-                  </Select>
-                  {errors.training_id && <p className="text-sm text-red-500">{errors.training_id}</p>}
+                  <label className="text-sm font-medium">Nama Sesi Latihan <span className="text-red-500">*</span></label>
+                  <Input
+                    placeholder="Contoh: Latihan Pagi Fisik Dasar"
+                    value={formSessionName}
+                    onChange={(e) => setFormSessionName(e.target.value)}
+                  />
+                  {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
+                </div>
+
+                {/* Latihan (multiple) */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Latihan <span className="text-red-500">*</span>
+                    <span className="text-muted-foreground text-xs font-normal ml-1">
+                      (boleh pilih lebih dari satu)
+                    </span>
+                  </label>
+                  <div className="relative" ref={trainingDropdownRef}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between font-normal"
+                      onClick={() => setTrainingDropdownOpen((o) => !o)}
+                    >
+                      <span className="truncate">
+                        {formTrainingIds.length === 0
+                          ? "Pilih latihan..."
+                          : formTrainingIds.length === 1
+                            ? `1 latihan dipilih`
+                            : `${formTrainingIds.length} latihan dipilih`}
+                      </span>
+                      <svg
+                        className={`h-4 w-4 opacity-50 transition-transform ${trainingDropdownOpen ? "rotate-180" : ""}`}
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                        strokeLinecap="round" strokeLinejoin="round"
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </Button>
+
+                    {trainingDropdownOpen && (
+                      <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-background shadow-md">
+                        {trainingsList.length === 0 ? (
+                          <p className="px-3 py-4 text-sm text-muted-foreground">
+                            Belum ada data latihan. Tambahkan latihan terlebih dahulu di tab Latihan.
+                          </p>
+                        ) : (
+                          <div className="p-1">
+                            {trainingsList.map((t) => {
+                              const active = formTrainingIds.includes(t.id);
+                              return (
+                                <label
+                                  key={t.id}
+                                  className={`flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm hover:bg-muted ${
+                                    active ? "bg-muted/60" : ""
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={active}
+                                    onChange={() => toggleFormTraining(t.id)}
+                                    className="h-4 w-4 accent-primary"
+                                  />
+                                  <span className="flex-1">{t.name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {CATEGORY_LABELS[t.category] || t.category}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {formTrainingIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {trainingsList
+                        .filter((t) => formTrainingIds.includes(t.id))
+                        .map((t) => (
+                          <Badge
+                            key={t.id}
+                            variant="secondary"
+                            className="cursor-pointer gap-1"
+                            onClick={() => toggleFormTraining(t.id)}
+                          >
+                            {t.name}
+                            <span aria-hidden className="text-muted-foreground">&times;</span>
+                          </Badge>
+                        ))}
+                    </div>
+                  )}
+                  {errors.training_ids && <p className="text-sm text-red-500">{errors.training_ids}</p>}
                 </div>
 
                 {/* Multiple Dates */}

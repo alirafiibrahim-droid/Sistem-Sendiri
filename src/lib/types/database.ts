@@ -340,6 +340,7 @@ export interface TrainingSession {
   id: string;
   coach_id: string | null;
   training_id: string | null;
+  name: string | null;
   date: string;
   session_type: string | null;
   duration_minutes: number | null;
@@ -349,7 +350,7 @@ export interface TrainingSession {
 
 export interface TrainingSessionWithCoach extends TrainingSession {
   profiles: Pick<Profile, "id" | "full_name"> | null;
-  trainings: Pick<Training, "id" | "name" | "category"> | null;
+  trainings: Array<Pick<Training, "id" | "name" | "category">>;
   training_session_attendants: TrainingSessionAttendant[];
 }
 

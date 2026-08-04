@@ -16,16 +16,16 @@ export const trainingFormSchema = z.object({
 export type TrainingFormValues = z.infer<typeof trainingFormSchema>;
 
 export const trainingSessionSchema = z.object({
+  name: z
+    .string()
+    .min(5, "Nama sesi latihan minimal 5 karakter.")
+    .max(100, "Nama sesi latihan maksimal 100 karakter."),
   dates: z
     .array(z.string().min(1, "Tanggal wajib diisi."))
     .min(1, "Minimal satu tanggal harus dipilih."),
-  training_id: z.string().uuid().optional().or(z.literal("")),
-  session_type: z
-    .string()
-    .min(2, "Jenis latihan minimal 2 karakter.")
-    .max(50, "Jenis latihan maksimal 50 karakter.")
-    .optional()
-    .or(z.literal("")),
+  training_ids: z
+    .array(z.string().uuid("Latihan tidak valid."))
+    .min(1, "Minimal satu latihan harus dipilih."),
   duration_minutes: z.coerce
     .number()
     .int("Durasi harus bilangan bulat.")

@@ -53,10 +53,14 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { athlete_id, value, notes } = body;
+    const { athlete_id, training_id, value, notes } = body;
 
     if (!athlete_id || value === undefined || value === null) {
       return apiBadRequest("athlete_id dan value wajib diisi.");
+    }
+
+    if (!training_id) {
+      return apiBadRequest("training_id wajib diisi.");
     }
 
     const numValue = Number(value);
@@ -66,7 +70,7 @@ export async function POST(
 
     const supabase = await createSupabaseServer();
 
-    // Get session to find training category
+    // Get session
     const { data: session, error: sErr } = await supabase
       .from("training_sessions")
       .select("id, training_id")
@@ -75,17 +79,28 @@ export async function POST(
 
     if (sErr || !session) return apiNotFound("Sesi latihan tidak ditemukan.");
 
-    let category: string | null = null;
-    if (session.training_id) {
-      const { data: training } = await supabase
-        .from("trainings")
-        .select("category")
-        .eq("id", session.training_id)
-        .single();
-      category = training?.category || null;
+    // Pastikan latihan memang bagian dari sesi ini (via junction atau legacy)
+    const { data: links } = await supabase
+      .from("training_session_trainings")
+      .select("training_id")
+      .eq("session_id", id);
+
+    const linkedIds = (links || []).map((l) => l.training_id);
+    const isLinked =
+      linkedIds.includes(training_id) || session.training_id === training_id;
+    if (!isLinked) {
+      return apiBadRequest("Latihan tidak terdaftar pada sesi latihan ini.");
     }
-    if (!category) {
-      return apiBadRequest("Sesi ini tidak memiliki kategori latihan. Ubah jenis latihan ke data Latihan yang memiliki kategori.");
+
+    const { data: training, error: tErr } = await supabase
+      .from("trainings")
+      .select("category")
+      .eq("id", training_id)
+      .single();
+
+    const category = training?.category || null;
+    if (tErr || !category) {
+      return apiBadRequest("Latihan ini tidak memiliki kategori untuk penilaian.");
     }
 
     // Find the metric for this category

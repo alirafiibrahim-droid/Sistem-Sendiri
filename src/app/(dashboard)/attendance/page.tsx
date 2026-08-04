@@ -35,6 +35,7 @@ type SessionItem = {
   has_attended: boolean;
   program_name?: string;
   session_type?: string | null;
+  name?: string | null;
   project_name?: string;
   training_name?: string | null;
   trainings?: { name: string } | null;
@@ -332,7 +333,7 @@ function AttendanceInner() {
                       sessionType === "program"
                         ? s.program_name || "Sesi Program Kerja"
                         : sessionType === "training"
-                          ? s.session_type || "Sesi Latihan"
+                          ? s.name || s.session_type || "Sesi Latihan"
                           : s.project_name || "Sesi Proyek Insidental";
                     return (
                       <TableRow key={s.id}>

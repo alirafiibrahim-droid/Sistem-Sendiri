@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("training_sessions")
-      .select("id, date, session_type, training_id, trainings(name)")
+      .select("id, date, name, session_type, training_id, trainings(name)")
       .gte("date", twoDaysAgo)
       .order("date", { ascending: true });
 
@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
         return {
           id: s.id,
           date: s.date,
+          name: s.name || s.session_type,
           session_type: s.session_type,
           training_id: s.training_id,
           training_name: (s.trainings as unknown as { name: string } | null)?.name ?? null,

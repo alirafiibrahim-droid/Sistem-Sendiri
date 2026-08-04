@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +50,7 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [qrUrl, setQrUrl] = useState("");
   const [showQr, setShowQr] = useState(false);
+  const trainings = useMemo(() => session?.trainings || [], [session?.trainings]);
 
   // User role
   const [userRole, setUserRole] = useState<UserRole | null>(null);
@@ -96,21 +97,28 @@ export default function SessionDetailPage() {
     setAssessmentsLoading(true);
     const res = await fetch(`/api/training-sessions/${id}/assessments`);
     const json = await res.json();
-    if (json.success) {
-      setAssessments(json.data);
-      // Pre-fill score inputs from existing assessments
-      const inputs: Record<string, string> = {};
-      for (const a of json.data) {
-        inputs[a.athlete_id] = String(a.value);
-      }
-      setScoreInputs(inputs);
-    }
+    if (json.success) setAssessments(json.data);
     setAssessmentsLoading(false);
   }, [id]);
 
   useEffect(() => {
     fetchAssessments();
   }, [fetchAssessments]);
+
+  // Pre-fill score inputs from existing assessments (per training/category)
+  useEffect(() => {
+    const inputs: Record<string, string> = {};
+    for (const a of assessments) {
+      const cat = a.athletic_metrics?.category;
+      if (!cat) continue;
+      for (const t of trainings) {
+        if (t.category === cat) {
+          inputs[`${t.id}_${a.athlete_id}`] = String(a.value);
+        }
+      }
+    }
+    setScoreInputs(inputs);
+  }, [assessments, trainings]);
 
   // Fetch QR URL
   useEffect(() => {
@@ -120,34 +128,52 @@ export default function SessionDetailPage() {
       .then((j) => { if (j.success) setQrUrl(j.data.scan_url); });
   }, [showQr, id]);
 
-  // Submit assessment
+  // Submit assessment (per training/variable)
   const handleSaveScore = async (athleteId: string) => {
-    const val = scoreInputs[athleteId];
-    if (!val) return;
+    const entries = trainings
+      .map((t) => ({
+        training_id: t.id,
+        value: scoreInputs[`${t.id}_${athleteId}`],
+      }))
+      .filter((e) => e.value && e.value.trim() !== "");
 
-    const numVal = Number(val);
-    if (isNaN(numVal) || numVal < 1 || numVal > 10) {
-      setSaveMsg((prev) => ({ ...prev, [athleteId]: "Score harus 1-10" }));
-      return;
+    if (entries.length === 0) return;
+
+    for (const e of entries) {
+      const numVal = Number(e.value);
+      if (isNaN(numVal) || numVal < 1 || numVal > 10) {
+        setSaveMsg((prev) => ({ ...prev, [athleteId]: "Score harus 1-10" }));
+        return;
+      }
     }
 
     setSavingAthlete(athleteId);
     setSaveMsg((prev) => ({ ...prev, [athleteId]: "" }));
 
-    const res = await fetch(`/api/training-sessions/${id}/assessments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ athlete_id: athleteId, value: numVal }),
-    });
+    let ok = true;
+    for (const e of entries) {
+      const res = await fetch(`/api/training-sessions/${id}/assessments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          athlete_id: athleteId,
+          training_id: e.training_id,
+          value: Number(e.value),
+        }),
+      });
 
-    const json = await res.json();
+      const json = await res.json();
+      if (!json.success) {
+        ok = false;
+        setSaveMsg((prev) => ({ ...prev, [athleteId]: json.error?.message || "Gagal" }));
+        break;
+      }
+    }
 
-    if (json.success) {
+    if (ok) {
       setSaveMsg((prev) => ({ ...prev, [athleteId]: "Tersimpan" }));
       fetchAssessments();
       setTimeout(() => setSaveMsg((prev) => ({ ...prev, [athleteId]: "" })), 2000);
-    } else {
-      setSaveMsg((prev) => ({ ...prev, [athleteId]: json.error?.message || "Gagal" }));
     }
 
     setSavingAthlete(null);
@@ -167,7 +193,6 @@ export default function SessionDetailPage() {
   }
 
   const attendants = session.training_session_attendants || [];
-  const category = session.trainings?.category;
   const qrScanUrl = qrUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`
     : "";
@@ -200,15 +225,8 @@ export default function SessionDetailPage() {
             <p className="font-semibold">{formatDate(session.date)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Jenis Latihan</p>
-            <p className="font-semibold">
-              {session.trainings?.name || session.session_type || "-"}
-              {category && (
-                <Badge variant="outline" className="ml-2 text-xs">
-                  {CATEGORY_LABELS[category] || category}
-                </Badge>
-              )}
-            </p>
+            <p className="text-xs text-muted-foreground">Nama Sesi</p>
+            <p className="font-semibold">{session.name || session.session_type || "-"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Pelatih</p>
@@ -216,16 +234,33 @@ export default function SessionDetailPage() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Durasi / Intensitas</p>
-            <p className="font-semibold">
+            <div className="font-semibold">
               {session.duration_minutes} menit
               {session.intensity && (
                 <Badge variant={intensityVariant[session.intensity] || "secondary"} className="ml-2 text-xs">
                   {session.intensity}
                 </Badge>
               )}
-            </p>
+            </div>
           </div>
         </CardContent>
+        {trainings.length > 0 && (
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground mb-2">Latihan dalam sesi ini</p>
+            <div className="flex flex-wrap gap-2">
+              {trainings.map((t) => (
+                <Badge key={t.id} variant="outline">
+                  {t.name}
+                  {t.category && (
+                    <span className="ml-2 text-[10px] text-muted-foreground">
+                      {CATEGORY_LABELS[t.category] || t.category}
+                    </span>
+                  )}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* QR Code */}
@@ -292,22 +327,31 @@ export default function SessionDetailPage() {
       </Card>
 
       {/* Assessment Section — only for PELATIH / ADMIN */}
-      {canAssess && category && attendants.length > 0 && (
+      {canAssess && trainings.length > 0 && attendants.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Penilaian Anggota</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Score 1-10 per anggota untuk kategori <strong>{CATEGORY_LABELS[category] || category}</strong>.
-              Rata-rata akan muncul di Matrik Performa.
+              Berikan score 1-10 per atlet untuk setiap variabel latihan dalam sesi ini.
+              Hasilnya akan diperbarui di Matrik Performa.
             </p>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nama</TableHead>
                   <TableHead>NIM</TableHead>
-                  <TableHead className="w-32">Score (1-10)</TableHead>
+                  {trainings.map((t) => (
+                    <TableHead key={t.id} className="text-center">
+                      <span className="font-medium">{t.name}</span>
+                      {t.category && (
+                        <span className="block text-[10px] text-muted-foreground">
+                          {CATEGORY_LABELS[t.category] || t.category}
+                        </span>
+                      )}
+                    </TableHead>
+                  ))}
                   <TableHead className="w-32">Aksi</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -315,45 +359,55 @@ export default function SessionDetailPage() {
               <TableBody>
                 {assessmentsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Memuat data...</TableCell>
+                    <TableCell colSpan={trainings.length + 4} className="text-center py-6 text-muted-foreground">Memuat data...</TableCell>
                   </TableRow>
                 ) : (
-                  attendants.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-medium">{a.profiles?.full_name || a.athlete_id}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{a.profiles?.nim || "-"}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="10"
-                          step="0.5"
-                          placeholder="1-10"
-                          value={scoreInputs[a.athlete_id] || ""}
-                          onChange={(e) =>
-                            setScoreInputs((prev) => ({ ...prev, [a.athlete_id]: e.target.value }))
-                          }
-                          className="w-24"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          disabled={savingAthlete === a.athlete_id || !scoreInputs[a.athlete_id]}
-                          onClick={() => handleSaveScore(a.athlete_id)}
-                        >
-                          {savingAthlete === a.athlete_id ? "..." : "Simpan"}
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        {saveMsg[a.athlete_id] && (
-                          <span className={`text-sm ${saveMsg[a.athlete_id] === "Tersimpan" ? "text-green-600" : "text-red-500"}`}>
-                            {saveMsg[a.athlete_id]}
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  attendants.map((a) => {
+                    const hasScore = trainings.some((t) =>
+                      scoreInputs[`${t.id}_${a.athlete_id}`]
+                    );
+                    return (
+                      <TableRow key={a.id}>
+                        <TableCell className="font-medium">{a.profiles?.full_name || a.athlete_id}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{a.profiles?.nim || "-"}</TableCell>
+                        {trainings.map((t) => (
+                          <TableCell key={t.id}>
+                            <Input
+                              type="number"
+                              min="1"
+                              max="10"
+                              step="0.5"
+                              placeholder="1-10"
+                              value={scoreInputs[`${t.id}_${a.athlete_id}`] || ""}
+                              onChange={(e) =>
+                                setScoreInputs((prev) => ({
+                                  ...prev,
+                                  [`${t.id}_${a.athlete_id}`]: e.target.value,
+                                }))
+                              }
+                              className="w-20 mx-auto text-center"
+                            />
+                          </TableCell>
+                        ))}
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            disabled={savingAthlete === a.athlete_id || !hasScore}
+                            onClick={() => handleSaveScore(a.athlete_id)}
+                          >
+                            {savingAthlete === a.athlete_id ? "..." : "Simpan"}
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          {saveMsg[a.athlete_id] && (
+                            <span className={`text-sm ${saveMsg[a.athlete_id] === "Tersimpan" ? "text-green-600" : "text-red-500"}`}>
+                              {saveMsg[a.athlete_id]}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -361,11 +415,11 @@ export default function SessionDetailPage() {
         </Card>
       )}
 
-      {/* Show message if no category */}
-      {canAssess && !category && attendants.length > 0 && (
+      {/* Show message if no training */}
+      {canAssess && trainings.length === 0 && attendants.length > 0 && (
         <Card>
           <CardContent className="py-6 text-center text-muted-foreground">
-            Sesi ini belum memiliki kategori latihan. Ubah jenis latihan ke data Latihan yang memiliki kategori untuk mengisi penilaian.
+            Sesi ini belum memiliki latihan. Tambahkan latihan untuk mengisi penilaian variabel.
           </CardContent>
         </Card>
       )}

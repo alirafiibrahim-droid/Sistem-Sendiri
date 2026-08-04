@@ -378,6 +378,7 @@ CREATE TABLE public.training_sessions (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     coach_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     training_id      UUID REFERENCES public.trainings(id) ON DELETE SET NULL,
+    name             VARCHAR(100),
     date             DATE NOT NULL,
     session_type     VARCHAR(50),
     duration_minutes INTEGER,
@@ -386,6 +387,25 @@ CREATE TABLE public.training_sessions (
 );
 
 COMMENT ON TABLE public.training_sessions IS 'Log pencatatan sesi latihan harian (A3)';
+
+-- ----------------------------------------------------------------------------
+-- A3: TRAINING SESSION TRAININGS (Banyak latihan/variabel dalam satu sesi)
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.training_session_trainings (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id  UUID NOT NULL REFERENCES public.training_sessions(id) ON DELETE CASCADE,
+    training_id UUID NOT NULL REFERENCES public.trainings(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(session_id, training_id)
+);
+
+COMMENT ON TABLE public.training_session_trainings
+    IS 'Relasi sesi latihan dengan banyak latihan (variabel penilaian) (A3)';
+
+CREATE INDEX idx_ts_trainings_session
+    ON public.training_session_trainings(session_id);
+CREATE INDEX idx_ts_trainings_training
+    ON public.training_session_trainings(training_id);
 
 -- ----------------------------------------------------------------------------
 -- A3: TRAINING SESSION ATTENDANTS (Kehadiran atlet dalam sesi latihan)
@@ -1047,6 +1067,40 @@ CREATE POLICY "training_sessions_insert_coach"
         (SELECT role FROM public.profiles WHERE id = auth.uid())
         IN ('ADMIN', 'PENGURUS_INTI')
         OR coach_id = auth.uid()
+    );
+
+-- Training session trainings: semua bisa baca, pelatih/core/admin bisa tulis
+ALTER TABLE public.training_session_trainings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "ts_trainings_select_all"
+    ON public.training_session_trainings FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "ts_trainings_insert_coach"
+    ON public.training_session_trainings FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI')
+        OR EXISTS (
+            SELECT 1 FROM public.training_sessions ts
+            WHERE ts.id = session_id
+              AND ts.coach_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "ts_trainings_delete_coach"
+    ON public.training_session_trainings FOR DELETE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI')
+        OR EXISTS (
+            SELECT 1 FROM public.training_sessions ts
+            WHERE ts.id = session_id
+              AND ts.coach_id = auth.uid()
+        )
     );
 
 -- Trainings: all authenticated can read, core/coach can manage

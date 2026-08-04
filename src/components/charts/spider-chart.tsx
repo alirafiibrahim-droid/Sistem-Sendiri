@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 interface SpiderChartProps {
   data: Array<{ category: string; value: number }>;
   maxScore?: number;
@@ -19,18 +21,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   GAME_INTELLIGENCE: "Game Intelligence",
 };
 
-const CATEGORY_SHORT: Record<string, string> = {
-  STRENGTH: "STR",
-  POWER: "PWR",
-  SPEED: "SPD",
-  AGILITY: "AGI",
-  ENDURANCE: "END",
-  FLEXIBILITY: "FLX",
-  TEKNIK: "TEK",
-  MENTAL: "MEN",
-  GAME_INTELLIGENCE: "GI",
-};
-
 function polarToCartesian(
   cx: number,
   cy: number,
@@ -47,6 +37,8 @@ export default function SpiderChart({
   size = 300,
   className,
 }: SpiderChartProps) {
+  const [hovered, setHovered] = useState<number | null>(null);
+
   const cx = size / 2;
   const cy = size / 2;
   const radius = (size / 2) * 0.7;
@@ -56,7 +48,7 @@ export default function SpiderChart({
   const angleStep = 360 / Math.max(n, 3);
   const levels = 5;
 
-  // Grid polygons
+  // Grid polygons (spider-web)
   const gridLevels = Array.from({ length: levels }, (_, i) => {
     const r = (radius * (i + 1)) / levels;
     const points = Array.from({ length: n }, (_, j) => {
@@ -86,8 +78,22 @@ export default function SpiderChart({
     return { ...d, ...p, label: CATEGORY_LABELS[d.category] || d.category };
   });
 
+  // Tooltip overlay position (clamped inside chart bounds)
+  let tooltipStyle: React.CSSProperties | null = null;
+  if (hovered !== null) {
+    const p = dataPoints[hovered];
+    const width = 132;
+    const height = 48;
+    const pad = 8;
+    let left = p.x + 12;
+    let top = p.y - height - 8;
+    if (left + width > size - pad) left = p.x - width - 12;
+    if (top < pad) top = p.y + 14;
+    tooltipStyle = { left, top, width };
+  }
+
   return (
-    <div className={className}>
+    <div className={`relative ${className || ""}`}>
       <svg
         viewBox={`0 0 ${size} ${size}`}
         width={size}
@@ -128,16 +134,19 @@ export default function SpiderChart({
           strokeWidth={2}
         />
 
-        {/* Data dots */}
+        {/* Data dots with hover tooltip */}
         {dataPoints.map((p, i) => (
           <circle
             key={i}
             cx={p.x}
             cy={p.y}
-            r={4}
+            r={hovered === i ? 6 : 4}
             fill="hsl(var(--primary))"
             stroke="white"
             strokeWidth={2}
+            className="cursor-pointer transition-all"
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
           />
         ))}
 
@@ -155,6 +164,19 @@ export default function SpiderChart({
           </text>
         ))}
       </svg>
+
+      {/* Tooltip overlay */}
+      {hovered !== null && tooltipStyle && (
+        <div
+          className="pointer-events-none absolute z-10 rounded-md border bg-background/95 px-2.5 py-1.5 text-xs shadow-lg"
+          style={tooltipStyle}
+        >
+          <p className="font-semibold">
+            {CATEGORY_LABELS[data[hovered].category] || data[hovered].category}
+          </p>
+          <p className="font-bold text-primary">Nilai: {data[hovered].value}</p>
+        </div>
+      )}
     </div>
   );
 }
