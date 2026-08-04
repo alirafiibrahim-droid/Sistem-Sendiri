@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { financeFormSchema } from "@/lib/validations/finance";
-import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount, IncidentalProject } from "@/lib/types/database";
+import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount, IncidentalProject, UserRole } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
@@ -25,6 +25,9 @@ interface DashboardData {
   total_income: number;
   total_expense: number;
   total_balance: number;
+  no_source_income: number;
+  no_source_expense: number;
+  no_source_balance: number;
   banks: Array<{
     bank_id: string;
     bank_name: string;
@@ -104,6 +107,10 @@ export default function FinancesPage() {
   const [showModal, setShowModal] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [editingTx, setEditingTx] = useState<FinanceWithDetails | null>(null);
+
+  // User role (to show/hide edit actions)
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
 
   // Form state
   const [formType, setFormType] = useState<"INCOME" | "EXPENSE">("INCOME");
@@ -204,6 +211,25 @@ export default function FinancesPage() {
     fetchDashboard();
   }, [fetchDashboard]);
 
+  // Fetch current user role
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single()
+          .then(({ data }) => {
+            if (data) setUserRole(data.role);
+          });
+      }
+    });
+  }, [supabase]);
+
+  const canEdit =
+    userRole === "ADMIN" || userRole === "PENGURUS_INTI" || userRole === "KABID";
+
   // Get available wallets based on hierarchical filter
   const availableWallets = filterBankCash
     ? walletsList.filter(
@@ -244,7 +270,26 @@ export default function FinancesPage() {
   };
 
   const openModal = () => {
+    setEditingTx(null);
     resetForm();
+    setShowModal(true);
+  };
+
+  const openEdit = (tx: FinanceWithDetails) => {
+    setEditingTx(tx);
+    setFormType(tx.type);
+    setFormAmount(String(tx.amount));
+    setFormDescription(tx.description);
+    setFormDate(tx.date);
+    setFormReceiptUrl(tx.receipt_url || "");
+    if (tx.bank_id) setFormWalletId(`bank:${tx.bank_id}`);
+    else if (tx.cash_account_id) setFormWalletId(`cash:${tx.cash_account_id}`);
+    else setFormWalletId(tx.wallet_id || "");
+    if (tx.program_id) setFormSubjectId(tx.program_id);
+    else if (tx.incidental_projects?.id)
+      setFormSubjectId(`project:${tx.incidental_projects.id}`);
+    else setFormSubjectId("");
+    setErrors({});
     setShowModal(true);
   };
 
@@ -297,22 +342,25 @@ export default function FinancesPage() {
     setErrors({});
     setFormLoading(true);
 
-    const res = await fetch("/api/finances", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: formType,
-        amount: Number(formAmount),
-        description: formDescription,
-        date: formDate,
-        program_id: formProgramId || undefined,
-        project_id: formProjectId || undefined,
-        receipt_url: formReceiptUrl || undefined,
-        wallet_id: walletId || undefined,
-        bank_id: bankId || undefined,
-        cash_account_id: cashAccountId || undefined,
-      }),
-    });
+    const res = await fetch(
+      editingTx ? `/api/finances/${editingTx.id}` : "/api/finances",
+      {
+        method: editingTx ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: formType,
+          amount: Number(formAmount),
+          description: formDescription,
+          date: formDate,
+          program_id: formProgramId || undefined,
+          project_id: formProjectId || undefined,
+          receipt_url: formReceiptUrl || undefined,
+          wallet_id: walletId || undefined,
+          bank_id: bankId || undefined,
+          cash_account_id: cashAccountId || undefined,
+        }),
+      }
+    );
 
     const json = await res.json();
 
@@ -461,6 +509,31 @@ export default function FinancesPage() {
                 </CardContent>
               </Card>
             ))}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-medium text-sm">Belum Dialokasikan</p>
+                  <Badge variant="outline" className="text-xs">Lainnya</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Transaksi tanpa bank / kas tertentu
+                </p>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <p className="text-muted-foreground">Masuk</p>
+                    <p className="font-medium text-green-600">{formatCurrency(dashboard.no_source_income || 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Keluar</p>
+                    <p className="font-medium text-red-600">{formatCurrency(dashboard.no_source_expense || 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Saldo</p>
+                    <p className="font-bold">{formatCurrency(dashboard.no_source_balance || 0)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
@@ -530,18 +603,19 @@ export default function FinancesPage() {
                 <TableHead>Program / Proyek</TableHead>
                 <TableHead>Dicatat Oleh</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
+                {canEdit && <TableHead className="text-right">Aksi</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canEdit ? 8 : 7} className="text-center py-8 text-muted-foreground">
                     Memuat data...
                   </TableCell>
                 </TableRow>
               ) : transactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canEdit ? 8 : 7} className="text-center py-8 text-muted-foreground">
                     Belum ada transaksi.
                   </TableCell>
                 </TableRow>
@@ -584,6 +658,17 @@ export default function FinancesPage() {
                         {formatCurrency(Number(t.amount))}
                       </span>
                     </TableCell>
+                    {canEdit && (
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEdit(t)}
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -634,9 +719,13 @@ export default function FinancesPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-bold">Catat Transaksi</h3>
+                  <h3 className="text-lg font-bold">
+                    {editingTx ? "Edit Transaksi" : "Catat Transaksi"}
+                  </h3>
                   <p className="text-sm text-muted-foreground">
-                    Tambah transaksi pemasukan atau pengeluaran
+                    {editingTx
+                      ? "Ubah detail transaksi yang sudah dicatat"
+                      : "Tambah transaksi pemasukan atau pengeluaran"}
                   </p>
                 </div>
                 <button
@@ -853,7 +942,11 @@ export default function FinancesPage() {
 
                 <div className="flex gap-3 pt-2">
                   <Button type="submit" disabled={formLoading} className="flex-1">
-                    {formLoading ? "Menyimpan..." : "Simpan Transaksi"}
+                    {formLoading
+                      ? "Menyimpan..."
+                      : editingTx
+                        ? "Simpan Perubahan"
+                        : "Simpan Transaksi"}
                   </Button>
                   <Button
                     type="button"

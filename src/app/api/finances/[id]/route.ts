@@ -10,6 +10,7 @@ import {
   getUserRole,
 } from "@/lib/api-response";
 import { isAdmin, requireRole } from "@/lib/authz";
+import { financeFormSchema } from "@/lib/validations/finance";
 import { NextRequest } from "next/server";
 import type { FinanceWithDetails, Profile } from "@/lib/types/database";
 
@@ -50,7 +51,7 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("finances")
-      .select("*, programs(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
+      .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
       .eq("id", id)
       .single();
 
@@ -88,27 +89,50 @@ export async function PATCH(
     if (!existing) return apiNotFound();
 
     const body = await request.json();
-    const { type, amount, description, date, program_id, receipt_url, wallet_id, bank_id, cash_account_id } = body;
 
-    const updateData: Record<string, unknown> = {};
-    if (type !== undefined) updateData.type = type;
-    if (amount !== undefined) updateData.amount = amount;
-    if (description !== undefined) updateData.description = description;
-    if (date !== undefined) updateData.date = date;
-    if (program_id !== undefined) updateData.program_id = program_id;
-    if (receipt_url !== undefined) updateData.receipt_url = receipt_url;
-    if (wallet_id !== undefined) updateData.wallet_id = wallet_id;
-    if (bank_id !== undefined) updateData.bank_id = bank_id;
-    if (cash_account_id !== undefined) updateData.cash_account_id = cash_account_id;
+    const parsed = financeFormSchema.safeParse(body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join(", ");
+      return apiBadRequest(msg);
+    }
+
+    const {
+      type,
+      amount,
+      description,
+      date,
+      program_id,
+      project_id,
+      receipt_url,
+      wallet_id,
+      bank_id,
+      cash_account_id,
+    } = parsed.data;
+
+    const updateData: Record<string, unknown> = {
+      type,
+      amount,
+      description,
+      date,
+      program_id: program_id || null,
+      project_id: project_id || null,
+      receipt_url: receipt_url || "",
+      wallet_id: wallet_id || null,
+      bank_id: bank_id || null,
+      cash_account_id: cash_account_id || null,
+    };
 
     const { data, error } = await supabase
       .from("finances")
       .update(updateData)
       .eq("id", id)
-      .select("*, programs(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
+      .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
       .single();
 
-    if (error) return apiInternalError();
+    if (error) {
+      console.error("FINANCES UPDATE ERROR:", error);
+      return apiInternalError(error.message);
+    }
 
     const result = (await attachProfiles([data as FinanceWithDetails], supabase))[0];
 

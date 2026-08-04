@@ -845,7 +845,7 @@ CREATE POLICY "tasks_update_committee"
     );
 
 -- ----------------------------------------------------------------------------
--- A4: RLS FINANCES (immutable journal: hanya SELECT & INSERT)
+-- A4: RLS FINANCES (SELECT semua, INSERT semua, UPDATE untuk pengelola)
 -- ----------------------------------------------------------------------------
 CREATE POLICY "finances_select_all"
     ON public.finances FOR SELECT
@@ -856,7 +856,19 @@ CREATE POLICY "finances_insert_all_roles"
     ON public.finances FOR INSERT
     TO authenticated
     WITH CHECK (true);
--- UPDATE & DELETE dicegah oleh trigger immutable (bagian 15)
+
+CREATE POLICY "finances_update_admin_core"
+    ON public.finances FOR UPDATE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID')
+    )
+    WITH CHECK (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID')
+    );
+-- DELETE dicegah oleh trigger immutable (bagian 15)
 
 -- ----------------------------------------------------------------------------
 -- A4: RLS DUES_TEMPLATES
@@ -1415,21 +1427,16 @@ CREATE OR REPLACE TRIGGER on_dues_payment_verified
 
 
 -- ----------------------------------------------------------------------------
--- A4: Trigger proteksi jurnal keuangan (IMMUTABLE - tolak UPDATE & DELETE)
+-- A4: Trigger proteksi jurnal keuangan (UPDATE diizinkan, DELETE diblokir)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.protect_finances_immutable()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    RAISE EXCEPTION 'Jurnal transaksi keuangan bersifat immutable dan tidak dapat diubah atau dihapus.';
+    RAISE EXCEPTION 'Jurnal transaksi keuangan tidak dapat dihapus.';
 END;
 $$;
-
-CREATE TRIGGER trg_finances_no_update
-    BEFORE UPDATE ON public.finances
-    FOR EACH ROW
-    EXECUTE FUNCTION public.protect_finances_immutable();
 
 CREATE TRIGGER trg_finances_no_delete
     BEFORE DELETE ON public.finances

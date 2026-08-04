@@ -50,10 +50,18 @@ export async function GET(request: NextRequest) {
     // Calculate balances
     let totalIncome = 0;
     let totalExpense = 0;
+    let noSourceIncome = 0;
+    let noSourceExpense = 0;
 
     for (const f of finances || []) {
       if (f.type === "INCOME") totalIncome += Number(f.amount);
       else totalExpense += Number(f.amount);
+
+      // Transaksi tanpa sumber (wallet/bank/kas) → bucket "Belum Dialokasikan"
+      if (!f.wallet_id && !f.bank_id && !f.cash_account_id) {
+        if (f.type === "INCOME") noSourceIncome += Number(f.amount);
+        else noSourceExpense += Number(f.amount);
+      }
     }
 
     // Calculate balance per wallet
@@ -136,6 +144,9 @@ export async function GET(request: NextRequest) {
       total_income: totalIncome,
       total_expense: totalExpense,
       total_balance: totalIncome - totalExpense,
+      no_source_income: noSourceIncome,
+      no_source_expense: noSourceExpense,
+      no_source_balance: noSourceIncome - noSourceExpense,
       banks: bankBalances,
       cash_accounts: cashBalances,
       wallets: walletBalances,
