@@ -16,7 +16,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { InventoryItem, InventoryDisposalWithDetails } from "@/lib/types/database";
+import type {
+  InventoryItem,
+  InventoryDisposal,
+  InventoryDisposalWithDetails,
+} from "@/lib/types/database";
 
 const categoryLabel: Record<string, string> = {
   ELECTRONICS: "Elektronik",
@@ -104,10 +108,35 @@ export default function InventoryPage() {
   const fetchDisposals = useCallback(async () => {
     const { data } = await supabase
       .from("inventory_disposals")
-      .select("*, inventory_items(id, code, name), profiles(id, full_name)")
+      .select("*, inventory_items(id, code, name)")
       .order("disposal_date", { ascending: false })
       .limit(10);
-    if (data) setDisposals(data as InventoryDisposalWithDetails[]);
+    if (!data) return;
+
+    const rows = data as InventoryDisposal[];
+    const userIds = [
+      ...new Set(
+        rows.map((d) => d.created_by).filter((v): v is string => Boolean(v))
+      ),
+    ];
+
+    let profileMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", userIds);
+      profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name]));
+    }
+
+    setDisposals(
+      rows.map((d) => ({
+        ...d,
+        profiles: d.created_by
+          ? { id: d.created_by, full_name: profileMap.get(d.created_by) || "" }
+          : null,
+      })) as InventoryDisposalWithDetails[]
+    );
   }, [supabase]);
 
   useEffect(() => {

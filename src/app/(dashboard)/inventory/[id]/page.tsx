@@ -21,6 +21,7 @@ import type {
   InventoryLoan,
   InventoryDamageLog,
   InventoryPurchase,
+  InventoryDisposal,
   InventoryDisposalWithDetails,
   WalletWithOwner,
   Bank,
@@ -138,14 +139,58 @@ export default function InventoryDetailPage() {
     const [{ data: itemData }, { data: loanData }, { data: logData }, { data: disposalData }] =
       await Promise.all([
         supabase.from("inventory_items").select("*").eq("id", id).single(),
-        supabase.from("inventory_loans").select("*, profiles(id, full_name, nim)").eq("item_id", id).order("created_at", { ascending: false }),
-        supabase.from("inventory_damage_logs").select("*, profiles(id, full_name)").eq("item_id", id).order("created_at", { ascending: false }),
-        supabase.from("inventory_disposals").select("*, inventory_items(id, code, name), profiles(id, full_name)").eq("item_id", id).order("disposal_date", { ascending: false }),
+        supabase.from("inventory_loans").select("*").eq("item_id", id).order("created_at", { ascending: false }),
+        supabase.from("inventory_damage_logs").select("*").eq("item_id", id).order("created_at", { ascending: false }),
+        supabase.from("inventory_disposals").select("*, inventory_items(id, code, name)").eq("item_id", id).order("disposal_date", { ascending: false }),
       ]);
     if (itemData) setItem(itemData as InventoryItem);
-    if (loanData) setLoans(loanData as InventoryLoan[]);
-    if (logData) setDamageLogs(logData as InventoryDamageLog[]);
-    if (disposalData) setDisposals(disposalData as InventoryDisposalWithDetails[]);
+
+    const loans = (loanData || []) as InventoryLoan[];
+    const logs = (logData || []) as InventoryDamageLog[];
+    const disposals = (disposalData || []) as InventoryDisposal[];
+
+    const userIds = [
+      ...new Set(
+        [
+          ...loans.map((l) => [l.borrower_id, l.approved_by]),
+          ...logs.map((l) => l.reported_by),
+          ...disposals.map((d) => d.created_by),
+        ]
+          .flat()
+          .filter((v): v is string => Boolean(v))
+      ),
+    ];
+
+    let profileMap = new Map<string, { id: string; full_name: string }>();
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", userIds);
+      profileMap = new Map(
+        (profiles || []).map((p) => [p.id, { id: p.id, full_name: p.full_name }])
+      );
+    }
+
+    setLoans(
+      loans.map((l) => ({
+        ...l,
+        profiles: l.borrower_id ? profileMap.get(l.borrower_id) || null : null,
+      })) as InventoryLoan[]
+    );
+    setDamageLogs(
+      logs.map((l) => ({
+        ...l,
+        profiles: l.reported_by ? profileMap.get(l.reported_by) || null : null,
+      })) as InventoryDamageLog[]
+    );
+    setDisposals(
+      disposals.map((d) => ({
+        ...d,
+        profiles: d.created_by ? profileMap.get(d.created_by) || null : null,
+      })) as InventoryDisposalWithDetails[]
+    );
+
     setLoading(false);
   }, [supabase, id]);
 
