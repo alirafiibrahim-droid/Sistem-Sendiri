@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ProfileWithDivision } from "@/lib/types/database";
+import type { Division, Fakultas, Jurusan, ProfileWithDivision } from "@/lib/types/database";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
@@ -54,29 +60,98 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [fakultasList, setFakultasList] = useState<Fakultas[]>([]);
+  const [jurusanList, setJurusanList] = useState<Jurusan[]>([]);
+  const [divisionFilter, setDivisionFilter] = useState("ALL");
+  const [fakultasFilter, setFakultasFilter] = useState("ALL");
+  const [jurusanFilter, setJurusanFilter] = useState("ALL");
+  const [breakdownBy, setBreakdownBy] = useState<"division" | "fakultas" | "jurusan">("division");
+
+  useEffect(() => {
+    supabase
+      .from("divisions")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => {
+        if (data) setDivisions(data as Division[]);
+      });
+    supabase
+      .from("fakultas")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => {
+        if (data) setFakultasList(data as Fakultas[]);
+      });
+    supabase
+      .from("jurusan")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => {
+        if (data) setJurusanList(data as Jurusan[]);
+      });
+  }, [supabase]);
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     let query = supabase
       .from("profiles")
-      .select("*, divisions(id, name)", { count: "exact" })
+      .select("*, divisions(id, name), fakultas(id, name), jurusan(id, name)", { count: "exact" })
       .order("full_name", { ascending: true });
 
     if (search) {
-      query = query.or(`full_name.ilike.%${search}%,nim.ilike.%${search}%`);
+      query = query.or(`full_name.ilike.%${search}%,nim.ilike.%${search}%,phone_number.ilike.%${search}%`);
     }
     if (roleFilter !== "ALL") {
       query = query.eq("role", roleFilter);
+    }
+    if (divisionFilter !== "ALL") {
+      query = query.eq("division_id", divisionFilter);
+    }
+    if (fakultasFilter !== "ALL") {
+      query = query.eq("fakultas_id", fakultasFilter);
+    }
+    if (jurusanFilter !== "ALL") {
+      query = query.eq("jurusan_id", jurusanFilter);
     }
 
     const { data } = await query;
     if (data) setMembers(data as ProfileWithDivision[]);
     setLoading(false);
-  }, [supabase, search, roleFilter]);
+  }, [supabase, search, roleFilter, divisionFilter, fakultasFilter, jurusanFilter]);
 
   useEffect(() => {
     fetchMembers();
   }, [fetchMembers]);
+
+  const summary = useMemo(() => {
+    const countBy = (key: (m: ProfileWithDivision) => string) => {
+      const map = new Map<string, number>();
+      for (const m of members) {
+        const name = key(m);
+        map.set(name, (map.get(name) || 0) + 1);
+      }
+      return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+    };
+
+    return {
+      totalMembers: members.length,
+      byDivision: countBy((m) => m.divisions?.name ?? "Tanpa Divisi"),
+      byFakultas: countBy((m) => m.fakultas?.name ?? "Tanpa Fakultas"),
+      byJurusan: countBy((m) => m.jurusan?.name ?? "Tanpa Jurusan"),
+      byStatus: countBy((m) => m.status),
+    };
+  }, [members]);
+
+  const activeBreakdown =
+    breakdownBy === "division"
+      ? summary.byDivision
+      : breakdownBy === "fakultas"
+        ? summary.byFakultas
+        : summary.byJurusan;
+
+  const statusOrder = ["AKTIF", "CUTI", "ALUMNI", "NONAKTIF"];
+  const statusCounts = new Map(summary.byStatus);
 
   return (
     <div className="space-y-6">
@@ -90,9 +165,100 @@ export default function MembersPage() {
         </Link>
       </div>
 
-      <div className="flex gap-3">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Anggota
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loading ? "-" : summary.totalMembers}
+            </div>
+            <CardDescription>Jumlah anggota sesuai filter</CardDescription>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Anggota per Kategori
+            </CardTitle>
+            <div className="flex gap-1">
+              {(
+                [
+                  ["division", "Divisi"],
+                  ["fakultas", "Fakultas"],
+                  ["jurusan", "Jurusan"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setBreakdownBy(key)}
+                  className={`rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+                    breakdownBy === key
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {activeBreakdown.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tidak ada data</p>
+            ) : (
+              <div className="space-y-1.5">
+                {activeBreakdown.slice(0, 5).map(([name, count]) => (
+                  <div
+                    key={name}
+                    className="flex items-center justify-between text-sm"
+                  >
+                    <span className="truncate">{name}</span>
+                    <span className="font-semibold">{count}</span>
+                  </div>
+                ))}
+                {activeBreakdown.length > 5 && (
+                  <p className="text-xs text-muted-foreground">
+                    +{activeBreakdown.length - 5} lainnya
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Anggota per Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1.5">
+              {statusOrder.map((status) => (
+                <div
+                  key={status}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <Badge variant={statusVariant[status]}>{status}</Badge>
+                  <span className="font-semibold">
+                    {loading ? "-" : statusCounts.get(status) || 0}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
         <Input
-          placeholder="Cari nama atau NIM..."
+          placeholder="Cari nama, NIM, atau No. HP..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
@@ -109,6 +275,30 @@ export default function MembersPage() {
           <option value="PELATIH">Pelatih</option>
           <option value="PEMBINA">Pembina</option>
           <option value="ANGGOTA">Anggota</option>
+        </Select>
+        <Select value={divisionFilter} onChange={(e) => setDivisionFilter(e.target.value)}>
+          <option value="ALL">Semua Divisi</option>
+          {divisions.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </Select>
+        <Select value={fakultasFilter} onChange={(e) => setFakultasFilter(e.target.value)}>
+          <option value="ALL">Semua Fakultas</option>
+          {fakultasList.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </Select>
+        <Select value={jurusanFilter} onChange={(e) => setJurusanFilter(e.target.value)}>
+          <option value="ALL">Semua Jurusan</option>
+          {jurusanList.map((j) => (
+            <option key={j.id} value={j.id}>
+              {j.name}
+            </option>
+          ))}
         </Select>
       </div>
 
