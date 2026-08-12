@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { MobileNav } from "@/components/layout/mobile-nav";
 
 interface HeaderProps {
   user?: { email?: string | null } | null;
@@ -41,18 +41,13 @@ export function Header({ user }: HeaderProps) {
   };
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background px-6 print:hidden">
+    <header className="flex h-14 items-center gap-3 border-b bg-background px-4 sm:px-6 print:hidden">
       <div className="lg:hidden">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-            S
-          </div>
-          <span className="font-semibold">SIORG</span>
-        </Link>
+        <MobileNav />
       </div>
-      <h1 className="text-lg font-semibold">{pageTitle}</h1>
+      <h1 className="text-base sm:text-lg font-semibold truncate">{pageTitle}</h1>
       <div className="ml-auto flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">{user?.email}</span>
+        <span className="hidden sm:inline text-sm text-muted-foreground">{user?.email}</span>
         <Button variant="outline" size="sm" onClick={handleLogout}>
           Keluar
         </Button>

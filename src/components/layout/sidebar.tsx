@@ -25,14 +25,14 @@ import {
 } from "lucide-react";
 import type { OrganizationSettings } from "@/lib/types/database";
 
-interface NavItem {
+export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
   adminOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
+export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Program Kerja", href: "/programs", icon: ClipboardList },
   { label: "Keuangan", href: "/finances", icon: Wallet },
