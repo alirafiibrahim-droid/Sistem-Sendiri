@@ -1,15 +1,17 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+﻿import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
   apiForbidden,
   apiNotFound,
-  apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, isRoleAllowed } from "@/lib/authz";
+import { canAccess, requireAccess } from "@/lib/access";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { attachHandovers } from "@/lib/handover";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -19,6 +21,10 @@ export async function GET(
   try {
     const uid = getUid(request);
     if (!uid) return apiUnauthorized();
+
+    const role = getUserRole(request);
+    const forbidden = requireAccess(role, "achievements-detail", "read");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
@@ -44,7 +50,7 @@ export async function GET(
       if (p.user_id) allUserIds.add(p.user_id);
     }
 
-    let profilesMap = new Map<string, { id: string; full_name: string; nim?: string; avatar_url?: string }>();
+    const profilesMap = new Map<string, { id: string; full_name: string; nim?: string; avatar_url?: string }>();
     if (allUserIds.size > 0) {
       const { data: profiles } = await supabase
         .from("profiles")
@@ -69,12 +75,17 @@ export async function GET(
       })
     );
 
+    const [withPeriods] = await attachHandovers(
+      [{ ...achievement, handover_id: achievement.handover_id || null }],
+      createSupabaseAdmin()
+    );
+
     return apiOk({
-      ...achievement,
+      ...withPeriods,
       profiles: creatorProfile,
       achievement_participants: participantsWithProfiles,
     });
-  } catch (error) {
+  } catch {
     return apiInternalError();
   }
 }
@@ -101,7 +112,7 @@ export async function PATCH(
     if (fetchError || !existing) return apiNotFound();
 
     const isCreator = existing.created_by === uid;
-    const hasPermission = isRoleAllowed(role, ["PENGURUS_INTI", "KABID"]) || isCreator;
+    const hasPermission = canAccess(role, "achievements-detail", "update") || isCreator;
 
     if (!hasPermission) return apiForbidden();
 
@@ -123,10 +134,10 @@ export async function PATCH(
         .eq("achievement_id", id);
 
       if (participants.length > 0) {
-        const rows = participants.map((p: { user_id: string; juara: string; keterangan?: string }) => ({
+        const rows = participants.map((p: { user_id: string; juara?: string | null; keterangan?: string }) => ({
           achievement_id: id,
           user_id: p.user_id,
-          juara: p.juara,
+          juara: p.juara || null,
           keterangan: p.keterangan || null,
         }));
 
@@ -138,8 +149,16 @@ export async function PATCH(
       }
     }
 
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "achievements",
+      targetId: id,
+      userId: uid,
+      newValue: updateData,
+    });
+
     return apiOk(data);
-  } catch (error) {
+  } catch {
     return apiInternalError();
   }
 }
@@ -153,10 +172,17 @@ export async function DELETE(
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
 
-    if (!isAdmin(role)) return apiForbidden();
+    const forbidden = requireAccess(role, "achievements-detail", "delete");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("achievements")
+      .select("id, title, type")
+      .eq("id", id)
+      .single();
 
     await supabase
       .from("achievement_participants")
@@ -170,8 +196,16 @@ export async function DELETE(
 
     if (error) throw error;
 
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "achievements",
+      targetId: id,
+      userId: uid,
+      oldValue: existing ? { title: existing.title, type: existing.type } : null,
+    });
+
     return apiOk({ message: "Achievement deleted" });
-  } catch (error) {
+  } catch {
     return apiInternalError();
   }
 }

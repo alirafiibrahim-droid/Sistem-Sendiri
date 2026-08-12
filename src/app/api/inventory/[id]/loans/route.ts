@@ -7,6 +7,7 @@ import {
   apiInternalError,
   getUid,
 } from "@/lib/api-response";
+import { writeAuditLog } from "@/lib/audit";
 
 // GET /api/inventory/[id]/loans
 export async function GET(
@@ -90,6 +91,22 @@ export async function POST(
       .single();
 
     if (error) return apiInternalError(error.message);
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "inventory_loans",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        item_id: id,
+        quantity: Number(quantity),
+        borrow_date,
+        return_date,
+        purpose,
+        status: "PENDING",
+      },
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

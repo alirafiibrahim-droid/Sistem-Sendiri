@@ -10,7 +10,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(
   request: NextRequest,
@@ -54,7 +55,7 @@ export async function POST(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "projects", "create");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -95,6 +96,22 @@ export async function POST(
       .single();
 
     if (error) throw error;
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "project_funds",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        project_id: id,
+        type,
+        amount,
+        source,
+        description,
+        date,
+        receipt_url: receipt_url || null,
+      },
+    });
 
     return apiCreated(data);
   } catch {

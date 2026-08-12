@@ -26,6 +26,8 @@ export function Header({ user }: HeaderProps) {
       letters: "Persuratan",
       handovers: "Sertijab",
       projects: "Proyek Insidental",
+      reports: "Laporan",
+      "audit-logs": "Audit Trail",
       settings: "Pengaturan",
     };
     return titles[segment] || "SIORG";
@@ -39,7 +41,7 @@ export function Header({ user }: HeaderProps) {
   };
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background px-6">
+    <header className="flex h-14 items-center gap-4 border-b bg-background px-6 print:hidden">
       <div className="lg:hidden">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">

@@ -8,8 +8,9 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { bankFormSchema } from "@/lib/validations/settings";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -44,7 +45,7 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["ADMIN", "PENGURUS_INTI"]);
+    const forbidden = requireAccess(role, "settings-cash-bank", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -52,7 +53,7 @@ export async function PATCH(
 
     const { data: existing } = await supabase
       .from("banks")
-      .select("id")
+      .select("id, name, account_number, account_holder, description")
       .eq("id", id)
       .single();
 
@@ -73,6 +74,27 @@ export async function PATCH(
       .single();
 
     if (error) return apiInternalError(error.message);
+
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const existingRow = existing as unknown as Record<string, unknown>;
+    const updatedRow = data as unknown as Record<string, unknown>;
+    for (const key of ["name", "account_number", "account_holder", "description"]) {
+      if (JSON.stringify(existingRow[key]) !== JSON.stringify(updatedRow[key])) {
+        oldValue[key] = existingRow[key] ?? null;
+        newValue[key] = updatedRow[key] ?? null;
+      }
+    }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "banks",
+      targetId: id,
+      userId: uid,
+      oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+      newValue: Object.keys(newValue).length > 0 ? newValue : null,
+    });
+
     return apiOk(data);
   } catch {
     return apiInternalError();
@@ -88,7 +110,7 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["ADMIN", "PENGURUS_INTI"]);
+    const forbidden = requireAccess(role, "settings-cash-bank", "delete");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -96,7 +118,7 @@ export async function DELETE(
 
     const { data: existing } = await supabase
       .from("banks")
-      .select("id")
+      .select("id, name, account_number, account_holder")
       .eq("id", id)
       .single();
 
@@ -104,6 +126,18 @@ export async function DELETE(
 
     const { error } = await supabase.from("banks").delete().eq("id", id);
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "banks",
+      targetId: id,
+      userId: uid,
+      oldValue: {
+        name: existing.name,
+        account_number: existing.account_number,
+        account_holder: existing.account_holder,
+      },
+    });
 
     return apiOk({ message: "Deleted successfully" });
   } catch {

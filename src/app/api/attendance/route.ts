@@ -8,6 +8,7 @@ import {
   apiInternalError,
   getUid,
 } from "@/lib/api-response";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 // GET /api/attendance?program_id=xxx — list attendance for a program
@@ -91,6 +92,20 @@ export async function POST(request: NextRequest) {
     if (error) {
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "attendances",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        program_id,
+        user_id: uid,
+        status: "PRESENT",
+        method,
+        scanned_at: data.scanned_at ?? null,
+      },
+    });
 
     return apiCreated(data);
   } catch {

@@ -3,11 +3,11 @@ import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiNotFound,
   apiBadRequest,
   apiInternalError,
   getUid,
 } from "@/lib/api-response";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -29,7 +29,7 @@ export async function GET(
     if (error) throw error;
 
     return apiOk(data);
-  } catch (error) {
+  } catch {
     return apiInternalError();
   }
 }
@@ -75,8 +75,20 @@ export async function POST(
 
     if (error) throw error;
 
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "achievement_participants",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        achievement_id: id,
+        user_id,
+        role_in_achievement: data.role_in_achievement,
+      },
+    });
+
     return apiCreated(data);
-  } catch (error) {
+  } catch {
     return apiInternalError();
   }
 }

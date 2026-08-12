@@ -19,7 +19,7 @@ export type DuesPaymentStatus =
 
 export type LetterType = "INCOMING" | "OUTGOING";
 export type LetterClassification = "PUBLIC" | "CONFIDENTIAL";
-export type HandoverStatus = "DRAFT" | "SIGNED" | "COMPLETED";
+export type HandoverStatus = "NOT_STARTED" | "ONGOING" | "COMPLETED";
 
 export type MetricType = "QUANTITATIVE" | "QUALITATIVE";
 export type IntensityLevel = "LOW" | "MEDIUM" | "HIGH";
@@ -28,6 +28,7 @@ export type AttendanceMethod = "MANUAL" | "QR";
 
 export type AchievementType = "ORGANIZATION" | "INDIVIDUAL";
 export type AchievementStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type AchievementJuara = "JUARA_I" | "JUARA_II" | "JUARA_III" | "JUARA_HARAPAN";
 
 export type ProjectStatus = "PROPOSED" | "APPROVED" | "ONGOING" | "CLOSED";
 
@@ -70,6 +71,11 @@ export interface ProfileWithDivision extends Profile {
   jurusan: Pick<Jurusan, "id" | "name"> | null;
 }
 
+export interface OrgSocialLink {
+  platform: string;
+  url: string;
+}
+
 export interface OrganizationSettings {
   id: string;
   org_name: string;
@@ -78,7 +84,25 @@ export interface OrganizationSettings {
   org_logo_url: string | null;
   period_year: string;
   is_maintenance: boolean;
+  org_address: string | null;
+  org_phone_number: string | null;
+  org_university: string;
+  org_social_media: OrgSocialLink[] | null;
+  org_est_year: string;
   updated_at: string;
+}
+
+// A13: Pelaporan
+export interface ReportFile {
+  id: string;
+  report_type: string;
+  report_title: string;
+  format: string;
+  file_url: string;
+  filters: Record<string, unknown>;
+  status: string;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface Fakultas {
@@ -126,6 +150,7 @@ export interface Program {
   proposal_url: string | null;
   lpj_url: string | null;
   division_id: string | null;
+  handover_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -133,7 +158,9 @@ export interface Program {
 
 export interface ProgramWithDetails extends Program {
   divisions: Pick<Division, "id" | "name"> | null;
+  handovers: Pick<Handover, "id" | "period_from" | "period_to" | "status"> | null;
   program_members: ProgramMember[];
+  average_score?: number | null;
   _count?: { tasks: number; done_tasks: number };
 }
 
@@ -210,6 +237,7 @@ export interface Finance {
   date: string;
   program_id: string | null;
   project_id: string | null;
+  handover_id: string | null;
   receipt_url: string;
   wallet_id: string | null;
   bank_id: string | null;
@@ -226,6 +254,7 @@ export interface FinanceWithDetails extends Finance {
   wallets: Pick<Wallet, "id" | "name"> | null;
   banks: Pick<Bank, "id" | "name"> | null;
   cash_accounts: Pick<CashAccount, "id" | "name"> | null;
+  handovers: Pick<Handover, "id" | "period_from" | "period_to" | "status"> | null;
   is_external?: boolean;
 }
 
@@ -282,6 +311,8 @@ export interface Letter {
   date_received_sent: string;
   classification: LetterClassification;
   document_url: string;
+  handover_id: string | null;
+  handovers?: Pick<Handover, "id" | "period_from" | "period_to" | "status"> | null;
   created_by: string | null;
   created_at: string;
 }
@@ -344,6 +375,7 @@ export interface TrainingSession {
   training_id: string | null;
   name: string | null;
   date: string;
+  session_code: string | null;
   session_type: string | null;
   duration_minutes: number | null;
   intensity: IntensityLevel | null;
@@ -403,9 +435,12 @@ export interface Achievement {
   level: string;
   organizer: string | null;
   achievement_date: string;
+  juara: AchievementJuara | null;
   proof_url: string | null;
   status: AchievementStatus;
   rejection_reason: string | null;
+  handover_id: string | null;
+  handovers?: Pick<Handover, "id" | "period_from" | "period_to" | "status"> | null;
   created_by: string | null;
   created_at: string;
 }
@@ -419,7 +454,7 @@ export interface AchievementParticipant {
   id: string;
   achievement_id: string;
   user_id: string;
-  juara: string;
+  juara: AchievementJuara;
   keterangan: string | null;
 }
 
@@ -438,6 +473,8 @@ export interface IncidentalProject {
   end_date: string | null;
   budget_source: string | null;
   status: ProjectStatus;
+  handover_id: string | null;
+  handovers?: Pick<Handover, "id" | "period_from" | "period_to" | "status"> | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -477,6 +514,25 @@ export interface ProjectMilestone {
   is_completed: boolean;
   completed_at: string | null;
   created_at: string;
+}
+
+// A9/A10: Pos Anggaran (Budget Items) Program Kerja & Proyek Insidental
+export interface BudgetItem {
+  id: string;
+  program_id: string | null;
+  project_id: string | null;
+  parent_id: string | null;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetItemWithChildren extends BudgetItem {
+  children: BudgetItem[];
 }
 
 // A12: Inventarisasi

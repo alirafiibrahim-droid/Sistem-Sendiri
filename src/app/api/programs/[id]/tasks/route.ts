@@ -1,15 +1,17 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { isProgramLocked } from "@/lib/program-lock";
 import {
   apiOk,
   apiCreated,
   apiUnauthorized,
+  apiForbidden,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
-import type { PaginationParams } from "@/lib/types/api";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 // GET /api/programs/[id]/tasks?page=1&limit=25&search=&sort=&order=asc
 export async function GET(
@@ -68,7 +70,7 @@ export async function POST(
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(userRole, "programs", "create");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -80,6 +82,11 @@ export async function POST(
     }
 
     const supabase = await createSupabaseServer();
+
+    if (await isProgramLocked(supabase, id)) {
+      return apiForbidden("Program pada periode yang telah selesai tidak dapat diubah.");
+    }
+
     const { data, error } = await supabase
       .from("tasks")
       .insert({
@@ -94,6 +101,15 @@ export async function POST(
       .single();
 
     if (error) return apiInternalError(error.message);
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "tasks",
+      targetId: data.id,
+      userId: uid,
+      newValue: data,
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

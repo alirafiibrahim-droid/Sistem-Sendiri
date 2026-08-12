@@ -11,10 +11,8 @@ export const programFormSchema = z
       .min(10, "Deskripsi program minimal 10 karakter."),
     start_date: z.coerce.date(),
     end_date: z.coerce.date(),
-    budget_estimate: z.coerce
-      .number()
-      .min(0, "Anggaran tidak boleh negatif."),
     division_id: z.string().uuid("ID divisi tidak valid.").optional(),
+    handover_id: z.string().uuid("ID periode tidak valid.").optional(),
     proposal_url: z
       .string()
       .url("URL proposal harus valid.")
@@ -45,12 +43,9 @@ export const programUpdateSchema = z
       .optional(),
     start_date: z.coerce.date().optional(),
     end_date: z.coerce.date().optional(),
-    budget_estimate: z.coerce
-      .number()
-      .min(0, "Anggaran tidak boleh negatif.")
-      .optional(),
     status: z.enum(["PLANNED", "ONGOING", "COMPLETED", "CANCELLED"]).optional(),
     division_id: z.string().uuid("ID divisi tidak valid.").nullable().optional(),
+    handover_id: z.string().uuid("ID periode tidak valid.").nullable().optional(),
     proposal_url: z
       .string()
       .url("URL proposal harus valid.")

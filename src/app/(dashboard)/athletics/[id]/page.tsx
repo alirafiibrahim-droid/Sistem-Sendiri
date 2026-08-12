@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { TrainingSessionWithCoach, TrainingSessionAttendant, UserRole } from "@/lib/types/database";
+import { QrCodeModal } from "@/components/ui/qr-code-modal";
 import Link from "next/link";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -30,7 +31,7 @@ const intensityVariant: Record<string, "destructive" | "warning" | "secondary"> 
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
-    day: "2-digit", month: "short", year: "numeric",
+    day: "2-digit", month: "2-digit", year: "numeric",
   });
 }
 
@@ -193,9 +194,6 @@ export default function SessionDetailPage() {
   }
 
   const attendants = session.training_session_attendants || [];
-  const qrScanUrl = qrUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`
-    : "";
 
   return (
     <div className="space-y-6">
@@ -208,8 +206,8 @@ export default function SessionDetailPage() {
           <h2 className="text-2xl font-bold tracking-tight mt-1">Detail Sesi Latihan</h2>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowQr(!showQr)}>
-            {showQr ? "Sembunyikan QR" : "Tampilkan QR Code"}
+          <Button variant="outline" onClick={() => setShowQr(true)}>
+            Tampilkan QR Code
           </Button>
         </div>
       </div>
@@ -263,27 +261,16 @@ export default function SessionDetailPage() {
         )}
       </Card>
 
-      {/* QR Code */}
-      {showQr && (
-        <Card>
-          <CardHeader>
-            <CardTitle>QR Code Absensi</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-4">
-            {qrScanUrl ? (
-              <>
-                <img src={qrScanUrl} alt="QR Code Absensi" width={250} height={250} className="border rounded-lg" />
-                <p className="text-sm text-muted-foreground text-center break-all">URL: {qrUrl}</p>
-                <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(qrUrl)}>
-                  Salin Link Absensi
-                </Button>
-              </>
-            ) : (
-              <p className="text-muted-foreground">Memuat QR code...</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* QR Code Modal */}
+      <QrCodeModal
+        open={showQr}
+        label="Sesi Latihan"
+        title="QR Code Absensi"
+        dateText={formatDate(session.date)}
+        url={qrUrl}
+        loading={!qrUrl}
+        onClose={() => { setShowQr(false); setQrUrl(""); }}
+      />
 
       {/* Attendance List */}
       <Card>
@@ -316,7 +303,7 @@ export default function SessionDetailPage() {
                       <Badge variant={a.method === "QR" ? "default" : "secondary"}>{a.method}</Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {a.scanned_at ? new Date(a.scanned_at).toLocaleString("id-ID") : "-"}
+                      {a.scanned_at ? new Date(a.scanned_at).toLocaleString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}
                     </TableCell>
                   </TableRow>
                 ))

@@ -8,7 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 // GET /api/inventory?page=1&limit=25&search=&category=&condition=
 export async function GET(request: Request) {
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(userRole, "inventory-add", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -92,6 +93,22 @@ export async function POST(request: Request) {
       .single();
 
     if (error) return apiInternalError(error.message);
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "inventory_items",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        name: data.name,
+        category: data.category,
+        stock: data.stock,
+        unit_price: data.unit_price,
+        condition: data.condition,
+        location: data.location,
+      },
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

@@ -8,6 +8,7 @@ import {
   apiInternalError,
   getUid,
 } from "@/lib/api-response";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 // GET /api/attendance/projects — list active projects for attendance
@@ -75,6 +76,19 @@ export async function POST(request: NextRequest) {
     if (error) {
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "project_attendances",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        project_id,
+        user_id: uid,
+        method,
+        scanned_at: data.scanned_at ?? null,
+      },
+    });
 
     return apiCreated(data);
   } catch {

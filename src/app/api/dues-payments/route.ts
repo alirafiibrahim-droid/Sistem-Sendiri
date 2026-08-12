@@ -9,7 +9,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isRoleAllowed } from "@/lib/authz";
+import { canAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
         { count: "exact" }
       );
 
-    if (!isRoleAllowed(role, ["PENGURUS_INTI", "KABID"])) {
+    if (!canAccess(role, "finances", "read")) {
       query = query.eq("user_id", uid);
     }
 
@@ -99,6 +100,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "dues_payments",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        due_template_id,
+        user_id: uid,
+        payment_date,
+        proof_url,
+        status: "PENDING_VERIFICATION",
+      },
+    });
 
     return apiCreated(data);
   } catch {

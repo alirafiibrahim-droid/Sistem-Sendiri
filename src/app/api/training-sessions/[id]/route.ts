@@ -7,7 +7,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -101,7 +102,7 @@ export async function PATCH(
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
     if (role !== "coach") {
-      const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+      const forbidden = requireAccess(role, "training-sessions", "update");
       if (forbidden) return forbidden;
     }
 
@@ -110,6 +111,14 @@ export async function PATCH(
     const { athlete_ids, training_ids, ...sessionData } = body;
 
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("training_sessions")
+      .select("id, name, date, session_type, duration_minutes, intensity")
+      .eq("id", id)
+      .single();
+
+    if (!existing) return apiNotFound();
 
     const { data, error } = await supabase
       .from("training_sessions")
@@ -161,6 +170,26 @@ export async function PATCH(
       }
     }
 
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const existingRow = existing as unknown as Record<string, unknown>;
+    const updatedRow = data as unknown as Record<string, unknown>;
+    for (const key of ["name", "date", "session_type", "duration_minutes", "intensity"]) {
+      if (JSON.stringify(existingRow[key]) !== JSON.stringify(updatedRow[key])) {
+        oldValue[key] = existingRow[key] ?? null;
+        newValue[key] = updatedRow[key] ?? null;
+      }
+    }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "training_sessions",
+      targetId: id,
+      userId: uid,
+      oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+      newValue: Object.keys(newValue).length > 0 ? newValue : null,
+    });
+
     return apiOk(data);
   } catch {
     return apiInternalError();
@@ -176,12 +205,18 @@ export async function DELETE(
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
     if (role !== "coach") {
-      const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+      const forbidden = requireAccess(role, "training-sessions", "delete");
       if (forbidden) return forbidden;
     }
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("training_sessions")
+      .select("id, name, date")
+      .eq("id", id)
+      .single();
 
     await supabase
       .from("training_session_attendants")
@@ -194,6 +229,15 @@ export async function DELETE(
       .eq("id", id);
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "training_sessions",
+      targetId: id,
+      userId: uid,
+      oldValue: existing ? { name: existing.name, date: existing.date } : null,
+    });
+
     return apiOk({ deleted: true });
   } catch {
     return apiInternalError();

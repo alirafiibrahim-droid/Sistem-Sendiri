@@ -30,14 +30,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const PALETTE = [
-  "#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#a855f7",
-  "#06b6d4", "#ec4899", "#84cc16", "#f97316",
+  "#bb2233", "#fa8603", "#0a0f24", "#e8848f", "#4a5266",
+  "#f7b46b", "#c0505d", "#e8a24f", "#6b7280",
 ];
 
 function formatShortDate(dateStr: string) {
   const d = new Date(`${dateStr}T00:00:00`);
   if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit" });
 }
 
 export default function LineChart({

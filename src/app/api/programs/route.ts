@@ -1,4 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   apiOk,
   apiCreated,
@@ -6,8 +7,10 @@ import {
   apiBadRequest,
   apiInternalError,
   getUid,
+  getUserRole,
 } from "@/lib/api-response";
-import type { PaginationParams } from "@/lib/types/api";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 // GET /api/programs?page=1&limit=25&search=&sort=&order=asc
 export async function GET(request: Request) {
@@ -28,7 +31,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from("programs")
-      .select("*, divisions(id, name)", { count: "exact" });
+      .select("*, divisions(id, name), handovers(id, period_from, period_to, status)", { count: "exact" });
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
@@ -57,11 +60,29 @@ export async function POST(request: Request) {
     const uid = getUid(request);
     if (!uid) return apiUnauthorized();
 
+    const role = getUserRole(request);
+    const forbidden = requireAccess(role, "programs", "create");
+    if (forbidden) return forbidden;
+
     const body = await request.json();
-    const { name, description, start_date, end_date, budget_estimate, division_id, proposal_url, lpj_url } = body;
+    const { name, description, start_date, end_date, division_id, handover_id, proposal_url, lpj_url } = body;
 
     if (!name || !start_date || !end_date) {
       return apiBadRequest("Nama, tanggal mulai, dan tanggal selesai wajib diisi.");
+    }
+
+    // Pastikan periode yang dipilih benar-benar sedang berjalan (belum COMPLETED)
+    if (handover_id) {
+      const admin = createSupabaseAdmin();
+      const { data: handover } = await admin
+        .from("handovers")
+        .select("id, status")
+        .eq("id", handover_id)
+        .maybeSingle();
+
+      if (!handover || handover.status === "COMPLETED") {
+        return apiBadRequest("Periode yang dipilih tidak valid atau telah selesai.");
+      }
     }
 
     const supabase = await createSupabaseServer();
@@ -72,16 +93,25 @@ export async function POST(request: Request) {
         description: description || "",
         start_date,
         end_date,
-        budget_estimate: budget_estimate || 0,
         division_id: division_id || null,
+        handover_id: handover_id || null,
         proposal_url: proposal_url || null,
         lpj_url: lpj_url || null,
         created_by: uid,
       })
-      .select("*, divisions(id, name)")
+      .select("*, divisions(id, name), handovers(id, period_from, period_to, status)")
       .single();
 
     if (error) return apiInternalError(error.message);
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "programs",
+      targetId: data.id,
+      userId: uid,
+      newValue: data,
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

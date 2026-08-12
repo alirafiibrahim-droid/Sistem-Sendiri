@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
   Table,
   TableBody,
@@ -16,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { financeFormSchema } from "@/lib/validations/finance";
-import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount, IncidentalProject, UserRole } from "@/lib/types/database";
+import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount, IncidentalProject, UserRole, HandoverWithCreator } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
@@ -87,9 +88,16 @@ function formatCurrency(amount: number) {
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     year: "numeric",
   });
+}
+
+function splitReceipts(value: string | null | undefined): string[] {
+  return (value || "")
+    .split("\n")
+    .map((u) => u.trim())
+    .filter(Boolean);
 }
 
 export default function FinancesPage() {
@@ -100,6 +108,9 @@ export default function FinancesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterHandoverId, setFilterHandoverId] = useState("");
   const [page, setPage] = useState(1);
   const limit = 15;
 
@@ -126,8 +137,9 @@ export default function FinancesPage() {
     new Date().toISOString().split("T")[0]
   );
   const [formSubjectId, setFormSubjectId] = useState("");
-  const [formReceiptUrl, setFormReceiptUrl] = useState("");
+  const [formReceiptUrls, setFormReceiptUrls] = useState<string[]>([]);
   const [formWalletId, setFormWalletId] = useState("");
+  const [formHandoverId, setFormHandoverId] = useState("");
 
   // Dropdown data
   const [programs, setPrograms] = useState<Pick<Program, "id" | "name">[]>([]);
@@ -135,6 +147,9 @@ export default function FinancesPage() {
   const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
   const [banksList, setBanksList] = useState<Pick<Bank, "id" | "name" | "account_number">[]>([]);
   const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
+  const [handovers, setHandovers] = useState<HandoverWithCreator[]>([]);
+  const [activeHandoverId, setActiveHandoverId] = useState("");
+  const [handoversLoaded, setHandoversLoaded] = useState(false);
 
   // Dashboard data
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -151,6 +166,14 @@ export default function FinancesPage() {
     });
     if (search) params.set("search", search);
     if (filterType) params.set("type", filterType);
+    if (filterStartDate) params.set("start_date", filterStartDate);
+    if (filterEndDate) params.set("end_date", filterEndDate);
+    if (filterHandoverId) params.set("handover_id", filterHandoverId);
+    if (filterBankCash) {
+      if (filterBankCash.startsWith("bank:"))
+        params.set("bank_id", filterBankCash.replace("bank:", ""));
+      else params.set("cash_account_id", filterBankCash.replace("cash:", ""));
+    }
     if (filterWalletId) params.set("wallet_id", filterWalletId);
 
     const res = await fetch(`/api/finances?${params}`);
@@ -161,11 +184,31 @@ export default function FinancesPage() {
       setMeta(json.meta);
     }
     setLoading(false);
-  }, [page, search, filterType, filterWalletId]);
+  }, [page, search, filterType, filterStartDate, filterEndDate, filterHandoverId, filterBankCash, filterWalletId]);
 
   useEffect(() => {
+    if (!handoversLoaded) return;
     fetchTransactions();
-  }, [fetchTransactions]);
+  }, [fetchTransactions, handoversLoaded]);
+
+  // Fetch Sertijab periods (untuk filter "Periode" dan form "Periode Berjalan")
+  useEffect(() => {
+    fetch("/api/handovers?limit=100")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          const list = json.data as HandoverWithCreator[];
+          setHandovers(list);
+          const active = list.find((h) => h.status !== "COMPLETED");
+          if (active) {
+            setActiveHandoverId(active.id);
+            setFormHandoverId(active.id);
+            setFilterHandoverId(active.id);
+          }
+        }
+        setHandoversLoaded(true);
+      });
+  }, []);
 
   useEffect(() => {
     supabase
@@ -239,7 +282,11 @@ export default function FinancesPage() {
   // Get available wallets based on hierarchical filter
   const availableWallets = filterBankCash
     ? walletsList.filter(
-        (w) => w.bank_id === filterBankCash || w.cash_account_id === filterBankCash
+        (w) =>
+          (filterBankCash.startsWith("bank:") &&
+            w.bank_id === filterBankCash.replace("bank:", "")) ||
+          (filterBankCash.startsWith("cash:") &&
+            w.cash_account_id === filterBankCash.replace("cash:", ""))
       )
     : walletsList;
 
@@ -255,14 +302,17 @@ export default function FinancesPage() {
   // Build label for bank/cash selector
   const bankCashOptions = [
     ...(dashboard?.banks.map((b) => ({
-      id: b.bank_id,
+      id: `bank:${b.bank_id}`,
       label: `Bank: ${b.bank_name}`,
     })) || []),
     ...(dashboard?.cash_accounts.map((c) => ({
-      id: c.cash_account_id,
+      id: `cash:${c.cash_account_id}`,
       label: `Kas: ${c.cash_account_name}`,
     })) || []),
   ];
+
+  // Periode Sertijab yang sedang berjalan (status != COMPLETED)
+  const activePeriods = handovers.filter((h) => h.status !== "COMPLETED");
 
   const resetForm = () => {
     setFormType("INCOME");
@@ -270,8 +320,9 @@ export default function FinancesPage() {
     setFormDescription("");
     setFormDate(new Date().toISOString().split("T")[0]);
     setFormSubjectId("");
-    setFormReceiptUrl("");
+    setFormReceiptUrls([]);
     setFormWalletId("");
+    setFormHandoverId(activeHandoverId);
     setErrors({});
   };
 
@@ -287,7 +338,7 @@ export default function FinancesPage() {
     setFormAmount(String(tx.amount));
     setFormDescription(tx.description);
     setFormDate(tx.date);
-    setFormReceiptUrl(tx.receipt_url || "");
+    setFormReceiptUrls(splitReceipts(tx.receipt_url));
     if (tx.bank_id) setFormWalletId(`bank:${tx.bank_id}`);
     else if (tx.cash_account_id) setFormWalletId(`cash:${tx.cash_account_id}`);
     else setFormWalletId(tx.wallet_id || "");
@@ -295,9 +346,21 @@ export default function FinancesPage() {
     else if (tx.incidental_projects?.id)
       setFormSubjectId(`project:${tx.incidental_projects.id}`);
     else setFormSubjectId("");
+    setFormHandoverId(tx.handover_id || activeHandoverId);
     setErrors({});
     setShowModal(true);
   };
+
+  const addReceiptUrl = () => setFormReceiptUrls([...formReceiptUrls, ""]);
+
+  const updateReceiptUrl = (index: number, value: string) => {
+    const updated = [...formReceiptUrls];
+    updated[index] = value;
+    setFormReceiptUrls(updated);
+  };
+
+  const removeReceiptUrl = (index: number) =>
+    setFormReceiptUrls(formReceiptUrls.filter((_, i) => i !== index));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,7 +392,8 @@ export default function FinancesPage() {
       date: formDate,
       program_id: formProgramId || undefined,
       project_id: formProjectId || undefined,
-      receipt_url: formReceiptUrl || undefined,
+      handover_id: formHandoverId || undefined,
+      receipt_urls: formReceiptUrls.filter((u) => u.trim() !== ""),
       wallet_id: walletId || undefined,
       bank_id: bankId || undefined,
       cash_account_id: cashAccountId || undefined,
@@ -360,7 +424,8 @@ export default function FinancesPage() {
           date: formDate,
           program_id: formProgramId || undefined,
           project_id: formProjectId || undefined,
-          receipt_url: formReceiptUrl || undefined,
+          handover_id: formHandoverId || undefined,
+          receipt_urls: formReceiptUrls.filter((u) => u.trim() !== ""),
           wallet_id: walletId || undefined,
           bank_id: bankId || undefined,
           cash_account_id: cashAccountId || undefined,
@@ -584,6 +649,35 @@ export default function FinancesPage() {
           <option value="INCOME">Pemasukan</option>
           <option value="EXPENSE">Pengeluaran</option>
         </Select>
+        <DateRangeFilter
+          startDate={filterStartDate}
+          endDate={filterEndDate}
+          onStartDateChange={(v) => {
+            setFilterStartDate(v);
+            setPage(1);
+          }}
+          onEndDateChange={(v) => {
+            setFilterEndDate(v);
+            setPage(1);
+          }}
+        />
+        <Select
+          value={filterHandoverId}
+          onChange={(e) => {
+            setFilterHandoverId(e.target.value);
+            setPage(1);
+          }}
+          className="w-56"
+        >
+          <option value="">Semua Periode</option>
+          {handovers.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.status === "COMPLETED"
+                ? `Periode ${h.period_to} (Selesai)`
+                : `Periode ${h.period_to}`}
+            </option>
+          ))}
+        </Select>
         <Select
           value={filterBankCash}
           onChange={(e) => {
@@ -624,6 +718,7 @@ export default function FinancesPage() {
                 <TableHead>Deskripsi</TableHead>
                 <TableHead>Sumber</TableHead>
                 <TableHead>Program / Proyek</TableHead>
+                <TableHead>Periode</TableHead>
                 <TableHead>Dicatat Oleh</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
                 {canEdit && <TableHead className="text-right">Aksi</TableHead>}
@@ -632,13 +727,13 @@ export default function FinancesPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 8 : 7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canEdit ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     Memuat data...
                   </TableCell>
                 </TableRow>
               ) : transactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 8 : 7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canEdit ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     Belum ada transaksi.
                   </TableCell>
                 </TableRow>
@@ -659,12 +754,34 @@ export default function FinancesPage() {
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {t.description}
+                      {(() => {
+                        const receipts = splitReceipts(t.receipt_url);
+                        if (receipts.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                            {receipts.map((url, i) => (
+                              <a
+                                key={i}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                              >
+                                {receipts.length > 1 ? `Bukti ${i + 1}` : "Bukti"} &rarr;
+                              </a>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {t.wallets?.name || t.banks?.name || t.cash_accounts?.name || "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {t.programs?.name || t.incidental_projects?.name || "-"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {t.handovers ? `Periode ${t.handovers.period_to}` : "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {t.profiles?.full_name || "-"}
@@ -856,6 +973,40 @@ export default function FinancesPage() {
                   </div>
                 </div>
 
+                {/* Periode Baru */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="handover_id">
+                    Periode Baru
+                    <span className="text-muted-foreground text-xs font-normal ml-1">
+                      (dari modul Sertijab)
+                    </span>
+                  </label>
+                  <Select
+                    id="handover_id"
+                    value={formHandoverId}
+                    onChange={(e) => setFormHandoverId(e.target.value)}
+                  >
+                    {activePeriods.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        Periode {h.period_to}
+                      </option>
+                    ))}
+                    {formHandoverId &&
+                      !activePeriods.some((h) => h.id === formHandoverId) &&
+                      editingTx?.handovers && (
+                        <option value={formHandoverId}>
+                          Periode {editingTx.handovers.period_to} (Selesai)
+                        </option>
+                      )}
+                    {activePeriods.length === 0 && !formHandoverId && (
+                      <option value="">Tidak ada periode berjalan</option>
+                    )}
+                  </Select>
+                  {errors.handover_id && (
+                    <p className="text-sm text-red-500">{errors.handover_id}</p>
+                  )}
+                </div>
+
                 {/* Deskripsi */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="description">
@@ -960,16 +1111,42 @@ export default function FinancesPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="receipt">
                     URL Bukti (Opsional)
+                    <span className="text-muted-foreground text-xs font-normal ml-1">
+                      (boleh lebih dari satu)
+                    </span>
                   </label>
-                  <Input
-                    id="receipt"
-                    type="url"
-                    placeholder="https://..."
-                    value={formReceiptUrl}
-                    onChange={(e) => setFormReceiptUrl(e.target.value)}
-                  />
-                  {errors.receipt_url && (
-                    <p className="text-sm text-red-500">{errors.receipt_url}</p>
+                  <div className="space-y-2">
+                    {formReceiptUrls.map((url, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          id={i === 0 ? "receipt" : undefined}
+                          type="url"
+                          placeholder="https://..."
+                          value={url}
+                          onChange={(e) => updateReceiptUrl(i, e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeReceiptUrl(i)}
+                        >
+                          Hapus
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addReceiptUrl}
+                  >
+                    + Tambah URL
+                  </Button>
+                  {errors.receipt_urls && (
+                    <p className="text-sm text-red-500">{errors.receipt_urls}</p>
                   )}
                 </div>
 

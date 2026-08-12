@@ -9,7 +9,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { inventoryPurchaseFormSchema } from "@/lib/validations/inventory";
 import { NextRequest } from "next/server";
 
@@ -77,12 +78,7 @@ export async function POST(
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, [
-      "ADMIN",
-      "PENGURUS_INTI",
-      "KABID",
-      "BENDAHARA",
-    ]);
+    const forbidden = requireAccess(userRole, "inventory-add", "create");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -167,6 +163,23 @@ export async function POST(
       ...purchase,
       profiles: profile || null,
     };
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "inventory_purchases",
+      targetId: purchase.id,
+      userId: uid,
+      newValue: {
+        item_id: id,
+        amount,
+        date,
+        wallet_id: wallet_id || null,
+        bank_id: bank_id || null,
+        cash_account_id: cash_account_id || null,
+        description: description || "",
+        finance_id: finance.id,
+      },
+    });
 
     return apiCreated(result);
   } catch {

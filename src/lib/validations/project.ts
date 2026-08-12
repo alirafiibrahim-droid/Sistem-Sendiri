@@ -12,6 +12,11 @@ export const projectFormSchema = z.object({
   start_date: z.string().min(1, "Tanggal mulai wajib diisi."),
   end_date: z.string().optional().or(z.literal("")),
   budget_source: z.string().optional().or(z.literal("")),
+  handover_id: z
+    .string()
+    .uuid("ID periode tidak valid.")
+    .optional()
+    .or(z.literal("")),
 });
 
 export type ProjectFormValues = z.infer<typeof projectFormSchema>;

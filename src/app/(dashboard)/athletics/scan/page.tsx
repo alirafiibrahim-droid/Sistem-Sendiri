@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, Suspense, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -17,13 +18,12 @@ import type { TrainingSessionWithCoach } from "@/lib/types/database";
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
-    day: "2-digit", month: "short", year: "numeric",
+    day: "2-digit", month: "2-digit", year: "numeric",
   });
 }
 
 function ScanPageInner() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const preselectedSession = searchParams.get("session") || "";
 
   const [mode, setMode] = useState<"select" | "manual" | "qr">(
@@ -34,6 +34,7 @@ function ScanPageInner() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [attendedSessions, setAttendedSessions] = useState<Set<string>>(new Set());
+  const [manualCode, setManualCode] = useState("");
 
   // Camera state
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -51,42 +52,29 @@ function ScanPageInner() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+  const handleAttendance = useCallback(async (sessionId: string, method: "MANUAL" | "QR") => {
+    setSubmitting(true);
+    setMessage(null);
 
-  // Auto-submit if session param is provided
-  useEffect(() => {
-    if (!preselectedSession || submitting || message) return;
-    if (attendedSessions.has(preselectedSession)) {
-      setMessage({ type: "success", text: "Anda sudah tercatat hadir di sesi ini." });
-      return;
-    }
-    handleAttendance(preselectedSession, "QR");
-  }, [preselectedSession, attendedSessions]); // eslint-disable-line react-hooks/exhaustive-deps
+    const res = await fetch(`/api/training-sessions/${sessionId}/attendance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method }),
+    });
 
-  // Start camera
-  const startCamera = useCallback(async () => {
-    setCameraError("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+    const json = await res.json();
+
+    if (json.success) {
+      setMessage({ type: "success", text: "Kehadiran berhasil dicatat!" });
+      setAttendedSessions((prev) => new Set(prev).add(sessionId));
+    } else {
+      setMessage({
+        type: "error",
+        text: json.error?.message || "Gagal mencatat kehadiran.",
       });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setCameraActive(true);
-        startScanning();
-      }
-    } catch (err) {
-      console.error("Camera error:", err);
-      setCameraError(
-        err instanceof DOMException && err.name === "NotAllowedError"
-          ? "Akses kamera ditolak. Berikan izin kamera di browser Anda."
-          : "Tidak dapat mengakses kamera. Pastikan browser mendukung kamera."
-      );
     }
+
+    setSubmitting(false);
   }, []);
 
   // Stop camera
@@ -101,6 +89,29 @@ function ScanPageInner() {
     }
     setCameraActive(false);
   }, []);
+
+  // Handle QR code detected
+  const handleQrDetected = useCallback((value: string) => {
+    stopCamera();
+
+    // Extract session ID from URL like /athletics/scan?session=<id>
+    let sessionId = "";
+    try {
+      const url = new URL(value);
+      sessionId = url.searchParams.get("session") || "";
+    } catch {
+      // Maybe it's just a raw UUID
+      if (/^[0-9a-f-]{36}$/i.test(value)) {
+        sessionId = value;
+      }
+    }
+
+    if (sessionId) {
+      handleAttendance(sessionId, "QR");
+    } else {
+      setMessage({ type: "error", text: "QR Code tidak valid. Bukan link absensi yang dikenali." });
+    }
+  }, [stopCamera, handleAttendance]);
 
   // Scan QR from video frames
   const startScanning = useCallback(() => {
@@ -127,30 +138,45 @@ function ScanPageInner() {
       // Fallback: canvas-based detection not available, prompt manual
       setCameraError("Browser tidak mendukung QR scanner otomatis. Gunakan mode manual atau salin link absensi.");
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [handleQrDetected]);
 
-  // Handle QR code detected
-  const handleQrDetected = useCallback((value: string) => {
-    stopCamera();
-
-    // Extract session ID from URL like /athletics/scan?session=<id>
-    let sessionId = "";
+  // Start camera
+  const startCamera = useCallback(async () => {
+    setCameraError("");
     try {
-      const url = new URL(value);
-      sessionId = url.searchParams.get("session") || "";
-    } catch {
-      // Maybe it's just a raw UUID
-      if (/^[0-9a-f-]{36}$/i.test(value)) {
-        sessionId = value;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setCameraActive(true);
+        startScanning();
       }
+    } catch (err) {
+      console.error("Camera error:", err);
+      setCameraError(
+        err instanceof DOMException && err.name === "NotAllowedError"
+          ? "Akses kamera ditolak. Berikan izin kamera di browser Anda."
+          : "Tidak dapat mengakses kamera. Pastikan browser mendukung kamera."
+      );
     }
+  }, [startScanning]);
 
-    if (sessionId) {
-      handleAttendance(sessionId, "QR");
-    } else {
-      setMessage({ type: "error", text: "QR Code tidak valid. Bukan link absensi yang dikenali." });
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
+  // Auto-submit if session param is provided
+  useEffect(() => {
+    if (!preselectedSession || submitting || message) return;
+    if (attendedSessions.has(preselectedSession)) {
+      setMessage({ type: "success", text: "Anda sudah tercatat hadir di sesi ini." });
+      return;
     }
-  }, [stopCamera]); // eslint-disable-line react-hooks/exhaustive-deps
+    handleAttendance(preselectedSession, "QR");
+  }, [preselectedSession, attendedSessions, handleAttendance]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -166,21 +192,32 @@ function ScanPageInner() {
     }
   }, [mode, cameraActive, stopCamera]);
 
-  const handleAttendance = async (sessionId: string, method: "MANUAL" | "QR") => {
+  const handleManualAttendance = async () => {
+    const code = manualCode.trim().toUpperCase();
+    if (!code) {
+      setMessage({ type: "error", text: "Kode Unit wajib diisi." });
+      return;
+    }
+    if (!/^[A-Z0-9]{7}$/.test(code)) {
+      setMessage({ type: "error", text: "Format Kode Unit tidak valid (7 karakter huruf/angka)." });
+      return;
+    }
+
     setSubmitting(true);
     setMessage(null);
 
-    const res = await fetch(`/api/training-sessions/${sessionId}/attendance`, {
+    const res = await fetch("/api/attendance/training-sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method }),
+      body: JSON.stringify({ method: "MANUAL", session_code: code }),
     });
 
     const json = await res.json();
 
     if (json.success) {
       setMessage({ type: "success", text: "Kehadiran berhasil dicatat!" });
-      setAttendedSessions((prev) => new Set(prev).add(sessionId));
+      setManualCode("");
+      fetchSessions();
     } else {
       setMessage({
         type: "error",
@@ -235,64 +272,82 @@ function ScanPageInner() {
       {mode === "manual" && (
         <Card>
           <CardHeader>
-            <CardTitle>Pilih Sesi Latihan</CardTitle>
+            <CardTitle>Absensi Manual</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Jenis Latihan</TableHead>
-                  <TableHead>Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Kode Unit <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  value={manualCode}
+                  onChange={(e) => setManualCode(e.target.value.toUpperCase())}
+                  maxLength={7}
+                  placeholder="Contoh: K7MB2X9"
+                  className="font-mono uppercase tracking-widest"
+                />
+                <Button disabled={submitting} onClick={handleManualAttendance}>
+                  {submitting ? "Mengirim..." : "Hadir"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Masukkan Kode Unit sesi latihan yang diberikan pelatih untuk mencatat kehadiran Anda.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Daftar sesi latihan</p>
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
-                      Memuat sesi...
-                    </TableCell>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Jenis Latihan</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
-                ) : sessions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
-                      Tidak ada sesi latihan tersedia.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  sessions.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="text-sm">{formatDate(s.date)}</TableCell>
-                      <TableCell className="font-medium">
-                        {s.name || s.session_type || "-"}
-                        {(s.trainings || []).length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {(s.trainings || []).map((t) => (
-                              <Badge key={t.id} variant="outline" className="text-[10px]">
-                                {t.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {attendedSessions.has(s.id) ? (
-                          <Badge variant="success">Hadir</Badge>
-                        ) : (
-                          <Button
-                            size="sm"
-                            disabled={submitting}
-                            onClick={() => handleAttendance(s.id, "MANUAL")}
-                          >
-                            {submitting ? "Mengirim..." : "Hadir"}
-                          </Button>
-                        )}
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                        Memuat sesi...
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : sessions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                        Tidak ada sesi latihan tersedia.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    sessions.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell className="text-sm">{formatDate(s.date)}</TableCell>
+                        <TableCell className="font-medium">
+                          {s.name || s.session_type || "-"}
+                          {(s.trainings || []).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {(s.trainings || []).map((t) => (
+                                <Badge key={t.id} variant="outline" className="text-[10px]">
+                                  {t.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {attendedSessions.has(s.id) ? (
+                            <Badge variant="success">Hadir</Badge>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}

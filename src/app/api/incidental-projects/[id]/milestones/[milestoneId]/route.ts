@@ -3,13 +3,13 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function PATCH(
   request: NextRequest,
@@ -22,7 +22,7 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "projects", "update");
     if (forbidden) return forbidden;
 
     const { id, milestoneId } = await params;
@@ -64,6 +64,15 @@ export async function PATCH(
 
     if (error) throw error;
 
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "project_milestones",
+      targetId: milestoneId,
+      userId: uid,
+      oldValue: existing ? { is_completed: existing.is_completed } : null,
+      newValue: updates,
+    });
+
     return apiOk(data);
   } catch {
     return apiInternalError();
@@ -81,14 +90,15 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!isAdmin(role)) return apiForbidden();
+    const forbidden = requireAccess(role, "projects", "delete");
+    if (forbidden) return forbidden;
 
     const { id, milestoneId } = await params;
     const supabase = await createSupabaseServer();
 
     const { data: existing } = await supabase
       .from("project_milestones")
-      .select("id")
+      .select("id, title")
       .eq("project_id", id)
       .eq("id", milestoneId)
       .single();
@@ -101,6 +111,14 @@ export async function DELETE(
       .eq("id", milestoneId);
 
     if (error) throw error;
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "project_milestones",
+      targetId: milestoneId,
+      userId: uid,
+      oldValue: { title: existing.title },
+    });
 
     return apiOk({ deleted: true });
   } catch {

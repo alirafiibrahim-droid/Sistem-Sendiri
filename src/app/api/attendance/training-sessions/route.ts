@@ -1,4 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { normalizeSessionCode, isValidSessionCode } from "@/lib/session-code";
 import {
   apiOk,
   apiCreated,
@@ -8,6 +9,7 @@ import {
   apiInternalError,
   getUid,
 } from "@/lib/api-response";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 // GET /api/attendance/training-sessions — list sessions available for attendance
@@ -62,11 +64,11 @@ export async function POST(request: NextRequest) {
     if (!uid) return apiUnauthorized();
 
     const body = await request.json();
-    const { session_id, method } = body as { session_id?: string; method?: string };
-
-    if (!session_id) {
-      return apiBadRequest("session_id wajib diisi.");
-    }
+    const { session_id, session_code, method } = body as {
+      session_id?: string;
+      session_code?: string;
+      method?: string;
+    };
 
     if (!method || !["MANUAL", "QR"].includes(method)) {
       return apiBadRequest("Method harus MANUAL atau QR.");
@@ -74,12 +76,26 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createSupabaseServer();
 
+    let query = supabase.from("training_sessions").select("id, date");
+
+    if (method === "MANUAL") {
+      if (!session_code) {
+        return apiBadRequest("Kode Unit wajib diisi untuk absensi manual.");
+      }
+      const normalized = normalizeSessionCode(session_code);
+      if (!isValidSessionCode(normalized)) {
+        return apiBadRequest("Format Kode Unit tidak valid (7 karakter huruf/angka).");
+      }
+      query = query.eq("session_code", normalized);
+    } else {
+      if (!session_id) {
+        return apiBadRequest("session_id wajib diisi.");
+      }
+      query = query.eq("id", session_id);
+    }
+
     // Verify session exists and check H+2
-    const { data: session, error: sErr } = await supabase
-      .from("training_sessions")
-      .select("id, date")
-      .eq("id", session_id)
-      .single();
+    const { data: session, error: sErr } = await query.single();
 
     if (sErr || !session) return apiNotFound("Sesi latihan tidak ditemukan.");
 
@@ -97,7 +113,7 @@ export async function POST(request: NextRequest) {
       .from("training_session_attendants")
       .upsert(
         {
-          session_id,
+          session_id: session.id,
           athlete_id: uid,
           method,
           scanned_at: method === "QR" ? new Date().toISOString() : null,
@@ -108,6 +124,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return apiInternalError(error.message);
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "training_session_attendants",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        session_id: session.id,
+        athlete_id: uid,
+        method,
+        scanned_at: data.scanned_at ?? null,
+      },
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

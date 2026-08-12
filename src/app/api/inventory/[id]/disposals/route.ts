@@ -10,7 +10,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { inventoryDisposalFormSchema } from "@/lib/validations/inventory";
 
 // GET /api/inventory/[id]/disposals
@@ -48,7 +49,7 @@ export async function POST(
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(userRole, "inventory-dispose", "create");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -99,6 +100,23 @@ export async function POST(
       .select("*")
       .eq("id", id)
       .single();
+
+    const disposed = Array.isArray(data) ? data[0] : data;
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "inventory_disposals",
+      targetId: disposed?.id || id,
+      userId: uid,
+      newValue: {
+        item_id: id,
+        quantity,
+        reason,
+        disposal_date,
+        stock_before: item.stock,
+        stock_after: updatedItem?.stock ?? null,
+      },
+    });
 
     return apiCreated({ disposal: data, item: updatedItem });
   } catch {

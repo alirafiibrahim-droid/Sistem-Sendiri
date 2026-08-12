@@ -123,7 +123,9 @@ export default function NewMemberPage() {
         <CardHeader>
           <CardTitle>Form Anggota Baru</CardTitle>
           <CardDescription>
-            Anggota akan menerima email undangan untuk membuat akun. Email undangan dikirim otomatis oleh Supabase Auth.
+            User langsung bisa login menggunakan email atau Nama Lengkap dengan password
+            default <code className="text-xs bg-muted px-1 py-0.5 rounded">tapaksuciunisa1!</code>,
+            lalu menggantinya di Pengaturan &gt; Profil Saya.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -242,7 +244,7 @@ export default function NewMemberPage() {
 
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={loading}>
-                {loading ? "Mengirim Undangan..." : "Tambah Anggota"}
+                {loading ? "Menyimpan..." : "Tambah Anggota"}
               </Button>
               <Button
                 type="button"

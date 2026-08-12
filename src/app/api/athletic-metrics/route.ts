@@ -8,10 +8,11 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createSupabaseServer();
     const { data, error } = await supabase
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "athlete-performance", "update");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -47,6 +48,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "athletic_metrics",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        name,
+        type,
+        unit,
+        category: data.category ?? null,
+      },
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

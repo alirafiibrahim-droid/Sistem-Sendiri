@@ -9,8 +9,11 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { projectFormSchema } from "@/lib/validations/project";
+import { writeAuditLog } from "@/lib/audit";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { attachHandovers } from "@/lib/handover";
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,10 +54,12 @@ export async function GET(request: NextRequest) {
       return apiInternalError();
     }
 
+    const withPeriods = await attachHandovers(data, createSupabaseAdmin());
+
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
 
-    return apiOk(data, { total, page, limit, totalPages });
+    return apiOk(withPeriods, { total, page, limit, totalPages });
   } catch (e) {
     console.error("PROJECTS GET ERROR:", e);
     return apiInternalError();
@@ -67,7 +72,7 @@ export async function POST(request: NextRequest) {
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "projects", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -78,7 +83,7 @@ export async function POST(request: NextRequest) {
       return apiBadRequest(msg);
     }
 
-    const { name, description, urgency_level, start_date, end_date, budget_source } = parsed.data;
+    const { name, description, urgency_level, start_date, end_date, budget_source, handover_id } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
@@ -91,6 +96,7 @@ export async function POST(request: NextRequest) {
         start_date,
         end_date: end_date || null,
         budget_source: budget_source || null,
+        handover_id: handover_id || null,
         status: "PROPOSED",
         created_by: uid,
       })
@@ -101,6 +107,21 @@ export async function POST(request: NextRequest) {
       console.error("PROJECTS INSERT ERROR:", error);
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "incidental_projects",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        name: data.name,
+        urgency_level: data.urgency_level,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        budget_source: data.budget_source,
+        status: data.status,
+      },
+    });
 
     return apiCreated(data);
   } catch (e) {

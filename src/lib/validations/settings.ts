@@ -45,6 +45,24 @@ export const orgSettingsFormSchema = z.object({
   org_name: z.string().min(2, "Nama organisasi minimal 2 karakter.").max(100),
   org_description: z.string().max(500).optional(),
   org_email: z.string().email("Email tidak valid.").optional().or(z.literal("")),
+  org_address: z.string().max(500, "Alamat maksimal 500 karakter.").optional().or(z.literal("")),
+  org_phone_number: z.string().max(20, "No telepon maksimal 20 karakter.").optional().or(z.literal("")),
+  org_university: z.string().max(200, "Nama universitas maksimal 200 karakter.").optional().or(z.literal("")),
+  org_social_media: z
+    .array(
+      z.object({
+        platform: z.string().min(1, "Platform wajib diisi.").max(50, "Platform maksimal 50 karakter."),
+        url: z.string().url("URL media sosial tidak valid.").max(500, "URL maksimal 500 karakter."),
+      })
+    )
+    .max(10, "Maksimal 10 tautan media sosial.")
+    .optional(),
+  org_est_year: z
+    .string()
+    .max(4, "Tahun berdiri maksimal 4 digit.")
+    .regex(/^\d{0,4}$/, "Tahun berdiri harus berupa angka.")
+    .optional()
+    .or(z.literal("")),
   period_year: z.string().min(4, "Periode wajib diisi.").max(9),
   is_maintenance: z.boolean().optional(),
 });

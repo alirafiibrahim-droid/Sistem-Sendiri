@@ -7,7 +7,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -39,11 +40,17 @@ export async function DELETE(
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "athlete-performance", "delete");
     if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("assessments")
+      .select("id, athlete_id, metric_id, value")
+      .eq("id", id)
+      .single();
 
     const { error } = await supabase
       .from("assessments")
@@ -51,6 +58,21 @@ export async function DELETE(
       .eq("id", id);
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "assessments",
+      targetId: id,
+      userId: uid,
+      oldValue: existing
+        ? {
+            athlete_id: existing.athlete_id,
+            metric_id: existing.metric_id,
+            value: existing.value,
+          }
+        : null,
+    });
+
     return apiOk({ deleted: true });
   } catch {
     return apiInternalError();

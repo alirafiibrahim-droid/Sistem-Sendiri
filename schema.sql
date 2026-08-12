@@ -52,8 +52,8 @@ CREATE TYPE public.dues_payment_status AS ENUM ('UNPAID', 'PENDING_VERIFICATION'
 CREATE TYPE public.letter_type AS ENUM ('INCOMING', 'OUTGOING');
 CREATE TYPE public.letter_classification AS ENUM ('PUBLIC', 'CONFIDENTIAL');
 
--- A11: Status sertijab
-CREATE TYPE public.handover_status AS ENUM ('DRAFT', 'SIGNED', 'COMPLETED');
+-- A11: Status sertijab (NOT_STARTED=Belum Berjalan, ONGOING=Berjalan, COMPLETED=Selesai Periode)
+CREATE TYPE public.handover_status AS ENUM ('NOT_STARTED', 'ONGOING', 'COMPLETED');
 
 -- A3: Tipe metrik keatletan & intensitas latihan
 CREATE TYPE public.metric_type AS ENUM ('QUANTITATIVE', 'QUALITATIVE');
@@ -67,6 +67,7 @@ CREATE TYPE public.attendance_method AS ENUM ('MANUAL', 'QR');
 -- A8: Tipe & status prestasi
 CREATE TYPE public.achievement_type AS ENUM ('ORGANIZATION', 'INDIVIDUAL');
 CREATE TYPE public.achievement_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+CREATE TYPE public.achievement_juara AS ENUM ('JUARA_I', 'JUARA_II', 'JUARA_III', 'JUARA_HARAPAN');
 
 -- A10: Status proyek insidental
 CREATE TYPE public.project_status AS ENUM ('PROPOSED', 'APPROVED', 'ONGOING', 'CLOSED');
@@ -226,6 +227,7 @@ CREATE TABLE public.finances (
     date        DATE NOT NULL,
     program_id  UUID REFERENCES public.programs(id) ON DELETE SET NULL,
     project_id  UUID REFERENCES public.incidental_projects(id) ON DELETE SET NULL,
+    handover_id UUID REFERENCES public.handovers(id) ON DELETE SET NULL,
     receipt_url TEXT NOT NULL,
     created_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -235,6 +237,8 @@ CREATE TABLE public.finances (
 COMMENT ON TABLE public.finances IS 'Jurnal transaksi keuangan (A4)';
 COMMENT ON COLUMN public.finances.source
     IS 'Asal transaksi: keuangan (manual), inventory (pembelian inventori), dues (iuran)';
+COMMENT ON COLUMN public.finances.handover_id
+    IS 'Periode Sertijab (kepengurusan) tempat transaksi dicatat (Periode Berjalan)';
 
 -- ----------------------------------------------------------------------------
 -- A4: DUES TEMPLATES (Template tagihan iuran bulanan)
@@ -305,11 +309,14 @@ CREATE TABLE public.letters (
     date_received_sent  DATE NOT NULL,
     classification      public.letter_classification NOT NULL DEFAULT 'PUBLIC',
     document_url        TEXT NOT NULL,
+    handover_id         UUID REFERENCES public.handovers(id) ON DELETE SET NULL,
     created_by          UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE public.letters IS 'Katalog arsip surat masuk & keluar dengan level kerahasiaan (A7)';
+
+CREATE INDEX idx_letters_handover ON public.letters(handover_id);
 
 
 -- ============================================================================
@@ -326,7 +333,7 @@ CREATE TABLE public.handovers (
     handover_date   DATE NOT NULL,
     document_url    TEXT,
     witnesses       JSONB NOT NULL DEFAULT '[]'::jsonb,
-    status          public.handover_status NOT NULL DEFAULT 'DRAFT',
+    status          public.handover_status NOT NULL DEFAULT 'NOT_STARTED',
     created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -387,6 +394,7 @@ CREATE TABLE public.training_sessions (
     training_id      UUID REFERENCES public.trainings(id) ON DELETE SET NULL,
     name             VARCHAR(100),
     date             DATE NOT NULL,
+    session_code     VARCHAR(7) UNIQUE,
     session_type     VARCHAR(50),
     duration_minutes INTEGER,
     intensity        public.intensity_level,
@@ -475,14 +483,18 @@ CREATE TABLE public.achievements (
     level             VARCHAR(50) NOT NULL,
     organizer         VARCHAR(255),
     achievement_date  DATE NOT NULL,
+    juara             public.achievement_juara,
     proof_url         TEXT,
     status            public.achievement_status NOT NULL DEFAULT 'PENDING',
     rejection_reason  TEXT,
+    handover_id       UUID REFERENCES public.handovers(id) ON DELETE SET NULL,
     created_by        UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE public.achievements IS 'Data prestasi organisasi & individu / Wall of Fame (A8)';
+
+CREATE INDEX idx_achievements_handover ON public.achievements(handover_id);
 
 -- ----------------------------------------------------------------------------
 -- A8: ACHIEVEMENT PARTICIPANTS (Peserta/anggota yang terlibat dalam prestasi)
@@ -491,7 +503,7 @@ CREATE TABLE public.achievement_participants (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     achievement_id      UUID NOT NULL REFERENCES public.achievements(id) ON DELETE CASCADE,
     user_id             UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    juara               VARCHAR(50) NOT NULL DEFAULT '',
+    juara               public.achievement_juara,
     keterangan          TEXT,
     UNIQUE(achievement_id, user_id)
 );
@@ -515,12 +527,15 @@ CREATE TABLE public.incidental_projects (
     end_date        DATE,
     budget_source   VARCHAR(255),
     status          public.project_status NOT NULL DEFAULT 'PROPOSED',
+    handover_id     UUID REFERENCES public.handovers(id) ON DELETE SET NULL,
     created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE public.incidental_projects IS 'Proyek ad-hoc/insidental di luar program kerja rutin (A10)';
+
+CREATE INDEX idx_incidental_projects_handover ON public.incidental_projects(handover_id);
 
 -- ----------------------------------------------------------------------------
 -- A10: PROJECT FUNDS (Dana masuk/keluar proyek insidental)
@@ -569,6 +584,36 @@ CREATE TABLE public.project_milestones (
 );
 
 COMMENT ON TABLE public.project_milestones IS 'Milestone/titik pencapaian proyek insidental (A10)';
+
+-- ----------------------------------------------------------------------------
+-- A9/A10: BUDGET ITEMS (Pos Anggaran Program Kerja & Proyek Insidental)
+--     Anggaran dibuat melalui Detail Program/Proyek -> Tab Anggaran.
+--     Induk Pos (parent_id IS NULL) dapat berisi nilai langsung atau menjadi
+--     wadah untuk Anak Pos. Anak Pos (parent_id NOT NULL) menambah sub total.
+--     Total Anggaran = SUM(subtotal) seluruh pos pada entity.
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.budget_items (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id  UUID REFERENCES public.programs(id) ON DELETE CASCADE,
+    project_id  UUID REFERENCES public.incidental_projects(id) ON DELETE CASCADE,
+    parent_id   UUID REFERENCES public.budget_items(id) ON DELETE CASCADE,
+    name        VARCHAR(200) NOT NULL,
+    quantity    NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    unit_price  NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (unit_price >= 0),
+    subtotal    NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
+    created_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_budget_items_owner CHECK (
+        (program_id IS NOT NULL)::int + (project_id IS NOT NULL)::int = 1
+    )
+);
+
+COMMENT ON TABLE public.budget_items IS 'Pos anggaran Program Kerja (A9) dan Proyek Insidental (A10)';
+
+CREATE INDEX idx_budget_items_program ON public.budget_items(program_id);
+CREATE INDEX idx_budget_items_project ON public.budget_items(project_id);
+CREATE INDEX idx_budget_items_parent ON public.budget_items(parent_id);
 
 
 -- ============================================================================
@@ -681,6 +726,7 @@ CREATE INDEX idx_tasks_assigned_to ON public.tasks(assigned_to);
 CREATE INDEX idx_finances_type ON public.finances(type);
 CREATE INDEX idx_finances_date ON public.finances(date);
 CREATE INDEX idx_finances_program ON public.finances(program_id);
+CREATE INDEX idx_finances_handover ON public.finances(handover_id);
 
 -- Dues
 CREATE INDEX idx_dues_payments_user ON public.dues_payments(user_id);
@@ -770,6 +816,7 @@ ALTER TABLE public.incidental_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_funds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_team ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_milestones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.budget_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_loans ENABLE ROW LEVEL SECURITY;
@@ -974,7 +1021,7 @@ CREATE POLICY "letters_delete_admin"
 -- ----------------------------------------------------------------------------
 -- A11: RLS HANDOVERS
 -- ----------------------------------------------------------------------------
--- COMPLETED bisa dibaca semua; DRAFT/SIGNED hanya admin/core
+-- COMPLETED bisa dibaca semua; NOT_STARTED/ONGOING hanya admin/core
 CREATE POLICY "handovers_select_access"
     ON public.handovers FOR SELECT
     TO authenticated
@@ -1272,6 +1319,42 @@ CREATE POLICY "project_milestones_manage_team"
         )
         OR (SELECT role FROM public.profiles WHERE id = auth.uid())
            IN ('ADMIN', 'PENGURUS_INTI', 'KABID')
+    );
+
+-- ----------------------------------------------------------------------------
+-- A9/A10: RLS BUDGET ITEMS
+-- ----------------------------------------------------------------------------
+CREATE POLICY "budget_items_select_all"
+    ON public.budget_items FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "budget_items_insert_core"
+    ON public.budget_items FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID')
+    );
+
+CREATE POLICY "budget_items_update_core"
+    ON public.budget_items FOR UPDATE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID')
+    )
+    WITH CHECK (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID')
+    );
+
+CREATE POLICY "budget_items_delete_core"
+    ON public.budget_items FOR DELETE
+    TO authenticated
+    USING (
+        (SELECT role FROM public.profiles WHERE id = auth.uid())
+        IN ('ADMIN', 'PENGURUS_INTI', 'KABID')
     );
 
 -- ----------------------------------------------------------------------------
@@ -2218,21 +2301,21 @@ VALUES (
         {"name": "Dr. Budi Santoso, M.T.", "nim": "NIP001", "role": "Pembina Organisasi"},
         {"name": "Rina Wulandari", "nim": "2206010045", "role": "Ketua Senat Mahasiswa"}
     ]'::jsonb,
-    'DRAFT',
+    'NOT_STARTED',
     auth.uid()
 );
 
--- [UPDATE] Unggah dokumen Berita Acara (DRAFT -> SIGNED)
+-- [UPDATE] Unggah dokumen Berita Acara (NOT_STARTED -> ONGOING)
 UPDATE public.handovers
 SET document_url = 'https://apnlpdtgurvbdfkyzoxg.supabase.co/storage/v1/object/public/sertijab/ba-2025-2026.pdf',
-    status = 'SIGNED'
+    status = 'ONGOING'
 WHERE period_from = '2024/2025' AND period_to = '2025/2026';
 
--- [UPDATE] Pengesahan final oleh Admin (SIGNED -> COMPLETED)
+-- [UPDATE] Pengesahan final oleh Admin (ONGOING -> COMPLETED)
 UPDATE public.handovers
 SET status = 'COMPLETED'
 WHERE period_from = '2024/2025' AND period_to = '2025/2026'
-  AND status = 'SIGNED';
+  AND status = 'ONGOING';
 
 -- [UPDATE] Coba edit data COMPLETED -> AKAN ERROR!
 -- UPDATE public.handovers

@@ -15,6 +15,11 @@ export const letterFormSchema = z.object({
   date_received_sent: z.string().min(1, "Tanggal wajib diisi."),
   classification: z.enum(["PUBLIC", "CONFIDENTIAL"]).optional().default("PUBLIC"),
   document_url: z.string().optional().or(z.literal("")),
+  handover_id: z
+    .string()
+    .uuid("ID periode tidak valid.")
+    .optional()
+    .or(z.literal("")),
 });
 
 export type LetterFormValues = z.infer<typeof letterFormSchema>;

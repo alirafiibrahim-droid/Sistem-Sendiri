@@ -7,12 +7,13 @@
 -- 1. PROGRAM SESSIONS
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.program_sessions (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    program_id UUID NOT NULL REFERENCES public.programs(id) ON DELETE CASCADE,
-    date       DATE NOT NULL,
-    title      VARCHAR(200),
-    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id   UUID NOT NULL REFERENCES public.programs(id) ON DELETE CASCADE,
+    date         DATE NOT NULL,
+    title        VARCHAR(200),
+    session_code VARCHAR(7) UNIQUE,
+    created_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE public.program_sessions IS 'Sesi pertemuan program kerja (A9)';
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS public.program_session_attendants (
     user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     method     public.attendance_method NOT NULL DEFAULT 'MANUAL',
     scanned_at TIMESTAMPTZ,
+    score      INTEGER CHECK (score IS NULL OR (score >= 1 AND score <= 10)),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(session_id, user_id)
 );
@@ -91,12 +93,13 @@ CREATE POLICY "program_session_attendants_manage_core"
 -- 3. PROJECT SESSIONS
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.project_sessions (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id UUID NOT NULL REFERENCES public.incidental_projects(id) ON DELETE CASCADE,
-    date       DATE NOT NULL,
-    title      VARCHAR(200),
-    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id   UUID NOT NULL REFERENCES public.incidental_projects(id) ON DELETE CASCADE,
+    date         DATE NOT NULL,
+    title        VARCHAR(200),
+    session_code VARCHAR(7) UNIQUE,
+    created_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE public.project_sessions IS 'Sesi pertemuan proyek insidental (A10)';

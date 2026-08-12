@@ -9,8 +9,9 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { financeFormSchema } from "@/lib/validations/finance";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 import type { FinanceWithDetails, Profile } from "@/lib/types/database";
 
@@ -51,12 +52,16 @@ export async function GET(
     const uid = getUid(request);
     if (!uid) return apiUnauthorized();
 
+    const role = getUserRole(request);
+    const forbidden = requireAccess(role, "finances-detail", "read");
+    if (forbidden) return forbidden;
+
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
     const { data, error } = await supabase
       .from("finances")
-      .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
+      .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name), handovers(id, period_from, period_to, status)")
       .eq("id", id)
       .single();
 
@@ -80,7 +85,7 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "finances", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -88,7 +93,7 @@ export async function PATCH(
 
     const { data: existing } = await supabase
       .from("finances")
-      .select("id, source")
+      .select("id, source, type, amount, description, date")
       .eq("id", id)
       .single();
 
@@ -115,11 +120,15 @@ export async function PATCH(
       date,
       program_id,
       project_id,
+      handover_id,
       receipt_url,
+      receipt_urls,
       wallet_id,
       bank_id,
       cash_account_id,
     } = parsed.data;
+
+    const receiptUrls = (receipt_urls || []).filter((u: string) => u.trim() !== "");
 
     const updateData: Record<string, unknown> = {
       type,
@@ -128,7 +137,9 @@ export async function PATCH(
       date,
       program_id: program_id || null,
       project_id: project_id || null,
-      receipt_url: receipt_url || "",
+      handover_id: handover_id || null,
+      receipt_url:
+        receiptUrls.length > 0 ? receiptUrls.join("\n") : receipt_url || "",
       wallet_id: wallet_id || null,
       bank_id: bank_id || null,
       cash_account_id: cash_account_id || null,
@@ -138,13 +149,33 @@ export async function PATCH(
       .from("finances")
       .update(updateData)
       .eq("id", id)
-      .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name)")
+      .select("*, programs(id, name), incidental_projects(id, name), wallets(id, name), banks(id, name), cash_accounts(id, name), handovers(id, period_from, period_to, status)")
       .single();
 
     if (error) {
       console.error("FINANCES UPDATE ERROR:", error);
       return apiInternalError(error.message);
     }
+
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const existingRow = existing as unknown as Record<string, unknown>;
+    const updatedRow = data as unknown as Record<string, unknown>;
+    for (const key of ["type", "amount", "description", "date", "program_id", "project_id"]) {
+      if (JSON.stringify(existingRow[key]) !== JSON.stringify(updatedRow[key])) {
+        oldValue[key] = existingRow[key] ?? null;
+        newValue[key] = updatedRow[key] ?? null;
+      }
+    }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "finances",
+      targetId: id,
+      userId: uid,
+      oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+      newValue: Object.keys(newValue).length > 0 ? newValue : null,
+    });
 
     const result = (await attachProfiles([data as FinanceWithDetails], supabase))[0];
 
@@ -163,7 +194,7 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "finances", "delete");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -171,7 +202,7 @@ export async function DELETE(
 
     const { data: existing } = await supabase
       .from("finances")
-      .select("id, source")
+      .select("id, source, type, amount, description, date")
       .eq("id", id)
       .single();
 
@@ -186,6 +217,19 @@ export async function DELETE(
     const { error } = await supabase.from("finances").delete().eq("id", id);
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "finances",
+      targetId: id,
+      userId: uid,
+      oldValue: {
+        type: existing.type,
+        amount: existing.amount,
+        description: existing.description,
+        date: existing.date,
+      },
+    });
 
     return apiOk({ message: "Deleted successfully" });
   } catch {

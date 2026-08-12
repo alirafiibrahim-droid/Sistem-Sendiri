@@ -16,7 +16,12 @@ export const financeFormSchema = z
     date: z.string().min(1, "Tanggal wajib diisi."),
     program_id: z.string().uuid("ID program tidak valid.").optional().or(z.literal("")),
     project_id: z.string().uuid("ID proyek tidak valid.").optional().or(z.literal("")),
+    handover_id: z.string().uuid("ID periode tidak valid.").optional().or(z.literal("")),
     receipt_url: z.string().url("URL bukti harus valid.").optional().or(z.literal("")),
+    receipt_urls: z
+      .array(z.string().url("URL bukti harus valid."))
+      .max(10, "Maksimal 10 URL bukti.")
+      .optional(),
     wallet_id: z.string().uuid("ID dompet tidak valid.").optional().or(z.literal("")),
     bank_id: z.string().uuid("ID bank tidak valid.").optional().or(z.literal("")),
     cash_account_id: z.string().uuid("ID kas tidak valid.").optional().or(z.literal("")),

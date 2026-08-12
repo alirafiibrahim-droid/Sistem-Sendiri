@@ -2,13 +2,13 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -45,7 +45,7 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(role, "finances", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -53,7 +53,7 @@ export async function PATCH(
 
     const { data: existing } = await supabase
       .from("dues_templates")
-      .select("id")
+      .select("id, title, amount, due_date")
       .eq("id", id)
       .single();
 
@@ -76,6 +76,26 @@ export async function PATCH(
 
     if (error) return apiInternalError();
 
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const existingRow = existing as unknown as Record<string, unknown>;
+    const updatedRow = data as unknown as Record<string, unknown>;
+    for (const key of ["title", "amount", "due_date"]) {
+      if (JSON.stringify(existingRow[key]) !== JSON.stringify(updatedRow[key])) {
+        oldValue[key] = existingRow[key] ?? null;
+        newValue[key] = updatedRow[key] ?? null;
+      }
+    }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "dues_templates",
+      targetId: id,
+      userId: uid,
+      oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+      newValue: Object.keys(newValue).length > 0 ? newValue : null,
+    });
+
     return apiOk(data);
   } catch {
     return apiInternalError();
@@ -91,14 +111,15 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!isAdmin(role)) return apiForbidden();
+    const forbidden = requireAccess(role, "finances", "delete");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
     const { data: existing } = await supabase
       .from("dues_templates")
-      .select("id")
+      .select("id, title")
       .eq("id", id)
       .single();
 
@@ -110,6 +131,14 @@ export async function DELETE(
       .eq("id", id);
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "dues_templates",
+      targetId: id,
+      userId: uid,
+      oldValue: existing ? { title: existing.title } : null,
+    });
 
     return apiOk({ message: "Deleted successfully" });
   } catch {

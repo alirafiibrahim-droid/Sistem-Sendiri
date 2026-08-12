@@ -1,32 +1,36 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --primary: #2563eb;
+  --background: #fae3cf;
+  --foreground: #0a0f24;
+  --card: #ffffff;
+  --card-foreground: #0a0f24;
+  --primary: #bb2233;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #334155;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --destructive: #ef4444;
+  --secondary: color-mix(in srgb, #0a0f24 6%, #fae3cf);
+  --secondary-foreground: #0a0f24;
+  --muted: color-mix(in srgb, #0a0f24 6%, #fae3cf);
+  --muted-foreground: color-mix(in srgb, #0a0f24 62%, #fae3cf);
+  --accent: #fa8603;
+  --accent-foreground: #0a0f24;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #2563eb;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --sidebar-bg: #0f172a;
-  --sidebar-foreground: #e2e8f0;
-  --sidebar-accent: #1e293b;
-  --sidebar-border: #1e293b;
+  --border: color-mix(in srgb, #0a0f24 16%, #fae3cf);
+  --input: color-mix(in srgb, #0a0f24 24%, #fae3cf);
+  --ring: #bb2233;
+  --success: #16a34a;
+  --warning: #fa8603;
+  --sidebar-bg: #7c0a02;
+  --sidebar-foreground: #ffffff;
+  --sidebar-accent: #5c0802;
+  --sidebar-border: color-mix(in srgb, #ffffff 14%, #7c0a02);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -46,33 +50,38 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-border: var(--sidebar-border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-poppins);
+  --font-secondary: var(--font-public-sans);
+  --font-open: var(--font-open-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f172a;
-    --foreground: #f8fafc;
-    --primary: #3b82f6;
+    --background: #0a0f24;
+    --foreground: #fae3cf;
+    --card: color-mix(in srgb, #fae3cf 6%, #0a0f24);
+    --card-foreground: #fae3cf;
+    --primary: #bb2233;
     --primary-foreground: #ffffff;
-    --secondary: #1e293b;
-    --secondary-foreground: #e2e8f0;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --accent: #1e293b;
-    --accent-foreground: #f8fafc;
+    --secondary: color-mix(in srgb, #fae3cf 10%, #0a0f24);
+    --secondary-foreground: #fae3cf;
+    --muted: color-mix(in srgb, #fae3cf 10%, #0a0f24);
+    --muted-foreground: color-mix(in srgb, #fae3cf 60%, #0a0f24);
+    --accent: #fa8603;
+    --accent-foreground: #0a0f24;
     --destructive: #ef4444;
     --destructive-foreground: #ffffff;
-    --border: #1e293b;
-    --input: #1e293b;
-    --ring: #3b82f6;
+    --border: color-mix(in srgb, #fae3cf 16%, #0a0f24);
+    --input: color-mix(in srgb, #fae3cf 22%, #0a0f24);
+    --ring: #fa8603;
     --success: #22c55e;
-    --warning: #f59e0b;
-    --sidebar-bg: #020817;
-    --sidebar-foreground: #e2e8f0;
-    --sidebar-accent: #0f172a;
-    --sidebar-border: #1e293b;
+    --warning: #fa8603;
+    --sidebar-bg: #7c0a02;
+    --sidebar-foreground: #ffffff;
+    --sidebar-accent: #5c0802;
+    --sidebar-border: color-mix(in srgb, #ffffff 14%, #7c0a02);
   }
 }
 
@@ -80,6 +89,27 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+}
+
+/* Ukuran teks statistik yang responsif: mengecil saat layar/zoom menyempit
+   agar tidak pernah keluar dari kotak, membesar saat layar luas. */
+@utility text-stat {
+  font-size: clamp(0.875rem, 2.2vw, 1.375rem);
+  line-height: 1.25;
+}
+
+@utility text-stat-sm {
+  font-size: clamp(0.75rem, 1.8vw, 1.125rem);
+  line-height: 1.25;
 }
 
 * {

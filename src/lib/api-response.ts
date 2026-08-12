@@ -79,6 +79,18 @@ export function apiConflict(message: string) {
   );
 }
 
+export function apiTooManyRequests(
+  message = "Terlalu banyak permintaan dalam waktu singkat. Silakan coba lagi beberapa saat lagi."
+) {
+  return buildResponse(
+    {
+      success: false as const,
+      error: { code: "TOO_MANY_REQUESTS", message },
+    },
+    429
+  );
+}
+
 export function apiInternalError(message = "Terjadi kesalahan internal server.") {
   return buildResponse(
     {

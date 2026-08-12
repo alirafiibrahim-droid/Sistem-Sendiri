@@ -29,6 +29,8 @@ export interface ApiMeta {
   page?: number;
   limit?: number;
   totalPages?: number;
+  /** Role user aktif, dikirim pada response tertentu (misal katalog laporan). */
+  userRole?: string;
 }
 
 // ----------------------------------------------------------------------------
@@ -166,16 +168,18 @@ export interface CreateLetterRequest {
   date_received_sent: string;
   classification?: string;
   document_url: string;
+  handover_id?: string;
   reference_number?: string;
 }
 
-export interface UpdateLetterRequest extends Partial<CreateLetterRequest> {}
+export type UpdateLetterRequest = Partial<CreateLetterRequest>;
 
 // Handover Types
 export interface CreateHandoverRequest {
   period_from: string;
   period_to: string;
   handover_date: string;
+  document_url?: string | null;
   witnesses: Array<{ name: string; nim: string; role: string }>;
 }
 
@@ -198,6 +202,7 @@ export interface CreateAchievementRequest {
   organizer?: string;
   achievement_date: string;
   proof_url?: string;
+  handover_id?: string;
   participants?: {
     user_id: string;
     juara: string;
@@ -252,6 +257,7 @@ export interface CreateIncidentalProjectRequest {
   start_date: string;
   end_date?: string;
   budget_source?: string;
+  handover_id?: string;
 }
 
 export interface UpdateIncidentalProjectRequest
@@ -287,6 +293,33 @@ export interface UpdateOrganizationSettingsRequest {
   org_logo_url?: string;
   period_year?: string;
   is_maintenance?: boolean;
+  org_address?: string;
+  org_phone_number?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Report (A13) Types
+// ----------------------------------------------------------------------------
+
+export interface ReportColumn {
+  key: string;
+  label: string;
+  align?: "left" | "right" | "center";
+}
+
+export interface ReportSummaryItem {
+  label: string;
+  value: string;
+}
+
+export interface ReportData {
+  type: string;
+  title: string;
+  subtitle?: string;
+  columns: ReportColumn[];
+  rows: Record<string, string | number | null>[];
+  summary: ReportSummaryItem[];
+  params?: Record<string, string>;
 }
 
 export interface CreateBankRequest {

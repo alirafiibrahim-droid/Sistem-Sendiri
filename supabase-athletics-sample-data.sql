@@ -59,8 +59,8 @@ BEGIN
   -- Sesi 1: Sprint 100m (SPEED) — hari ini
   SELECT id INTO training_rec FROM public.trainings WHERE name = 'Sprint 100m';
 
-  INSERT INTO public.training_sessions (coach_id, training_id, date, session_type, duration_minutes, intensity)
-  VALUES (coach_rec.id, training_rec.id, CURRENT_DATE, 'Sprint 100m', 60, 'HIGH')
+  INSERT INTO public.training_sessions (coach_id, training_id, date, session_type, duration_minutes, intensity, session_code)
+  VALUES (coach_rec.id, training_rec.id, CURRENT_DATE, 'Sprint 100m', 60, 'HIGH', 'SPRNT6X')
   RETURNING id INTO session_id_1;
 
   RAISE NOTICE 'Sesi 1 dibuat: %', session_id_1;
@@ -68,8 +68,8 @@ BEGIN
   -- Sesi 2: Bench Press (STRENGTH) — besok
   SELECT id INTO training_rec FROM public.trainings WHERE name = 'Bench Press';
 
-  INSERT INTO public.training_sessions (coach_id, training_id, date, session_type, duration_minutes, intensity)
-  VALUES (coach_rec.id, training_rec.id, CURRENT_DATE + INTERVAL '1 day', 'Bench Press', 45, 'MEDIUM')
+  INSERT INTO public.training_sessions (coach_id, training_id, date, session_type, duration_minutes, intensity, session_code)
+  VALUES (coach_rec.id, training_rec.id, CURRENT_DATE + INTERVAL '1 day', 'Bench Press', 45, 'MEDIUM', 'BNCHPRS')
   RETURNING id INTO session_id_2;
 
   RAISE NOTICE 'Sesi 2 dibuat: %', session_id_2;
@@ -77,8 +77,8 @@ BEGIN
   -- Sesi 3: Shuttle Run (AGILITY) — lusa
   SELECT id INTO training_rec FROM public.trainings WHERE name = 'Shuttle Run';
 
-  INSERT INTO public.training_sessions (coach_id, training_id, date, session_type, duration_minutes, intensity)
-  VALUES (coach_rec.id, training_rec.id, CURRENT_DATE + INTERVAL '2 days', 'Shuttle Run', 30, 'HIGH')
+  INSERT INTO public.training_sessions (coach_id, training_id, date, session_type, duration_minutes, intensity, session_code)
+  VALUES (coach_rec.id, training_rec.id, CURRENT_DATE + INTERVAL '2 days', 'Shuttle Run', 30, 'HIGH', 'SHUTRUN')
   RETURNING id INTO session_id_3;
 
   RAISE NOTICE 'Sesi 3 dibuat: %', session_id_3;

@@ -8,7 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -16,7 +17,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "25");
-    const search = searchParams.get("search") || "";
     const sort = searchParams.get("sort") || "created_at";
     const order = searchParams.get("order") || "desc";
     const athlete_id = searchParams.get("athlete_id");
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "athlete-performance", "update");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -74,6 +74,19 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "athlete_targets",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        athlete_id,
+        metric_id,
+        target_value,
+      },
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

@@ -3,13 +3,15 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { attachHandovers } from "@/lib/handover";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(
   request: NextRequest,
@@ -18,6 +20,10 @@ export async function GET(
   try {
     const uid = getUid(request);
     if (!uid) return apiUnauthorized();
+
+    const role = getUserRole(request);
+    const forbidden = requireAccess(role, "projects-detail", "read");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
@@ -30,7 +36,9 @@ export async function GET(
 
     if (error || !data) return apiNotFound();
 
-    return apiOk(data);
+    const [withPeriod] = await attachHandovers([data], createSupabaseAdmin());
+
+    return apiOk(withPeriod);
   } catch {
     return apiInternalError();
   }
@@ -45,7 +53,7 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "projects", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -55,7 +63,7 @@ export async function PATCH(
 
     const { data: existing } = await supabase
       .from("incidental_projects")
-      .select("id")
+      .select("id, name, description, urgency_level, start_date, end_date, budget_source, status")
       .eq("id", id)
       .single();
 
@@ -68,6 +76,7 @@ export async function PATCH(
       "start_date",
       "end_date",
       "budget_source",
+      "handover_id",
       "status",
     ];
 
@@ -91,6 +100,26 @@ export async function PATCH(
 
     if (error) throw error;
 
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const existingRow = existing as unknown as Record<string, unknown>;
+    const updatedRow = data as unknown as Record<string, unknown>;
+    for (const key of ["name", "description", "urgency_level", "start_date", "end_date", "budget_source", "status"]) {
+      if (JSON.stringify(existingRow[key]) !== JSON.stringify(updatedRow[key])) {
+        oldValue[key] = existingRow[key] ?? null;
+        newValue[key] = updatedRow[key] ?? null;
+      }
+    }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "incidental_projects",
+      targetId: id,
+      userId: uid,
+      oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+      newValue: Object.keys(newValue).length > 0 ? newValue : null,
+    });
+
     return apiOk(data);
   } catch {
     return apiInternalError();
@@ -106,14 +135,15 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!isAdmin(role)) return apiForbidden();
+    const forbidden = requireAccess(role, "projects-detail", "delete");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
     const { data: existing } = await supabase
       .from("incidental_projects")
-      .select("id")
+      .select("id, name, urgency_level, status")
       .eq("id", id)
       .single();
 
@@ -125,6 +155,18 @@ export async function DELETE(
       .eq("id", id);
 
     if (error) throw error;
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "incidental_projects",
+      targetId: id,
+      userId: uid,
+      oldValue: {
+        name: existing.name,
+        urgency_level: existing.urgency_level,
+        status: existing.status,
+      },
+    });
 
     return apiOk({ deleted: true });
   } catch {

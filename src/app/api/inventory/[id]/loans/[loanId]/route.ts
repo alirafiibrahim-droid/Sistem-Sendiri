@@ -1,14 +1,14 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+﻿import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 // PATCH /api/inventory/[id]/loans/[loanId] (approve/reject/return)
 export async function PATCH(
@@ -20,7 +20,7 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(userRole, "inventory-loan", "update");
     if (forbidden) return forbidden;
 
     const { id, loanId } = await params;
@@ -28,6 +28,15 @@ export async function PATCH(
     const { status, return_condition, return_notes } = body;
 
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("inventory_loans")
+      .select("id, item_id, quantity, status")
+      .eq("id", loanId)
+      .eq("item_id", id)
+      .single();
+
+    if (!existing) return apiInternalError("Loan record not found");
 
     if (status === "APPROVED") {
       const { data, error } = await supabase
@@ -43,6 +52,16 @@ export async function PATCH(
         .single();
 
       if (error) return apiInternalError(error.message);
+
+      await writeAuditLog({
+        action: "UPDATE",
+        targetTable: "inventory_loans",
+        targetId: loanId,
+        userId: uid,
+        oldValue: { status: existing.status },
+        newValue: { status: "APPROVED" },
+      });
+
       return apiOk(data);
     }
 
@@ -56,6 +75,16 @@ export async function PATCH(
         .single();
 
       if (error) return apiInternalError(error.message);
+
+      await writeAuditLog({
+        action: "UPDATE",
+        targetTable: "inventory_loans",
+        targetId: loanId,
+        userId: uid,
+        oldValue: { status: existing.status },
+        newValue: { status: "REJECTED" },
+      });
+
       return apiOk(data);
     }
 
@@ -86,6 +115,19 @@ export async function PATCH(
           .update({ condition: return_condition })
           .eq("id", id);
       }
+
+      await writeAuditLog({
+        action: "UPDATE",
+        targetTable: "inventory_loans",
+        targetId: loanId,
+        userId: uid,
+        oldValue: { status: existing.status },
+        newValue: {
+          status: "RETURNED",
+          return_condition,
+          return_notes: return_notes || null,
+        },
+      });
 
       return apiOk(data);
     }

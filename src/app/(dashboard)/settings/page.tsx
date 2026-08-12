@@ -17,10 +17,30 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
-import type { OrganizationSettings, Division, Fakultas, Jurusan, Profile, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
+import type { OrganizationSettings, Division, Fakultas, Jurusan, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
 import SpiderChart from "@/components/charts/spider-chart";
+import BarChart from "@/components/charts/bar-chart";
+import LineChart from "@/components/charts/line-chart";
 type FormErrors = Record<string, string>;
 type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan" | "kas-bank" | "dompet";
+
+type SessionScoreData = {
+  average: number;
+  total: number;
+  points: Array<{ date: string; score: number }>;
+};
+
+const SHORT_CATEGORY_LABELS: Record<string, string> = {
+  STRENGTH: "Strength",
+  POWER: "Power",
+  SPEED: "Speed",
+  AGILITY: "Agility",
+  ENDURANCE: "Endurance",
+  FLEXIBILITY: "Fleksibel",
+  TEKNIK: "Teknik",
+  MENTAL: "Mental",
+  GAME_INTELLIGENCE: "Game Intel",
+};
 
 const allTabs: { id: TabId; label: string; adminOnly?: boolean }[] = [
   { id: "profile", label: "Profile Saya" },
@@ -46,15 +66,32 @@ export default function SettingsPage() {
   const [profileErrors, setProfileErrors] = useState<FormErrors>({});
   const [profileLoading, setProfileLoading] = useState(false);
 
+  // ─── Atur Password Login ───
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwMessage, setPwMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   // ─── Athlete Spider Chart ───
   const [athleteScores, setAthleteScores] = useState<Array<{ category: string; avg_score: number; latest_score: number; assessment_count: number }>>([]);
   const [scoreMode, setScoreMode] = useState<"average" | "latest">("average");
+
+  // ─── Skor Sesi (Program Kerja & Proyek Insidental) ───
+  const [programScores, setProgramScores] = useState<SessionScoreData>({ average: 0, total: 0, points: [] });
+  const [projectScores, setProjectScores] = useState<SessionScoreData>({ average: 0, total: 0, points: [] });
 
   // ─── Organization Tab ───
   const [orgData, setOrgData] = useState<OrganizationSettings | null>(null);
   const [orgName, setOrgName] = useState("");
   const [orgDesc, setOrgDesc] = useState("");
   const [orgEmail, setOrgEmail] = useState("");
+  const [orgAddress, setOrgAddress] = useState("");
+  const [orgPhone, setOrgPhone] = useState("");
+  const [orgUniversity, setOrgUniversity] = useState("");
+  const [orgSocial, setOrgSocial] = useState<{ platform: string; url: string }[]>([{ platform: "", url: "" }]);
+  const [orgEstYear, setOrgEstYear] = useState("");
   const [orgPeriod, setOrgPeriod] = useState("");
   const [orgMaintenance, setOrgMaintenance] = useState(false);
   const [orgLogoFile, setOrgLogoFile] = useState<File | null>(null);
@@ -184,6 +221,17 @@ export default function SettingsPage() {
     return () => clearInterval(id);
   }, [user, scoreMode]);
 
+  // ─── Fetch skor sesi program kerja & proyek insidental ───
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/my-scores/program")
+      .then((r) => r.json())
+      .then((j) => { if (j.success) setProgramScores(j.data); });
+    fetch("/api/my-scores/project")
+      .then((r) => r.json())
+      .then((j) => { if (j.success) setProjectScores(j.data); });
+  }, [user]);
+
   // ─── Fetch All Users (for Pengaturan User) ───
   const fetchAllUsers = useCallback(async () => {
     setUsersLoading(true);
@@ -201,12 +249,14 @@ export default function SettingsPage() {
   const handleRoleChange = async (userId: string, newRole: string) => {
     setSavingRole(userId);
     setUserRoleError("");
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: newRole })
-      .eq("id", userId);
-    if (error) {
-      setUserRoleError(error.message);
+    const res = await fetch(`/api/profiles/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      setUserRoleError(json.error?.message || "Gagal mengubah role.");
     } else {
       setAllUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole as UserRole } : u)));
     }
@@ -222,6 +272,11 @@ export default function SettingsPage() {
       setOrgName(json.data.org_name);
       setOrgDesc(json.data.org_description);
       setOrgEmail(json.data.org_email || "");
+      setOrgAddress(json.data.org_address || "");
+      setOrgPhone(json.data.org_phone_number || "");
+      setOrgUniversity(json.data.org_university || "");
+      setOrgSocial((json.data.org_social_media?.length ? json.data.org_social_media : [{ platform: "", url: "" }]).map((s: { platform: string; url: string }) => ({ platform: s.platform, url: s.url })));
+      setOrgEstYear(json.data.org_est_year || "");
       setOrgPeriod(json.data.period_year);
       setOrgMaintenance(json.data.is_maintenance);
       setOrgLogoPreview(json.data.org_logo_url || "");
@@ -508,6 +563,49 @@ export default function SettingsPage() {
     setProfileLoading(false);
   };
 
+  // ─── Atur Password Login ───
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwMessage(null);
+
+    if (!pwCurrent || !pwNew) {
+      setPwMessage({ type: "error", text: "Password lama dan baru wajib diisi." });
+      return;
+    }
+    if (pwNew.length < 6) {
+      setPwMessage({ type: "error", text: "Password baru minimal 6 karakter." });
+      return;
+    }
+    if (pwNew !== pwConfirm) {
+      setPwMessage({ type: "error", text: "Konfirmasi password tidak cocok." });
+      return;
+    }
+
+    setPwLoading(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: pwCurrent, new_password: pwNew }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setPwMessage({ type: "error", text: json.error?.message || "Gagal mengubah password." });
+        setPwLoading(false);
+        return;
+      }
+      setPwMessage({ type: "success", text: "Password berhasil diubah." });
+      setPwCurrent("");
+      setPwNew("");
+      setPwConfirm("");
+      setShowPasswordForm(false);
+      setPwLoading(false);
+    } catch {
+      setPwMessage({ type: "error", text: "Gagal terhubung ke server." });
+      setPwLoading(false);
+    }
+  };
+
   // ─── Organization Submit ───
   const handleOrgSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -515,6 +613,11 @@ export default function SettingsPage() {
       org_name: orgName,
       org_description: orgDesc || undefined,
       org_email: orgEmail || undefined,
+      org_address: orgAddress || undefined,
+      org_phone_number: orgPhone || undefined,
+      org_university: orgUniversity || undefined,
+      org_social_media: orgSocial.filter((s) => s.platform.trim() !== "" || s.url.trim() !== ""),
+      org_est_year: orgEstYear || undefined,
       period_year: orgPeriod,
       is_maintenance: orgMaintenance,
     });
@@ -796,13 +899,88 @@ export default function SettingsPage() {
                     <div className="flex justify-between"><span className="text-muted-foreground">Divisi</span><span>{user.divisions?.name ?? "-"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Fakultas</span><span>{user.fakultas?.name ?? "-"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Jurusan</span><span>{user.jurusan?.name ?? "-"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Bergabung</span><span>{new Date(user.joined_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Bergabung</span><span>{new Date(user.joined_at).toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" })}</span></div>
                   </div>
                 </div>
 
                 {profileErrors._form && <p className="text-sm text-red-500 text-center">{profileErrors._form}</p>}
                 <div className="flex gap-3">
                   <Button type="button" disabled={profileLoading} onClick={handleProfileSubmit}>{profileLoading ? "Menyimpan..." : "Simpan Profil"}</Button>
+                </div>
+
+                <div className="border-t pt-4 mt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold">Atur Password Login</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Password hanya dapat diubah oleh akun Anda sendiri.
+                      </p>
+                    </div>
+                    {!showPasswordForm && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setShowPasswordForm(true); setPwMessage(null); }}
+                      >
+                        Atur Password
+                      </Button>
+                    )}
+                  </div>
+
+                  {showPasswordForm && (
+                    <form onSubmit={handleChangePassword} className="mt-3 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium" htmlFor="pwCurrent">Password Lama</label>
+                          <Input
+                            id="pwCurrent"
+                            type="password"
+                            value={pwCurrent}
+                            onChange={(e) => setPwCurrent(e.target.value)}
+                            placeholder="Password saat ini"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium" htmlFor="pwNew">Password Baru</label>
+                          <Input
+                            id="pwNew"
+                            type="password"
+                            value={pwNew}
+                            onChange={(e) => setPwNew(e.target.value)}
+                            placeholder="Minimal 6 karakter"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium" htmlFor="pwConfirm">Konfirmasi Password</label>
+                          <Input
+                            id="pwConfirm"
+                            type="password"
+                            value={pwConfirm}
+                            onChange={(e) => setPwConfirm(e.target.value)}
+                            placeholder="Ulangi password baru"
+                          />
+                        </div>
+                      </div>
+                      {pwMessage && (
+                        <p className={`text-sm ${pwMessage.type === "success" ? "text-green-600" : "text-red-500"}`}>
+                          {pwMessage.text}
+                        </p>
+                      )}
+                      <div className="flex gap-3">
+                        <Button type="submit" disabled={pwLoading}>
+                          {pwLoading ? "Menyimpan..." : "Simpan Password"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => { setShowPasswordForm(false); setPwMessage(null); }}
+                        >
+                          Batal
+                        </Button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               </div>
             ) : (
@@ -819,7 +997,7 @@ export default function SettingsPage() {
             <CardTitle>Matrik Performa</CardTitle>
             <CardDescription>Visualisasi kemampuan berdasarkan kategori latihan</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="flex gap-2">
               <Button
                 variant={scoreMode === "average" ? "default" : "outline"}
@@ -837,18 +1015,115 @@ export default function SettingsPage() {
               </Button>
             </div>
             {athleteScores.some((s) => s.assessment_count > 0) ? (
-              <div className="flex justify-center">
-                <SpiderChart
-                  data={athleteScores.map((s) => ({
-                      category: s.category,
-                      value: scoreMode === "average" ? s.avg_score : s.latest_score,
-                    }))}
-                  size={320}
-                />
-              </div>
+              (() => {
+                const assessed = athleteScores.filter((s) => s.assessment_count > 0);
+                const totalAssessed = assessed.reduce((sum, s) => sum + s.assessment_count, 0);
+                const totalAverage =
+                  scoreMode === "average"
+                    ? (totalAssessed > 0
+                        ? assessed.reduce((sum, s) => sum + s.avg_score * s.assessment_count, 0) / totalAssessed
+                        : 0)
+                    : (assessed.length > 0
+                        ? assessed.reduce((sum, s) => sum + s.latest_score, 0) / assessed.length
+                        : 0);
+                return (
+                  <>
+                    <div className="flex justify-center">
+                      <SpiderChart
+                        data={athleteScores.map((s) => ({
+                            category: s.category,
+                            value: scoreMode === "average" ? s.avg_score : s.latest_score,
+                          }))}
+                        size={320}
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium mb-2">Nilai per Kategori</p>
+                      <BarChart
+                        data={athleteScores.map((s) => ({
+                          label: SHORT_CATEGORY_LABELS[s.category] || s.category,
+                          value: scoreMode === "average" ? s.avg_score : s.latest_score,
+                        }))}
+                        maxScore={10}
+                        height={200}
+                      />
+                    </div>
+                    <div className="flex gap-8 justify-center text-sm">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold">{totalAssessed}</p>
+                        <p className="text-muted-foreground">Total Variabel Dinilai</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold">{totalAverage.toFixed(1)}</p>
+                        <p className="text-muted-foreground">
+                          {scoreMode === "average" ? "Rata-rata Total (Semua Variabel)" : "Rata-rata Total Terakhir"}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()
             ) : (
               <p className="text-center text-muted-foreground py-4">
                 Belum ada data penilaian.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Skor Sesi Program Kerja */}
+      {activeTab === "profile" && user && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Rata-rata Nilai Sesi Program Kerja</CardTitle>
+            <CardDescription>Nilai yang Anda peroleh pada setiap sesi di modul Program Kerja</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {programScores.total > 0 ? (
+              <>
+                <div className="text-center">
+                  <p className="text-3xl font-bold">{programScores.average.toFixed(1)}</p>
+                  <p className="text-sm text-muted-foreground">Rata-rata dari {programScores.total} sesi dinilai</p>
+                </div>
+                <LineChart
+                  series={[{ category: "Nilai", points: programScores.points.map((p) => ({ date: p.date, value: p.score })) }]}
+                  maxScore={10}
+                  height={240}
+                />
+              </>
+            ) : (
+              <p className="text-center text-muted-foreground py-6">
+                Belum ada nilai sesi program kerja.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Skor Sesi Proyek Insidental */}
+      {activeTab === "profile" && user && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Rata-rata Nilai Sesi Proyek Insidental</CardTitle>
+            <CardDescription>Nilai yang Anda peroleh pada setiap sesi di modul Proyek Insidental</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {projectScores.total > 0 ? (
+              <>
+                <div className="text-center">
+                  <p className="text-3xl font-bold">{projectScores.average.toFixed(1)}</p>
+                  <p className="text-sm text-muted-foreground">Rata-rata dari {projectScores.total} sesi dinilai</p>
+                </div>
+                <LineChart
+                  series={[{ category: "Nilai", points: projectScores.points.map((p) => ({ date: p.date, value: p.score })) }]}
+                  maxScore={10}
+                  height={240}
+                />
+              </>
+            ) : (
+              <p className="text-center text-muted-foreground py-6">
+                Belum ada nilai sesi proyek insidental.
               </p>
             )}
           </CardContent>
@@ -1009,10 +1284,65 @@ export default function SettingsPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium" htmlFor="orgEmail">Email Organisasi</label>
                     <Input id="orgEmail" type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} />
+                    {orgErrors.org_email && <p className="text-sm text-red-500">{orgErrors.org_email}</p>}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="orgPeriod">Periode <span className="text-red-500">*</span></label>
-                    <Input id="orgPeriod" value={orgPeriod} onChange={(e) => setOrgPeriod(e.target.value)} />
+                    <label className="text-sm font-medium" htmlFor="orgUniversity">Nama Universitas</label>
+                    <Input id="orgUniversity" value={orgUniversity} onChange={(e) => setOrgUniversity(e.target.value)} placeholder="Contoh: Universitas X" />
+                    {orgErrors.org_university && <p className="text-sm text-red-500">{orgErrors.org_university}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orgAddress">Alamat Lengkap</label>
+                    <Input id="orgAddress" value={orgAddress} onChange={(e) => setOrgAddress(e.target.value)} placeholder="Alamat sekretariat organisasi" />
+                    {orgErrors.org_address && <p className="text-sm text-red-500">{orgErrors.org_address}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orgPhone">No Telepon</label>
+                    <Input id="orgPhone" type="tel" value={orgPhone} onChange={(e) => setOrgPhone(e.target.value)} placeholder="Contoh: 0812-xxxx-xxxx" />
+                    {orgErrors.org_phone_number && <p className="text-sm text-red-500">{orgErrors.org_phone_number}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orgEstYear">Tahun Berdiri</label>
+                    <Input id="orgEstYear" inputMode="numeric" maxLength={4} value={orgEstYear} onChange={(e) => setOrgEstYear(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Contoh: 2001" />
+                    {orgErrors.org_est_year && <p className="text-sm text-red-500">{orgErrors.org_est_year}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Media Sosial</label>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setOrgSocial([...orgSocial, { platform: "", url: "" }])}>+ Tambah Link</Button>
+                    </div>
+                    <div className="space-y-2">
+                      {orgSocial.map((s, i) => (
+                        <div key={i} className="flex gap-2 items-center">
+                          <Input
+                            className="w-36"
+                            placeholder="Platform"
+                            value={s.platform}
+                            onChange={(e) => {
+                              const next = [...orgSocial];
+                              next[i] = { ...next[i], platform: e.target.value };
+                              setOrgSocial(next);
+                            }}
+                          />
+                          <Input
+                            placeholder="https://..."
+                            value={s.url}
+                            onChange={(e) => {
+                              const next = [...orgSocial];
+                              next[i] = { ...next[i], url: e.target.value };
+                              setOrgSocial(next);
+                            }}
+                          />
+                          <Button type="button" variant="ghost" size="sm" className="text-red-500" onClick={() => setOrgSocial(orgSocial.filter((_, j) => j !== i))}>Hapus</Button>
+                        </div>
+                      ))}
+                    </div>
+                    {orgErrors.org_social_media && <p className="text-sm text-red-500">{orgErrors.org_social_media}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="orgPeriod">Periode Sertijab Aktif</label>
+                    <Input id="orgPeriod" value={orgPeriod} disabled />
+                    <p className="text-xs text-muted-foreground">Periode otomatis mengikuti Periode Sertijab yang sedang berjalan dan tidak dapat diubah manual.</p>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>

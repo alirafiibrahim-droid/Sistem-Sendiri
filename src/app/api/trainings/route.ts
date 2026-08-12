@@ -8,8 +8,9 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { trainingFormSchema } from "@/lib/validations/training";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -43,12 +44,7 @@ export async function POST(request: NextRequest) {
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
 
-    const forbidden = requireRole(role, [
-      "ADMIN",
-      "PENGURUS_INTI",
-      "KABID",
-      "PELATIH",
-    ]);
+    const forbidden = requireAccess(role, "trainings", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -69,6 +65,18 @@ export async function POST(request: NextRequest) {
       console.error("TRAININGS INSERT ERROR:", error);
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "trainings",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        name: data.name,
+        category: data.category,
+        description: data.description,
+      },
+    });
 
     return apiCreated(data);
   } catch {

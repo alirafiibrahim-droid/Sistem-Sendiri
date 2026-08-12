@@ -4,29 +4,30 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { handoverSchema } from "@/lib/validations/handover";
-import type { HandoverWithCreator } from "@/lib/types/database";
+import type { HandoverWithCreator, HandoverStatus } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
 
 const statusVariant: Record<string, "success" | "warning" | "secondary"> = {
   COMPLETED: "success",
-  SIGNED: "warning",
-  DRAFT: "secondary",
+  ONGOING: "warning",
+  NOT_STARTED: "secondary",
 };
 
 const statusLabel: Record<string, string> = {
-  COMPLETED: "Selesai",
-  SIGNED: "Ditandatangani",
-  DRAFT: "Draf",
+  COMPLETED: "Selesai Periode",
+  ONGOING: "Berjalan",
+  NOT_STARTED: "Belum Berjalan",
 };
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     year: "numeric",
   });
 }
@@ -43,9 +44,13 @@ export default function HandoversPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingOriginalStatus, setEditingOriginalStatus] = useState<HandoverStatus>("NOT_STARTED");
   const [formPeriodFrom, setFormPeriodFrom] = useState("");
   const [formPeriodTo, setFormPeriodTo] = useState("");
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
+  const [formDocumentUrl, setFormDocumentUrl] = useState("");
+  const [formStatus, setFormStatus] = useState<HandoverStatus>("NOT_STARTED");
   const [formWitnesses, setFormWitnesses] = useState<{ name: string; nim: string; role: string }[]>([]);
   const [witnessName, setWitnessName] = useState("");
   const [witnessNim, setWitnessNim] = useState("");
@@ -71,9 +76,13 @@ export default function HandoversPage() {
   }, [fetchHandovers]);
 
   const resetForm = () => {
+    setEditingId(null);
+    setEditingOriginalStatus("NOT_STARTED");
     setFormPeriodFrom("");
     setFormPeriodTo("");
     setFormDate(new Date().toISOString().split("T")[0]);
+    setFormDocumentUrl("");
+    setFormStatus("NOT_STARTED");
     setFormWitnesses([]);
     setWitnessName("");
     setWitnessNim("");
@@ -83,6 +92,28 @@ export default function HandoversPage() {
 
   const openModal = () => {
     resetForm();
+    setShowModal(true);
+  };
+
+  const openEdit = (h: HandoverWithCreator) => {
+    setEditingId(h.id);
+    setEditingOriginalStatus(h.status);
+    setFormPeriodFrom(h.period_from);
+    setFormPeriodTo(h.period_to);
+    setFormDate(h.handover_date.slice(0, 10));
+    setFormDocumentUrl(h.document_url || "");
+    setFormStatus(h.status);
+    setFormWitnesses(
+      (h.witnesses || []).map((w) => ({
+        name: w.name,
+        nim: w.nim || "",
+        role: w.role,
+      }))
+    );
+    setWitnessName("");
+    setWitnessNim("");
+    setWitnessRole("");
+    setErrors({});
     setShowModal(true);
   };
 
@@ -108,6 +139,7 @@ export default function HandoversPage() {
       period_from: formPeriodFrom,
       period_to: formPeriodTo,
       handover_date: formDate,
+      document_url: formDocumentUrl.trim() ? formDocumentUrl.trim() : null,
       witnesses: formWitnesses,
     });
 
@@ -124,15 +156,19 @@ export default function HandoversPage() {
     setErrors({});
     setFormLoading(true);
 
-    const res = await fetch("/api/handovers", {
-      method: "POST",
+    const payload = {
+      period_from: formPeriodFrom,
+      period_to: formPeriodTo,
+      handover_date: formDate,
+      document_url: formDocumentUrl.trim() ? formDocumentUrl.trim() : null,
+      witnesses: formWitnesses,
+      ...(editingId ? { status: formStatus } : {}),
+    };
+
+    const res = await fetch(editingId ? `/api/handovers/${editingId}` : "/api/handovers", {
+      method: editingId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        period_from: formPeriodFrom,
-        period_to: formPeriodTo,
-        handover_date: formDate,
-        witnesses: formWitnesses,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const json = await res.json();
@@ -149,6 +185,13 @@ export default function HandoversPage() {
   };
 
   const totalPages = meta.totalPages || 1;
+
+  const allowedStatuses: HandoverStatus[] =
+    editingOriginalStatus === "NOT_STARTED"
+      ? ["NOT_STARTED", "ONGOING"]
+      : editingOriginalStatus === "ONGOING"
+      ? ["ONGOING", "COMPLETED"]
+      : ["COMPLETED"];
 
   return (
     <div className="space-y-6">
@@ -184,21 +227,38 @@ export default function HandoversPage() {
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <CardTitle className="text-lg">
-                      Periode {h.period_from} &rarr; {h.period_to}
+                      Periode {h.period_to}
                     </CardTitle>
                     <p className="text-sm text-muted-foreground">
                       Tanggal: {formatDate(h.handover_date)} &middot; Dibuat oleh:{" "}
                       {h.profiles?.full_name || "-"}
                     </p>
                   </div>
-                  <Badge variant={statusVariant[h.status]}>
-                    {statusLabel[h.status]}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={statusVariant[h.status]}>
+                      {statusLabel[h.status]}
+                    </Badge>
+                    {h.status !== "COMPLETED" && (
+                      <Button variant="outline" size="sm" onClick={() => openEdit(h)}>
+                        Edit
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
+                {h.document_url && (
+                  <a
+                    href={h.document_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-blue-600 hover:underline"
+                  >
+                    &darr; Berita Acara (PDF)
+                  </a>
+                )}
                 {h.witnesses && h.witnesses.length > 0 && (
-                  <div>
+                  <div className={h.document_url ? "mt-2" : ""}>
                     <p className="text-xs font-medium text-muted-foreground mb-2">Saksi:</p>
                     <div className="flex flex-wrap gap-2">
                       {h.witnesses.map((w, i) => (
@@ -240,8 +300,12 @@ export default function HandoversPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-bold">Sertijab Baru</h3>
-                  <p className="text-sm text-muted-foreground">Buat serah terima jabatan baru</p>
+                  <h3 className="text-lg font-bold">{editingId ? "Edit Sertijab" : "Sertijab Baru"}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {editingId
+                      ? "Perbarui data atau status serah terima jabatan"
+                      : "Buat serah terima jabatan baru"}
+                  </p>
                 </div>
                 <button onClick={() => setShowModal(false)} className="p-1 hover:bg-muted rounded-lg">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,6 +360,45 @@ export default function HandoversPage() {
                     <p className="text-sm text-red-500">{errors.handover_date}</p>
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="document_url">
+                    URL Berita Acara
+                  </label>
+                  <Input
+                    id="document_url"
+                    type="url"
+                    placeholder="https://.../ba-sertijab.pdf"
+                    value={formDocumentUrl}
+                    onChange={(e) => setFormDocumentUrl(e.target.value)}
+                  />
+                  {errors.document_url && (
+                    <p className="text-sm text-red-500">{errors.document_url}</p>
+                  )}
+                </div>
+
+                {editingId && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="status">
+                      Status Periode
+                    </label>
+                    <Select
+                      id="status"
+                      value={formStatus}
+                      onChange={(e) => setFormStatus(e.target.value as HandoverStatus)}
+                    >
+                      {allowedStatuses.map((s) => (
+                        <option key={s} value={s}>
+                          {statusLabel[s]}
+                        </option>
+                      ))}
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Status berubah secara berurutan: Belum Berjalan &rarr; Berjalan (perlu URL
+                      Berita Acara) &rarr; Selesai Periode (pengesahan).
+                    </p>
+                  </div>
+                )}
 
                 {/* Witnesses */}
                 <div className="space-y-3">
@@ -352,7 +455,11 @@ export default function HandoversPage() {
 
                 <div className="flex gap-3 pt-2">
                   <Button type="submit" disabled={formLoading} className="flex-1">
-                    {formLoading ? "Menyimpan..." : "Simpan Sertijab"}
+                    {formLoading
+                      ? "Menyimpan..."
+                      : editingId
+                      ? "Simpan Perubahan"
+                      : "Simpan Sertijab"}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
                     Batal

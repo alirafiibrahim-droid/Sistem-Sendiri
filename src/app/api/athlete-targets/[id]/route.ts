@@ -2,13 +2,13 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -40,13 +40,22 @@ export async function PATCH(
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "athlete-performance", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
     const body = await request.json();
 
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("athlete_targets")
+      .select("id, athlete_id, metric_id, target_value")
+      .eq("id", id)
+      .single();
+
+    if (!existing) return apiNotFound();
+
     const { data, error } = await supabase
       .from("athlete_targets")
       .update(body)
@@ -56,6 +65,27 @@ export async function PATCH(
 
     if (error) return apiInternalError();
     if (!data) return apiNotFound();
+
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const existingRow = existing as unknown as Record<string, unknown>;
+    const updatedRow = data as unknown as Record<string, unknown>;
+    for (const key of ["athlete_id", "metric_id", "target_value", "is_active"]) {
+      if (JSON.stringify(existingRow[key]) !== JSON.stringify(updatedRow[key])) {
+        oldValue[key] = existingRow[key] ?? null;
+        newValue[key] = updatedRow[key] ?? null;
+      }
+    }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "athlete_targets",
+      targetId: id,
+      userId: uid,
+      oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+      newValue: Object.keys(newValue).length > 0 ? newValue : null,
+    });
+
     return apiOk(data);
   } catch {
     return apiInternalError();
@@ -70,10 +100,17 @@ export async function DELETE(
     const uid = getUid(request);
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
-    if (!isAdmin(role)) return apiForbidden();
+    const forbidden = requireAccess(role, "athlete-performance", "delete");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("athlete_targets")
+      .select("id, athlete_id, metric_id, target_value")
+      .eq("id", id)
+      .single();
 
     const { error } = await supabase
       .from("athlete_targets")
@@ -81,6 +118,21 @@ export async function DELETE(
       .eq("id", id);
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "athlete_targets",
+      targetId: id,
+      userId: uid,
+      oldValue: existing
+        ? {
+            athlete_id: existing.athlete_id,
+            metric_id: existing.metric_id,
+            target_value: existing.target_value,
+          }
+        : null,
+    });
+
     return apiOk({ deleted: true });
   } catch {
     return apiInternalError();

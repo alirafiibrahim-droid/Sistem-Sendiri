@@ -1,4 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { generateUniqueSessionCodes } from "@/lib/session-code";
 import {
   apiOk,
   apiCreated,
@@ -8,8 +9,9 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { trainingSessionSchema } from "@/lib/validations/training";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 import type { Profile, Training, TrainingSessionWithCoach } from "@/lib/types/database";
 
@@ -126,7 +128,7 @@ export async function POST(request: NextRequest) {
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
 
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID", "PELATIH"]);
+    const forbidden = requireAccess(role, "training-sessions", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -141,10 +143,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createSupabaseServer();
 
-    const sessionsToInsert = dates.map((date) => ({
+    const sessionCodes = await generateUniqueSessionCodes(supabase, "training_sessions", dates.length);
+
+    const sessionsToInsert = dates.map((date, i) => ({
       coach_id: uid,
       name,
       date,
+      session_code: sessionCodes[i],
       session_type: name,
       duration_minutes,
       intensity,
@@ -194,6 +199,22 @@ export async function POST(request: NextRequest) {
       if (attError) {
         console.error("TRAINING SESSIONS ATTENDANTS INSERT ERROR:", attError);
       }
+    }
+
+    for (const s of sessions ?? []) {
+      await writeAuditLog({
+        action: "CREATE",
+        targetTable: "training_sessions",
+        targetId: s.id,
+        userId: uid,
+        newValue: {
+          name: s.name,
+          date: s.date,
+          session_code: s.session_code,
+          duration_minutes: s.duration_minutes,
+          intensity: s.intensity,
+        },
+      });
     }
 
     return apiCreated(sessions);

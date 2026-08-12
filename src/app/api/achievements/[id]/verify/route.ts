@@ -1,4 +1,4 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+﻿import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
@@ -8,7 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function POST(
@@ -20,7 +21,7 @@ export async function POST(
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
 
-    const forbidden = requireRole(role, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(role, "achievements-verify", "create");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -57,8 +58,19 @@ export async function POST(
 
     if (error) throw error;
 
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "achievements",
+      targetId: id,
+      userId: uid,
+      newValue: {
+        status,
+        rejection_reason: status === "REJECTED" ? rejection_reason : null,
+      },
+    });
+
     return apiOk(data);
-  } catch (error) {
+  } catch {
     return apiInternalError();
   }
 }

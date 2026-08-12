@@ -8,7 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isRoleAllowed } from "@/lib/authz";
+import { canAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -31,7 +32,7 @@ export async function GET(
       .eq("id", id)
       .single();
 
-    if (!isRoleAllowed(role, ["PENGURUS_INTI", "KABID"])) {
+    if (!canAccess(role, "finances", "read")) {
       query = supabase
         .from("dues_payments")
         .select(
@@ -64,7 +65,7 @@ export async function PATCH(
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
-    const isAdminUser = isRoleAllowed(role, ["PENGURUS_INTI"]);
+    const isAdminUser = canAccess(role, "finances", "update");
 
     let baseQuery = supabase
       .from("dues_payments")
@@ -100,6 +101,15 @@ export async function PATCH(
 
       if (error) return apiInternalError();
 
+      await writeAuditLog({
+        action: "UPDATE",
+        targetTable: "dues_payments",
+        targetId: id,
+        userId: uid,
+        oldValue: { status: existing.status },
+        newValue: updateData,
+      });
+
       return apiOk(data);
     }
 
@@ -125,6 +135,15 @@ export async function PATCH(
       .single();
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "dues_payments",
+      targetId: id,
+      userId: uid,
+      oldValue: { status: existing.status },
+      newValue: updateData,
+    });
 
     return apiOk(data);
   } catch {

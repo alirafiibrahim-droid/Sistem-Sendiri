@@ -1,4 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { generateUniqueSessionCodes } from "@/lib/session-code";
 import {
   apiOk,
   apiCreated,
@@ -8,6 +9,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
+import { writeAuditLog } from "@/lib/audit";
+import { requireAccess } from "@/lib/access";
 import { NextRequest } from "next/server";
 
 // GET /api/projects/[id]/sessions — list sessions
@@ -45,9 +48,8 @@ export async function POST(
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
 
-    if (!role || !["ADMIN", "PENGURUS_INTI", "KABID"].includes(role)) {
-      return apiUnauthorized("Hanya Admin, Pengurus Inti, atau Kabid yang dapat membuat sesi.");
-    }
+    const forbidden = requireAccess(role, "projects", "create");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const body = await request.json();
@@ -59,10 +61,13 @@ export async function POST(
 
     const supabase = await createSupabaseServer();
 
-    const rows = dates.map((date) => ({
+    const sessionCodes = await generateUniqueSessionCodes(supabase, "project_sessions", dates.length);
+
+    const rows = dates.map((date, i) => ({
       project_id: id,
       date,
       title: title || null,
+      session_code: sessionCodes[i],
       created_by: uid,
     }));
 
@@ -72,6 +77,23 @@ export async function POST(
       .select();
 
     if (error) return apiInternalError(error.message);
+
+    const inserted = data || [];
+    for (const row of inserted) {
+      await writeAuditLog({
+        action: "CREATE",
+        targetTable: "project_sessions",
+        targetId: row.id,
+        userId: uid,
+        newValue: {
+          project_id: id,
+          date: row.date,
+          title: row.title ?? null,
+          session_code: row.session_code,
+        },
+      });
+    }
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

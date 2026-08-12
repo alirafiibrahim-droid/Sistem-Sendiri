@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
   Table,
   TableBody,
@@ -46,7 +47,7 @@ const intensityVariant: Record<string, "destructive" | "warning" | "secondary"> 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     year: "numeric",
   });
 }
@@ -61,6 +62,8 @@ export default function AthleticsPage() {
   const [meta, setMeta] = useState<ApiMeta>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
   const [page, setPage] = useState(1);
   const limit = 15;
 
@@ -102,6 +105,8 @@ export default function AthleticsPage() {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (search) params.set("search", search);
+    if (filterStartDate) params.set("start_date", filterStartDate);
+    if (filterEndDate) params.set("end_date", filterEndDate);
 
     const res = await fetch(`/api/training-sessions?${params}`);
     const json = await res.json();
@@ -111,7 +116,7 @@ export default function AthleticsPage() {
       setMeta(json.meta);
     }
     setLoading(false);
-  }, [page, search]);
+  }, [page, search, filterStartDate, filterEndDate]);
 
   useEffect(() => {
     if (tab === "sessions") fetchSessions();
@@ -481,7 +486,7 @@ export default function AthleticsPage() {
                                   <TableCell className="text-right">
                                     {(() => {
                                       const val = scoreMode === "average" ? s.avg_score : s.latest_score;
-                                      const color = val >= 7 ? "#22c55e" : val >= 4 ? "#f59e0b" : "#ef4444";
+                                      const color = val >= 7 ? "#16a34a" : val >= 4 ? "#fa8603" : "#dc2626";
                                       return (
                                         <span
                                           className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
@@ -500,13 +505,13 @@ export default function AthleticsPage() {
                           </Table>
                           <div className="flex justify-center gap-4 text-xs text-muted-foreground mt-4">
                             <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#ef4444" }} /> 0-3.9
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#dc2626" }} /> 0-3.9
                             </span>
                             <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#f59e0b" }} /> 4-6.9
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#fa8603" }} /> 4-6.9
                             </span>
                             <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#22c55e" }} /> 7-10
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#16a34a" }} /> 7-10
                             </span>
                           </div>
                         </div>
@@ -586,6 +591,18 @@ export default function AthleticsPage() {
               }}
               className="max-w-sm"
             />
+            <DateRangeFilter
+              startDate={filterStartDate}
+              endDate={filterEndDate}
+              onStartDateChange={(v) => {
+                setFilterStartDate(v);
+                setPage(1);
+              }}
+              onEndDateChange={(v) => {
+                setFilterEndDate(v);
+                setPage(1);
+              }}
+            />
           </div>
 
           <Card>
@@ -594,6 +611,7 @@ export default function AthleticsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tanggal</TableHead>
+                    <TableHead>Kode Unit</TableHead>
                     <TableHead>Jenis Latihan</TableHead>
                     <TableHead>Durasi</TableHead>
                     <TableHead>Intensitas</TableHead>
@@ -603,13 +621,13 @@ export default function AthleticsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         Memuat data...
                       </TableCell>
                     </TableRow>
                   ) : sessions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         Belum ada sesi latihan.
                       </TableCell>
                     </TableRow>
@@ -617,6 +635,11 @@ export default function AthleticsPage() {
                     sessions.map((s) => (
                       <TableRow key={s.id}>
                         <TableCell className="text-sm">{formatDate(s.date)}</TableCell>
+                        <TableCell>
+                          <code className="rounded bg-muted px-2 py-1 font-mono text-xs font-semibold tracking-widest text-primary">
+                            {s.session_code || "-"}
+                          </code>
+                        </TableCell>
                         <TableCell>
                           <p className="font-medium">{s.name || s.session_type || "-"}</p>
                           {(s.trainings || []).length > 0 && (

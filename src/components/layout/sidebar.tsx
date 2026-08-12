@@ -6,27 +6,47 @@ import { usePathname } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import {
+  LayoutDashboard,
+  ClipboardList,
+  Wallet,
+  Users,
+  CalendarCheck,
+  Dumbbell,
+  Award,
+  Package,
+  Mail,
+  FileText,
+  Wrench,
+  FileBarChart,
+  Search,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import type { OrganizationSettings } from "@/lib/types/database";
 
 interface NavItem {
   label: string;
   href: string;
-  icon: string;
+  icon: LucideIcon;
+  adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: "📊" },
-  { label: "Program Kerja", href: "/programs", icon: "📋" },
-  { label: "Keuangan", href: "/finances", icon: "💰" },
-  { label: "Anggota", href: "/members", icon: "👥" },
-  { label: "Absensi", href: "/attendance", icon: "📌" },
-  { label: "Keatletan", href: "/athletics", icon: "🏃" },
-  { label: "Prestasi", href: "/achievements", icon: "🏆" },
-  { label: "Inventaris", href: "/inventory", icon: "📦" },
-  { label: "Persuratan", href: "/letters", icon: "✉️" },
-  { label: "Sertijab", href: "/handovers", icon: "📝" },
-  { label: "Proyek Insidental", href: "/projects", icon: "🔧" },
-  { label: "Pengaturan", href: "/settings", icon: "⚙️" },
+  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Program Kerja", href: "/programs", icon: ClipboardList },
+  { label: "Keuangan", href: "/finances", icon: Wallet },
+  { label: "Anggota", href: "/members", icon: Users },
+  { label: "Absensi", href: "/attendance", icon: CalendarCheck },
+  { label: "Keatletan", href: "/athletics", icon: Dumbbell },
+  { label: "Prestasi", href: "/achievements", icon: Award },
+  { label: "Inventaris", href: "/inventory", icon: Package },
+  { label: "Persuratan", href: "/letters", icon: Mail },
+  { label: "Sertijab", href: "/handovers", icon: FileText },
+  { label: "Proyek Insidental", href: "/projects", icon: Wrench },
+  { label: "Laporan", href: "/reports", icon: FileBarChart },
+  { label: "Audit Trail", href: "/audit-logs", icon: Search, adminOnly: true },
+  { label: "Pengaturan", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -36,16 +56,18 @@ export function Sidebar() {
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userAvatar, setUserAvatar] = useState("");
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
     const fetchProfile = () => {
       supabase.auth.getUser().then(({ data: { user: u } }) => {
         if (u) {
           setUserEmail(u.email || "");
-          supabase.from("profiles").select("full_name, avatar_url").eq("id", u.id).single().then(({ data }) => {
+          supabase.from("profiles").select("full_name, avatar_url, role").eq("id", u.id).single().then(({ data }) => {
             if (data) {
               setUserName(data.full_name);
               setUserAvatar(data.avatar_url || "");
+              setUserRole(data.role);
             }
           });
         }
@@ -67,14 +89,14 @@ export function Sidebar() {
   }, [supabase]);
 
   return (
-    <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r bg-sidebar-bg text-sidebar-foreground">
+    <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r bg-sidebar-bg text-sidebar-foreground print:hidden">
       <div className="flex h-14 items-center border-b border-sidebar-border px-4">
         <Link href="/" className="flex items-center gap-2">
           {orgData?.org_logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={orgData.org_logo_url} alt="Logo" className="h-8 w-8 rounded-lg object-cover" />
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white font-bold text-sm">
               S
             </div>
           )}
@@ -83,6 +105,7 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {navItems.map((item) => {
+          if (item.adminOnly && userRole !== "ADMIN") return null;
           const isActive =
             item.href === "/"
               ? pathname === "/"
@@ -98,7 +121,7 @@ export function Sidebar() {
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white"
               )}
             >
-              <span className="text-base">{item.icon}</span>
+              <item.icon className="h-5 w-5 shrink-0 text-white" strokeWidth={2.5} aria-hidden="true" />
               {item.label}
             </Link>
           );

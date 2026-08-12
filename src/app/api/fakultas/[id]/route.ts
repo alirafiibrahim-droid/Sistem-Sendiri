@@ -2,15 +2,15 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { fakultasFormSchema } from "@/lib/validations/settings";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(
   request: Request,
@@ -36,7 +36,7 @@ export async function PATCH(
 ) {
   try {
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(userRole, "settings-fakultas-jurusan", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -48,6 +48,13 @@ export async function PATCH(
     }
 
     const supabase = await createSupabaseServer();
+
+    const { data: current } = await supabase
+      .from("fakultas")
+      .select("id, name, description")
+      .eq("id", id)
+      .maybeSingle();
+
     const { data, error } = await supabase
       .from("fakultas")
       .update(parsed.data)
@@ -59,6 +66,17 @@ export async function PATCH(
       if (error.code === "23505") return apiBadRequest("Nama fakultas sudah ada.");
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "fakultas",
+      targetId: id,
+      userId: getUid(request),
+      oldValue: current
+        ? { name: current.name, description: current.description }
+        : null,
+      newValue: { name: data.name, description: data.description },
+    });
 
     return apiOk(data);
   } catch {
@@ -72,12 +90,29 @@ export async function DELETE(
 ) {
   try {
     const userRole = getUserRole(request);
-    if (!isAdmin(userRole)) return apiForbidden();
+    const forbidden = requireAccess(userRole, "settings-fakultas-jurusan", "delete");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("fakultas")
+      .select("id, name")
+      .eq("id", id)
+      .maybeSingle();
+
     const { error } = await supabase.from("fakultas").delete().eq("id", id);
     if (error) return apiInternalError(error.message);
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "fakultas",
+      targetId: id,
+      userId: getUid(request),
+      oldValue: existing ? { name: existing.name } : null,
+    });
+
     return apiOk({ message: "Fakultas berhasil dihapus." });
   } catch {
     return apiInternalError();

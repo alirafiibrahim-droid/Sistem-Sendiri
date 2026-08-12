@@ -1,15 +1,15 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+﻿import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiCreated,
   apiUnauthorized,
-  apiForbidden,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
     if (role !== "coach") {
-      const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+      const forbidden = requireAccess(role, "athlete-performance", "update");
       if (forbidden) return forbidden;
     }
 
@@ -81,6 +81,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "assessments",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        athlete_id,
+        metric_id,
+        value,
+        session_id: session_id || null,
+      },
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

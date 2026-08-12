@@ -49,6 +49,7 @@ interface HandoverOption {
 export default function ProgramsPage() {
   const supabase = createSupabaseClient();
   const [programs, setPrograms] = useState<ProgramWithDetails[]>([]);
+  const [budgets, setBudgets] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -104,6 +105,29 @@ export default function ProgramsPage() {
     if (data) {
       const programIds = data.map((p: { id: string }) => p.id);
       const averageScoreByProgram = new Map<string, number>();
+      const budgetByProgram = new Map<string, number>();
+
+      if (programIds.length > 0) {
+        const { data: budgetItems } = await supabase
+          .from("budget_items")
+          .select("program_id, subtotal, parent_id")
+          .in("program_id", programIds);
+
+        for (const item of budgetItems || []) {
+          if (item.parent_id) continue;
+          budgetByProgram.set(
+            item.program_id,
+            (budgetByProgram.get(item.program_id) || 0) + Number(item.subtotal)
+          );
+        }
+        for (const b of budgetItems || []) {
+          if (!b.parent_id) continue;
+          budgetByProgram.set(
+            b.program_id,
+            (budgetByProgram.get(b.program_id) || 0) + Number(b.subtotal)
+          );
+        }
+      }
 
       if (programIds.length > 0) {
         const { data: sessions } = await supabase
@@ -151,6 +175,7 @@ export default function ProgramsPage() {
           average_score: averageScoreByProgram.get(p.id) ?? null,
         }))
       );
+      setBudgets(budgetByProgram);
     }
     setLoading(false);
   }, [supabase, search, statusFilter, periodFilter, divisionFilter]);
@@ -164,7 +189,7 @@ export default function ProgramsPage() {
   const summary = useMemo(() => {
     const totalPrograms = programs.length;
     const totalBudget = programs.reduce(
-      (sum, p) => sum + (p.budget_estimate || 0),
+      (sum, p) => sum + (budgets.get(p.id) || 0),
       0
     );
     const byDivision = new Map<string, number>();
@@ -176,7 +201,7 @@ export default function ProgramsPage() {
       (a, b) => b[1] - a[1]
     );
     return { totalPrograms, totalBudget, divisionBreakdown };
-  }, [programs]);
+  }, [programs, budgets]);
 
   return (
     <div className="space-y-6">
@@ -251,7 +276,7 @@ export default function ProgramsPage() {
             <div className="text-2xl font-bold">
               {loading ? "-" : formatCurrency(summary.totalBudget)}
             </div>
-            <CardDescription>Estimasi anggaran program kerja</CardDescription>
+            <CardDescription>Total anggaran dari pos anggaran program kerja</CardDescription>
           </CardContent>
         </Card>
       </div>
@@ -341,7 +366,7 @@ export default function ProgramsPage() {
                     <TableCell>
                       <Badge variant={statusVariant[p.status]}>{p.status}</Badge>
                     </TableCell>
-                    <TableCell>{formatCurrency(p.budget_estimate)}</TableCell>
+                    <TableCell>{formatCurrency(budgets.get(p.id) || 0)}</TableCell>
                     <TableCell>
                       {p.average_score != null ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-sm font-semibold text-success">

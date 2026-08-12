@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import { Select } from "@/components/ui/select";
 import {
   Table,
@@ -17,6 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { programUpdateSchema } from "@/lib/validations/program";
+import BudgetManager from "@/components/budget/BudgetManager";
+import { QrCodeModal } from "@/components/ui/qr-code-modal";
 import type {
   ProgramWithDetails,
   ProgramMemberWithProfile,
@@ -50,7 +53,7 @@ function formatCurrency(amount: number) {
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit",
-    month: "long",
+    month: "2-digit",
     year: "numeric",
   });
 }
@@ -77,11 +80,13 @@ export default function ProgramDetailPage() {
   const [formDescription, setFormDescription] = useState("");
   const [formStartDate, setFormStartDate] = useState("");
   const [formEndDate, setFormEndDate] = useState("");
-  const [formBudget, setFormBudget] = useState("");
   const [formStatus, setFormStatus] = useState<string>("PLANNED");
   const [formDivisionId, setFormDivisionId] = useState("");
+  const [formHandoverId, setFormHandoverId] = useState("");
   const [formProposalUrl, setFormProposalUrl] = useState("");
   const [formLpjUrl, setFormLpjUrl] = useState("");
+
+  const [activePeriods, setActivePeriods] = useState<{ id: string; period_from: string; period_to: string; status: string }[]>([]);
 
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -89,9 +94,9 @@ export default function ProgramDetailPage() {
   const [allProfiles, setAllProfiles] = useState<{ id: string; full_name: string; nim: string }[]>([]);
   const [newMemberId, setNewMemberId] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"detail" | "anggota" | "sesi">("detail");
+  const [activeTab, setActiveTab] = useState<"detail" | "anggota" | "sesi" | "anggaran">("detail");
 
-  const [sessions, setSessions] = useState<Array<{id: string; date: string; title: string | null; created_at: string; program_session_attendants: Array<{count: number}>}>>([]);
+  const [sessions, setSessions] = useState<Array<{id: string; date: string; title: string | null; session_code: string | null; created_at: string; program_session_attendants: Array<{count: number}>}>>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [submittingSessions, setSubmittingSessions] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -104,8 +109,15 @@ export default function ProgramDetailPage() {
   const [loadingQr, setLoadingQr] = useState(false);
 
   const [attendeeSessionId, setAttendeeSessionId] = useState<string | null>(null);
-  const [attendees, setAttendees] = useState<Array<{id: string; method: string; scanned_at: string | null; created_at: string; profiles: {id: string; full_name: string; nim: string; avatar_url: string | null} | null}>>([]);
+  const [attendeeSessionDate, setAttendeeSessionDate] = useState("");
+  const [attendees, setAttendees] = useState<Array<{id: string; method: string; scanned_at: string | null; score: number | null; notes: string | null; created_at: string; profiles: {id: string; full_name: string; nim: string; avatar_url: string | null} | null}>>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
+  const [scoreDrafts, setScoreDrafts] = useState<Record<string, string>>({});
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [savingScores, setSavingScores] = useState(false);
+  const [scoreMessage, setScoreMessage] = useState<{type: "success" | "error"; text: string} | null>(null);
+
+  const [budgetTotal, setBudgetTotal] = useState(0);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -142,6 +154,28 @@ export default function ProgramDetailPage() {
     fetchData();
   }, [fetchData]);
 
+  const fetchBudgetTotal = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/budget-items?program_id=${id}`);
+      const json = await res.json();
+      if (json.success) {
+        const indaks = json.data as Array<{ subtotal: number; children: Array<{ subtotal: number }> }>;
+        const total = indaks.reduce((sum, induk) => {
+          const value =
+            induk.children && induk.children.length > 0
+              ? induk.children.reduce((s, c) => s + Number(c.subtotal), 0)
+              : Number(induk.subtotal);
+          return sum + value;
+        }, 0);
+        setBudgetTotal(total);
+      }
+    } catch {}
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === "detail" || activeTab === "anggaran") fetchBudgetTotal();
+  }, [activeTab, fetchBudgetTotal]);
+
   useEffect(() => {
     supabase
       .from("divisions")
@@ -151,6 +185,15 @@ export default function ProgramDetailPage() {
         if (data) setDivisions(data);
       });
   }, [supabase]);
+
+  // Periode Sertijab yang sedang berjalan (dropdown "Periode")
+  useEffect(() => {
+    fetch("/api/handovers/active")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) setActivePeriods(json.data);
+      });
+  }, []);
 
   useEffect(() => {
     supabase
@@ -227,16 +270,91 @@ export default function ProgramDetailPage() {
     setLoadingQr(false);
   };
 
-  const handleViewAttendees = async (sessionId: string) => {
+  const handleViewAttendees = async (sessionId: string, date: string) => {
     setAttendeeSessionId(sessionId);
+    setAttendeeSessionDate(date);
     setAttendees([]);
+    setScoreDrafts({});
+    setNoteDrafts({});
+    setScoreMessage(null);
     setLoadingAttendees(true);
     try {
       const res = await fetch(`/api/programs/${id}/sessions/${sessionId}/attendance`);
       const json = await res.json();
-      if (json.success) setAttendees(json.data);
+      if (json.success) {
+        setAttendees(json.data);
+        const drafts: Record<string, string> = {};
+        const notes: Record<string, string> = {};
+        for (const a of json.data) {
+          drafts[a.id] = a.score != null ? String(a.score) : "";
+          notes[a.id] = a.notes ?? "";
+        }
+        setScoreDrafts(drafts);
+        setNoteDrafts(notes);
+      }
     } catch {}
     setLoadingAttendees(false);
+  };
+
+  const handleSaveScores = async () => {
+    if (!attendeeSessionId) return;
+    setSavingScores(true);
+    setScoreMessage(null);
+
+    const scores = attendees
+      .map((a) => {
+        const raw = scoreDrafts[a.id]?.trim() ?? "";
+        if (raw === "") return { attendee_id: a.id, score: null, notes: noteDrafts[a.id] ?? "" };
+        const value = Number(raw);
+        if (!Number.isInteger(value) || value < 1 || value > 10) return null;
+        return { attendee_id: a.id, score: value, notes: noteDrafts[a.id] ?? "" };
+      })
+      .filter(
+        (s): s is { attendee_id: string; score: number | null; notes: string } => s !== null
+      );
+
+    const invalid = scores.some((s) => s.score === null);
+    if (invalid) {
+      setScoreMessage({ type: "error", text: "Nilai harus berupa angka bulat 1-10 atau dikosongkan." });
+      setSavingScores(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/programs/${id}/sessions/${attendeeSessionId}/attendance`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scores }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setScoreMessage({ type: "error", text: json.error?.message || "Gagal menyimpan nilai." });
+        setSavingScores(false);
+        return;
+      }
+      setAttendees(json.data);
+      const drafts: Record<string, string> = {};
+      const notes: Record<string, string> = {};
+      for (const a of json.data) {
+        drafts[a.id] = a.score != null ? String(a.score) : "";
+        notes[a.id] = a.notes ?? "";
+      }
+      setScoreDrafts(drafts);
+      setNoteDrafts(notes);
+      setScoreMessage({ type: "success", text: "Nilai berhasil disimpan." });
+    } catch {
+      setScoreMessage({ type: "error", text: "Gagal terhubung ke server." });
+    }
+    setSavingScores(false);
+  };
+
+  const closeAttendeeModal = () => {
+    setAttendeeSessionId(null);
+    setAttendeeSessionDate("");
+    setAttendees([]);
+    setScoreDrafts({});
+    setNoteDrafts({});
+    setScoreMessage(null);
   };
 
   const openEdit = () => {
@@ -245,9 +363,9 @@ export default function ProgramDetailPage() {
     setFormDescription(program.description || "");
     setFormStartDate(program.start_date);
     setFormEndDate(program.end_date);
-    setFormBudget(String(program.budget_estimate));
     setFormStatus(program.status);
     setFormDivisionId(program.division_id || "");
+    setFormHandoverId(program.handover_id || "");
     setFormProposalUrl(program.proposal_url || "");
     setFormLpjUrl(program.lpj_url || "");
     setFormMembers(
@@ -270,9 +388,9 @@ export default function ProgramDetailPage() {
       description: formDescription || undefined,
       start_date: formStartDate || undefined,
       end_date: formEndDate || undefined,
-      budget_estimate: formBudget ? Number(formBudget) : undefined,
       status: formStatus,
       division_id: formDivisionId || undefined,
+      handover_id: formHandoverId || undefined,
       proposal_url: formProposalUrl || undefined,
       lpj_url: formLpjUrl || undefined,
     });
@@ -298,9 +416,9 @@ export default function ProgramDetailPage() {
         description: formDescription || null,
         start_date: formStartDate || undefined,
         end_date: formEndDate || undefined,
-        budget_estimate: formBudget ? Number(formBudget) : 0,
         status: formStatus,
         division_id: formDivisionId || null,
+        handover_id: formHandoverId || null,
         proposal_url: formProposalUrl || null,
         lpj_url: formLpjUrl || null,
       }),
@@ -362,8 +480,10 @@ export default function ProgramDetailPage() {
   };
 
   const isCreator = program?.created_by === userId;
-  const canEdit = userRole === "ADMIN" || userRole === "PENGURUS_INTI" || userRole === "KABID" || isCreator;
-  const canDelete = userRole === "ADMIN";
+  const isLocked = program?.handovers?.status === "COMPLETED";
+  const canEdit = ["ADMIN", "KABID", "BENDAHARA", "SEKRETARIS", "PENGURUS_INTI", "WAKIL_KETUA", "KETUA_UMUM"].includes(userRole) || isCreator;
+  const canManageScores = userRole === "ADMIN" || userRole === "PENGURUS_INTI" || userRole === "KABID";
+  const canDelete = ["ADMIN", "WAKIL_KETUA", "KETUA_UMUM"].includes(userRole);
 
   if (loading) {
     return <div className="text-center py-8 text-muted-foreground">Memuat data...</div>;
@@ -388,13 +508,21 @@ export default function ProgramDetailPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.back()}>Kembali</Button>
-          {canEdit && !editing && (
-            <Button onClick={openEdit}>Edit Program</Button>
-          )}
-          {canDelete && (
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading}>
-              {deleteLoading ? "Menghapus..." : "Hapus"}
-            </Button>
+          {isLocked ? (
+            <div className="inline-flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              <span aria-hidden>🔒</span> Periode telah selesai — hanya dapat dilihat
+            </div>
+          ) : (
+            <>
+              {canEdit && !editing && (
+                <Button onClick={openEdit}>Edit Program</Button>
+              )}
+              {canDelete && (
+                <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading}>
+                  {deleteLoading ? "Menghapus..." : "Hapus"}
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -460,19 +588,6 @@ export default function ProgramDetailPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Estimasi Anggaran (Rp) <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    placeholder="Minimal Rp 1.000"
-                    min="0"
-                    value={formBudget}
-                    onChange={(e) => setFormBudget(e.target.value)}
-                  />
-                  {editErrors.budget_estimate && <p className="text-sm text-red-500">{editErrors.budget_estimate}</p>}
-                </div>
-                <div className="space-y-2">
                   <label className="text-sm font-medium">Status</label>
                   <Select value={formStatus} onChange={(e) => setFormStatus(e.target.value)}>
                     <option value="PLANNED">Direncanakan</option>
@@ -482,6 +597,20 @@ export default function ProgramDetailPage() {
                   </Select>
                   {editErrors.status && <p className="text-sm text-red-500">{editErrors.status}</p>}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Periode (Sertijab)</label>
+                <Select value={formHandoverId} onChange={(e) => setFormHandoverId(e.target.value)}>
+                  <option value="">Pilih periode</option>
+                  {activePeriods.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      Periode {p.period_to}
+                      {p.status === "ONGOING" ? " (Berjalan)" : ""}
+                    </option>
+                  ))}
+                </Select>
+                {editErrors.handover_id && <p className="text-sm text-red-500">{editErrors.handover_id}</p>}
               </div>
 
               <div className="space-y-2">
@@ -627,6 +756,16 @@ export default function ProgramDetailPage() {
                 Anggota
               </button>
               <button
+                onClick={() => setActiveTab("anggaran")}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "anggaran"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Anggaran
+              </button>
+              <button
                 onClick={() => setActiveTab("sesi")}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === "sesi"
@@ -658,8 +797,16 @@ export default function ProgramDetailPage() {
                     <span>{program.divisions?.name ?? "-"}</span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-muted-foreground">Periode</span>
+                    <span>
+                      {program.handovers
+                        ? `Periode ${program.handovers.period_to}${program.handovers.status === "COMPLETED" ? " (Selesai)" : ""}`
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-muted-foreground">Anggaran</span>
-                    <span className="font-medium">{formatCurrency(program.budget_estimate)}</span>
+                    <span className="font-medium">{formatCurrency(budgetTotal)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Tanggal Mulai</span>
@@ -668,6 +815,30 @@ export default function ProgramDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Tanggal Selesai</span>
                     <span>{formatDate(program.end_date)}</span>
+                  </div>
+                  <div className="pt-2 border-t">
+                    <span className="text-muted-foreground text-sm">Penilaian</span>
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-full bg-gradient-to-br from-primary to-blue-600 text-primary-foreground shadow-md">
+                        <span className="text-base font-bold leading-none">
+                          {program.average_score != null ? program.average_score.toFixed(1) : "-"}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">Rata-rata semua sesi</span>
+                          <span className="text-xs font-medium text-muted-foreground">/ 10</span>
+                        </div>
+                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-warning to-success transition-all"
+                            style={{
+                              width: `${Math.min(100, ((program.average_score ?? 0) / 10) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   {program.description && (
                     <div className="pt-2 border-t">
@@ -768,17 +939,28 @@ export default function ProgramDetailPage() {
             </Card>
           )}
 
+          {/* Anggaran Tab */}
+          {activeTab === "anggaran" && (
+            <BudgetManager
+              type="program"
+              entityId={id}
+              canEdit={canEdit && !isLocked}
+            />
+          )}
+
           {/* Sesi Tab */}
           {activeTab === "sesi" && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold">Sesi Pertemuan</h3>
-                <Button
-                  variant="outline"
-                  onClick={() => { setShowCreateForm(!showCreateForm); setSessionMessage(null); }}
-                >
-                  {showCreateForm ? "Tutup" : "+ Buat Sesi"}
-                </Button>
+                {!isLocked && (
+                  <Button
+                    variant="outline"
+                    onClick={() => { setShowCreateForm(!showCreateForm); setSessionMessage(null); }}
+                  >
+                    {showCreateForm ? "Tutup" : "+ Buat Sesi"}
+                  </Button>
+                )}
               </div>
 
               {showCreateForm && (
@@ -814,7 +996,7 @@ export default function ProgramDetailPage() {
                                 key={d}
                                 className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-secondary text-secondary-foreground"
                               >
-                                {new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                                {new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" })}
                                 <button
                                   type="button"
                                   className="hover:text-destructive ml-1"
@@ -852,6 +1034,7 @@ export default function ProgramDetailPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Tanggal</TableHead>
+                          <TableHead>Kode Unit</TableHead>
                           <TableHead>Aksi</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -860,14 +1043,21 @@ export default function ProgramDetailPage() {
                           <TableRow key={session.id}>
                             <TableCell>{formatDate(session.date)}</TableCell>
                             <TableCell>
+                              <code className="rounded bg-muted px-2 py-1 font-mono text-xs font-semibold tracking-widest text-primary">
+                                {session.session_code || "-"}
+                              </code>
+                            </TableCell>
+                            <TableCell>
                               <div className="flex gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleViewAttendees(session.id)}
+                                <button
+                                  onClick={() => handleViewAttendees(session.id, session.date)}
+                                  className="group inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary hover:bg-primary hover:text-primary-foreground hover:shadow-md active:scale-95"
                                 >
-                                  {session.program_session_attendants?.[0]?.count ?? 0} Peserta
-                                </Button>
+                                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary transition-colors group-hover:bg-primary-foreground group-hover:text-primary">
+                                    {session.program_session_attendants?.[0]?.count ?? 0}
+                                  </span>
+                                  Peserta
+                                </button>
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -875,64 +1065,176 @@ export default function ProgramDetailPage() {
                                 >
                                   QR Code
                                 </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleDeleteSession(session.id)}
-                                >
-                                  Hapus
-                                </Button>
-              {/* Attendee List Modal */}
+                                {!isLocked && (
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => handleDeleteSession(session.id)}
+                                  >
+                                    Hapus
+                                  </Button>
+                                )}
+              {/* Attendee List Overlay */}
               {attendeeSessionId && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-                  <Card className="w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
-                    <CardHeader>
-                      <CardTitle>Daftar Hadir</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <div className="fixed inset-0 z-50 flex justify-end">
+                  <div
+                    className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                    onClick={closeAttendeeModal}
+                  />
+                  <div className="relative flex h-full w-full max-w-md flex-col bg-background shadow-2xl">
+                    <div className="bg-gradient-to-br from-primary to-blue-600 px-6 pb-6 pt-5 text-primary-foreground">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-widest text-primary-foreground/70">
+                            Sesi Pertemuan
+                          </p>
+                          <h2 className="mt-1 text-xl font-semibold">
+                            {attendeeSessionDate ? formatDate(attendeeSessionDate) : ""}
+                          </h2>
+                        </div>
+                        <button
+                          onClick={closeAttendeeModal}
+                          className="rounded-full bg-white/15 p-2 text-white transition-colors hover:bg-white/30"
+                          aria-label="Tutup"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          >
+                            <path d="M18 6 6 18M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm font-medium">
+                          <span className="h-2 w-2 rounded-full bg-success" />
+                          {loadingAttendees ? "Memuat..." : `${attendees.length} peserta hadir`}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 space-y-3 overflow-y-auto p-5">
                       {loadingAttendees ? (
-                        <p className="text-center py-8 text-muted-foreground">Memuat...</p>
+                        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                          <p className="mt-3 text-sm">Memuat daftar hadir...</p>
+                        </div>
                       ) : attendees.length === 0 ? (
-                        <p className="text-center py-8 text-muted-foreground">Belum ada peserta yang hadir.</p>
+                        <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+                          <svg
+                            className="h-10 w-10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                          </svg>
+                          <p className="mt-3 text-sm font-medium">Belum ada peserta yang hadir</p>
+                          <p className="mt-1 text-xs">Peserta dapat melakukan presensi melalui QR Code.</p>
+                        </div>
                       ) : (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Nama</TableHead>
-                              <TableHead>NIM</TableHead>
-                              <TableHead>Metode</TableHead>
-                              <TableHead>Waktu</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {attendees.map((a) => (
-                              <TableRow key={a.id}>
-                                <TableCell className="font-medium">
-                                  {a.profiles?.full_name || "Unknown"}
-                                </TableCell>
-                                <TableCell>{a.profiles?.nim || "-"}</TableCell>
-                                <TableCell>
+                        attendees.map((a) => {
+                          const initials =
+                            a.profiles?.full_name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?";
+                          const time = new Date(a.created_at).toLocaleTimeString("id-ID", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
+                          return (
+                            <div key={a.id} className="flex flex-col gap-2">
+                              <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-primary/40">
+                                <Avatar
+                                  src={a.profiles?.avatar_url}
+                                  fallback={initials}
+                                  className="h-10 w-10 ring-2 ring-border"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-semibold">
+                                    {a.profiles?.full_name || "Unknown"}
+                                  </p>
+                                  <p className="font-mono text-xs text-muted-foreground">
+                                    {a.profiles?.nim || "-"}
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 flex-col items-end gap-1">
                                   <Badge variant={a.method === "QR" ? "default" : "secondary"}>
                                     {a.method}
                                   </Badge>
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {new Date(a.created_at).toLocaleString("id-ID")}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                                  <span className="text-[11px] text-muted-foreground">{time}</span>
+                                </div>
+                              </div>
+                              {canManageScores && !isLocked && (
+                                <div className="flex flex-col gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-3 py-2">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-xs font-medium text-muted-foreground">
+                                      Nilai (1-10)
+                                    </span>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      max={10}
+                                      value={scoreDrafts[a.id] ?? ""}
+                                      onChange={(e) =>
+                                        setScoreDrafts({
+                                          ...scoreDrafts,
+                                          [a.id]: e.target.value,
+                                        })
+                                      }
+                                      placeholder="-"
+                                      className="h-8 w-16 text-center text-sm"
+                                    />
+                                  </div>
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-xs font-medium text-muted-foreground">
+                                      Catatan
+                                    </span>
+                                    <textarea
+                                      value={noteDrafts[a.id] ?? ""}
+                                      onChange={(e) =>
+                                        setNoteDrafts({
+                                          ...noteDrafts,
+                                          [a.id]: e.target.value,
+                                        })
+                                      }
+                                      rows={2}
+                                      placeholder="Catatan (opsional)..."
+                                      className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
                       )}
-                      <Button
-                        variant="outline"
-                        className="w-full mt-4"
-                        onClick={() => { setAttendeeSessionId(null); setAttendees([]); }}
-                      >
-                        Tutup
-                      </Button>
-                    </CardContent>
-                  </Card>
+                    </div>
+
+                    {canManageScores && !isLocked && !loadingAttendees && attendees.length > 0 && (
+                      <div className="border-t border-border bg-card px-5 py-4">
+                        {scoreMessage && (
+                          <p
+                            className={`mb-2 text-sm ${
+                              scoreMessage.type === "success" ? "text-success" : "text-destructive"
+                            }`}
+                          >
+                            {scoreMessage.text}
+                          </p>
+                        )}
+                        <Button className="w-full" disabled={savingScores} onClick={handleSaveScores}>
+                          {savingScores ? "Menyimpan..." : "Simpan Nilai"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -946,42 +1248,15 @@ export default function ProgramDetailPage() {
               </Card>
 
               {/* QR Code Modal */}
-              {qrSession && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-                  <Card className="w-full max-w-md mx-4">
-                    <CardHeader>
-                      <CardTitle>QR Code Presensi</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Tanggal</p>
-                        <p className="font-medium">{formatDate(qrSession.date)}</p>
-                      </div>
-                      <div className="text-center py-4">
-                        {loadingQr ? (
-                          <p className="text-muted-foreground">Memuat QR Code...</p>
-                        ) : (
-                          <>
-                            <p className="text-sm text-muted-foreground mb-2">
-                              Arahkan kamera ke QR Code di bawah
-                            </p>
-                            <div className="bg-white p-4 rounded-lg inline-block max-w-full overflow-hidden">
-                              <p className="text-xs font-mono break-all">{qrUrl || "Tidak ada URL QR."}</p>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => { setQrSession(null); setQrUrl(""); }}
-                      >
-                        Tutup
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+              <QrCodeModal
+                open={!!qrSession}
+                label="Sesi Program Kerja"
+                title="QR Code Presensi"
+                dateText={qrSession ? formatDate(qrSession.date) : ""}
+                url={qrUrl}
+                loading={loadingQr}
+                onClose={() => { setQrSession(null); setQrUrl(""); }}
+              />
             </div>
           )}
         </>

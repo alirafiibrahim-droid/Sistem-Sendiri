@@ -18,11 +18,19 @@ interface MemberItem {
   nim: string;
 }
 
+interface ActivePeriod {
+  id: string;
+  period_from: string;
+  period_to: string;
+  status: string;
+}
+
 export default function NewProgramPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
 
   const [divisions, setDivisions] = useState<Division[]>([]);
+  const [activePeriods, setActivePeriods] = useState<ActivePeriod[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -30,8 +38,8 @@ export default function NewProgramPage() {
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [budget, setBudget] = useState("");
   const [divisionId, setDivisionId] = useState("");
+  const [handoverId, setHandoverId] = useState("");
   const [proposalUrl, setProposalUrl] = useState("");
   const [lpjUrl, setLpjUrl] = useState("");
 
@@ -48,6 +56,18 @@ export default function NewProgramPage() {
         if (data) setDivisions(data);
       });
   }, [supabase]);
+
+  // Periode Sertijab yang sedang berjalan (dropdown "Periode")
+  useEffect(() => {
+    fetch("/api/handovers/active")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          setActivePeriods(json.data);
+          if (json.data.length === 1) setHandoverId(json.data[0].id);
+        }
+      });
+  }, []);
 
   useEffect(() => {
     supabase
@@ -81,8 +101,8 @@ export default function NewProgramPage() {
       description,
       start_date: startDate,
       end_date: endDate,
-      budget_estimate: budget ? Number(budget) : 0,
       division_id: divisionId || undefined,
+      handover_id: handoverId || undefined,
       proposal_url: proposalUrl || undefined,
       lpj_url: lpjUrl || undefined,
     });
@@ -123,8 +143,8 @@ export default function NewProgramPage() {
         description: description || "",
         start_date: startDate,
         end_date: endDate,
-        budget_estimate: budget ? Number(budget) : 0,
         division_id: divisionId || null,
+        handover_id: handoverId || null,
         proposal_url: proposalUrl || null,
         lpj_url: lpjUrl || null,
         created_by: user.id,
@@ -229,21 +249,34 @@ export default function NewProgramPage() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="period">
+                Periode (Sertijab)
+              </label>
+              <Select
+                id="period"
+                value={handoverId}
+                onChange={(e) => setHandoverId(e.target.value)}
+              >
+                <option value="">Pilih periode</option>
+                {activePeriods.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    Periode {p.period_to}
+                    {p.status === "ONGOING" ? " (Berjalan)" : ""}
+                  </option>
+                ))}
+              </Select>
+              {activePeriods.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Belum ada periode Sertijab yang berjalan.
+                </p>
+              )}
+              {errors.handover_id && (
+                <p className="text-sm text-red-500">{errors.handover_id}</p>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="budget">
-                  Estimasi Anggaran (Rp) <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="budget"
-                  type="number"
-                  placeholder="Minimal Rp 1.000"
-                  min="0"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
-                />
-                {errors.budget_estimate && <p className="text-sm text-red-500">{errors.budget_estimate}</p>}
-              </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="division">
                   Divisi Penanggung Jawab

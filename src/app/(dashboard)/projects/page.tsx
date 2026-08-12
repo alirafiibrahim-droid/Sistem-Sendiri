@@ -13,6 +13,13 @@ import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
 
+interface HandoverOption {
+  id: string;
+  period_from: string;
+  period_to: string;
+  status: string;
+}
+
 const statusVariant: Record<string, "success" | "warning" | "secondary" | "destructive" | "default"> = {
   PROPOSED: "secondary",
   APPROVED: "warning",
@@ -42,14 +49,23 @@ const urgencyLabel: Record<string, string> = {
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     year: "numeric",
   });
+}
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount);
 }
 
 export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<IncidentalProject[]>([]);
+  const [budgets, setBudgets] = useState<Map<string, number>>(new Map());
   const [meta, setMeta] = useState<ApiMeta>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -72,6 +88,10 @@ export default function ProjectsPage() {
   const [formEndDate, setFormEndDate] = useState("");
   const [formBudgetSource, setFormBudgetSource] = useState("");
 
+  // Periode Berjalan (Sertijab aktif)
+  const [handovers, setHandovers] = useState<HandoverOption[]>([]);
+  const [formHandoverId, setFormHandoverId] = useState("");
+
   const fetchProjects = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({
@@ -87,6 +107,31 @@ export default function ProjectsPage() {
     if (json.success) {
       setProjects(json.data);
       setMeta(json.meta);
+      const ids = (json.data as IncidentalProject[]).map((p: IncidentalProject) => p.id);
+      const budgetMap = new Map<string, number>();
+      if (ids.length > 0) {
+        try {
+          const budgetRes = await fetch(`/api/budget-items?project_id=${ids.join(",")}`);
+          const budgetJson = await budgetRes.json();
+          if (budgetJson.success) {
+            for (const item of budgetJson.data) {
+              if (item.parent_id) continue;
+              budgetMap.set(
+                item.project_id,
+                (budgetMap.get(item.project_id) || 0) + Number(item.subtotal)
+              );
+            }
+            for (const item of budgetJson.data) {
+              if (!item.parent_id) continue;
+              budgetMap.set(
+                item.project_id,
+                (budgetMap.get(item.project_id) || 0) + Number(item.subtotal)
+              );
+            }
+          }
+        } catch {}
+      }
+      setBudgets(budgetMap);
     }
     setLoading(false);
   }, [page, search, statusFilter]);
@@ -102,11 +147,26 @@ export default function ProjectsPage() {
     setFormStartDate(new Date().toISOString().split("T")[0]);
     setFormEndDate("");
     setFormBudgetSource("");
+    setFormHandoverId("");
     setErrors({});
   };
 
-  const openModal = () => {
+  const fetchActivePeriods = async (): Promise<HandoverOption[]> => {
+    try {
+      const res = await fetch("/api/handovers/active");
+      const json = await res.json();
+      if (json.success) {
+        setHandovers(json.data);
+        return json.data as HandoverOption[];
+      }
+    } catch {}
+    return [];
+  };
+
+  const openModal = async () => {
     resetForm();
+    const list = await fetchActivePeriods();
+    if (list.length > 0) setFormHandoverId(list[0].id);
     setShowModal(true);
   };
 
@@ -120,6 +180,7 @@ export default function ProjectsPage() {
       start_date: formStartDate,
       end_date: formEndDate || undefined,
       budget_source: formBudgetSource || undefined,
+      handover_id: formHandoverId || undefined,
     });
 
     if (!result.success) {
@@ -145,6 +206,7 @@ export default function ProjectsPage() {
         start_date: formStartDate,
         end_date: formEndDate || undefined,
         budget_source: formBudgetSource || undefined,
+        handover_id: formHandoverId || undefined,
       }),
     });
 
@@ -232,12 +294,20 @@ export default function ProjectsPage() {
                     <Button variant="outline" size="sm" onClick={() => router.push(`/projects/${p.id}`)}>
                       Detail
                     </Button>
+                    <Badge variant="secondary">
+                      Anggaran: {formatCurrency(budgets.get(p.id) || 0)}
+                    </Badge>
                     <Badge variant={urgencyVariant[p.urgency_level] || "secondary"}>
                       {urgencyLabel[p.urgency_level] || p.urgency_level}
                     </Badge>
                     <Badge variant={statusVariant[p.status] || "secondary"}>
                       {statusLabel[p.status] || p.status}
                     </Badge>
+                    {p.handovers && (
+                      <Badge variant="secondary">
+                        Periode {p.handovers.period_to}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -330,6 +400,34 @@ export default function ProjectsPage() {
                   />
                   {errors.name && (
                     <p className="text-sm text-red-500">{errors.name}</p>
+                  )}
+                </div>
+
+                {/* Periode Berjalan */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="handover_id">
+                    Periode Berjalan
+                  </label>
+                  <Select
+                    id="handover_id"
+                    value={formHandoverId}
+                    onChange={(e) => setFormHandoverId(e.target.value)}
+                  >
+                    <option value="">Pilih periode</option>
+                    {handovers.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        Periode {h.period_to}
+                        {h.status === "ONGOING" ? " (Berjalan)" : ""}
+                      </option>
+                    ))}
+                  </Select>
+                  {handovers.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Belum ada periode Sertijab yang berjalan.
+                    </p>
+                  )}
+                  {errors.handover_id && (
+                    <p className="text-sm text-red-500">{errors.handover_id}</p>
                   )}
                 </div>
 

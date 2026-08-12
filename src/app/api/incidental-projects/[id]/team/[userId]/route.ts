@@ -8,7 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function DELETE(
   request: NextRequest,
@@ -21,7 +22,7 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "projects", "delete");
     if (forbidden) return forbidden;
 
     const { id, userId } = await params;
@@ -29,7 +30,7 @@ export async function DELETE(
 
     const { data: existing } = await supabase
       .from("project_team")
-      .select("id")
+      .select("id, user_id, project_role")
       .eq("project_id", id)
       .eq("user_id", userId)
       .single();
@@ -43,6 +44,14 @@ export async function DELETE(
       .eq("user_id", userId);
 
     if (error) throw error;
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "project_team",
+      targetId: existing.id,
+      userId: uid,
+      oldValue: { project_id: id, user_id: userId, project_role: existing.project_role },
+    });
 
     return apiOk({ deleted: true });
   } catch {

@@ -8,8 +8,11 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { letterFormSchema } from "@/lib/validations/letter";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { attachHandovers } from "@/lib/handover";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 import type { LetterWithCreator, Profile } from "@/lib/types/database";
 
@@ -50,6 +53,8 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get("sort") || "created_at";
     const order = searchParams.get("order") || "desc";
     const type = searchParams.get("type") || "";
+    const start_date = searchParams.get("start_date");
+    const end_date = searchParams.get("end_date");
 
     let query = supabase
       .from("letters")
@@ -57,6 +62,14 @@ export async function GET(request: NextRequest) {
 
     if (type) {
       query = query.eq("type", type);
+    }
+
+    if (start_date) {
+      query = query.gte("date_received_sent", start_date);
+    }
+
+    if (end_date) {
+      query = query.lte("date_received_sent", end_date);
     }
 
     if (search) {
@@ -79,10 +92,12 @@ export async function GET(request: NextRequest) {
 
     const result = await attachProfiles(data as LetterWithCreator[], supabase);
 
+    const withPeriods = await attachHandovers(result, createSupabaseAdmin());
+
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
 
-    return apiOk(result, { total, page, limit, totalPages });
+    return apiOk(withPeriods, { total, page, limit, totalPages });
   } catch (e) {
     console.error("LETTERS GET ERROR:", e);
     return apiInternalError();
@@ -96,7 +111,7 @@ export async function POST(request: NextRequest) {
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "letters", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -107,7 +122,7 @@ export async function POST(request: NextRequest) {
       return apiBadRequest(msg);
     }
 
-    const { type, title, sender, date_received_sent, classification, document_url } = parsed.data;
+    const { type, title, sender, date_received_sent, classification, document_url, handover_id } = parsed.data;
 
     const refNum = `REF-${Date.now()}`;
 
@@ -120,6 +135,7 @@ export async function POST(request: NextRequest) {
         date_received_sent,
         classification: classification || "PUBLIC",
         document_url: document_url || "",
+        handover_id: handover_id || null,
         reference_number: refNum,
         created_by: uid,
       })
@@ -130,6 +146,20 @@ export async function POST(request: NextRequest) {
       console.error("LETTERS INSERT ERROR:", error);
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "letters",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        type: data.type,
+        reference_number: data.reference_number,
+        title: data.title,
+        sender: data.sender,
+        date_received_sent: data.date_received_sent,
+      },
+    });
 
     const result = (await attachProfiles([data as LetterWithCreator], supabase))[0];
 

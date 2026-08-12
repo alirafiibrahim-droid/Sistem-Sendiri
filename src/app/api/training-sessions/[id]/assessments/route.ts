@@ -9,7 +9,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 // GET /api/training-sessions/[id]/assessments
@@ -48,7 +49,7 @@ export async function POST(
     const role = getUserRole(request);
     if (!uid) return apiUnauthorized();
 
-    const forbidden = requireRole(role, ["ADMIN", "PENGURUS_INTI", "KABID", "PELATIH"]);
+    const forbidden = requireAccess(role, "training-sessions", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -153,6 +154,20 @@ export async function POST(
       if (error) return apiInternalError(error.message);
       result = data;
     }
+
+    await writeAuditLog({
+      action: existing ? "UPDATE" : "CREATE",
+      targetTable: "assessments",
+      targetId: result.id,
+      userId: uid,
+      newValue: {
+        session_id: id,
+        athlete_id,
+        metric_id: metric.id,
+        value: numValue,
+        notes: notes || null,
+      },
+    });
 
     return apiCreated(result);
   } catch (e) {

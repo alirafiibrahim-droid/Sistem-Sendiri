@@ -9,7 +9,8 @@ import {
   getUserRole,
 } from "@/lib/api-response";
 import { walletFormSchema } from "@/lib/validations/settings";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["ADMIN", "PENGURUS_INTI"]);
+    const forbidden = requireAccess(role, "settings-wallets", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -78,6 +79,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return apiInternalError(error.message);
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "wallets",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        name: data.name,
+        bank_id: data.bank_id,
+        cash_account_id: data.cash_account_id,
+        is_active: data.is_active,
+      },
+    });
+
     return apiCreated(data);
   } catch {
     return apiInternalError();

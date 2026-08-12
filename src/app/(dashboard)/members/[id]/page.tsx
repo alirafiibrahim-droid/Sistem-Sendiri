@@ -60,6 +60,7 @@ export default function MemberDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [forbidden, setForbidden] = useState(false);
 
   // Editable fields
   const [role, setRole] = useState("");
@@ -71,6 +72,25 @@ export default function MemberDetailPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: currentProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      if (currentProfile && id !== user.id) {
+        const allowedRoles = ["ADMIN", "BENDAHARA", "SEKRETARIS", "PENGURUS_INTI", "WAKIL_KETUA", "KETUA_UMUM"];
+        if (!allowedRoles.includes(currentProfile.role)) {
+          setForbidden(true);
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
     const [{ data: memberData }, { data: divData }, { data: fakData }, { data: jurData }] = await Promise.all([
       supabase.from("profiles").select("*, divisions(id, name), fakultas(id, name), jurusan(id, name)").eq("id", id).single(),
       supabase.from("divisions").select("id, name, description, created_at, updated_at").order("name"),
@@ -101,20 +121,22 @@ export default function MemberDetailPage() {
     setSaving(true);
     setMessage("");
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
+    const res = await fetch(`/api/profiles/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         role,
         status,
         division_id: divisionId || null,
         phone_number: phoneNumber || null,
         fakultas_id: fakultasId || null,
         jurusan_id: jurusanId || null,
-      })
-      .eq("id", id);
+      }),
+    });
+    const json = await res.json();
 
-    if (error) {
-      setMessage("Gagal menyimpan: " + error.message);
+    if (!json.success) {
+      setMessage("Gagal menyimpan: " + (json.error?.message || "Terjadi kesalahan."));
     } else {
       setMessage("Perubahan berhasil disimpan.");
       fetchData();
@@ -124,6 +146,15 @@ export default function MemberDetailPage() {
 
   if (loading) {
     return <div className="text-center py-8 text-muted-foreground">Memuat data...</div>;
+  }
+
+  if (forbidden) {
+    return (
+      <div className="text-center py-8 space-y-4">
+        <p className="text-muted-foreground">Anda tidak memiliki akses untuk melihat detail anggota ini.</p>
+        <Button variant="outline" onClick={() => router.back()}>Kembali</Button>
+      </div>
+    );
   }
 
   if (!member) {

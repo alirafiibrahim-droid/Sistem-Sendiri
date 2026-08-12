@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
   Table,
   TableBody,
@@ -60,6 +61,10 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [conditionFilter, setConditionFilter] = useState("");
 
+  // Disposal date range filter (Riwayat Penghapusan Aset)
+  const [disposalStartDate, setDisposalStartDate] = useState("");
+  const [disposalEndDate, setDisposalEndDate] = useState("");
+
   // Summary
   const [loanedUnits, setLoanedUnits] = useState(0);
 
@@ -106,11 +111,19 @@ export default function InventoryPage() {
   }, [supabase]);
 
   const fetchDisposals = useCallback(async () => {
-    const { data } = await supabase
+    let query = supabase
       .from("inventory_disposals")
       .select("*, inventory_items(id, code, name)")
-      .order("disposal_date", { ascending: false })
-      .limit(10);
+      .order("disposal_date", { ascending: false });
+
+    if (disposalStartDate) {
+      query = query.gte("disposal_date", disposalStartDate);
+    }
+    if (disposalEndDate) {
+      query = query.lte("disposal_date", disposalEndDate);
+    }
+
+    const { data } = await query.limit(100);
     if (!data) return;
 
     const rows = data as InventoryDisposal[];
@@ -137,7 +150,7 @@ export default function InventoryPage() {
           : null,
       })) as InventoryDisposalWithDetails[]
     );
-  }, [supabase]);
+  }, [supabase, disposalStartDate, disposalEndDate]);
 
   useEffect(() => {
     fetchItems();
@@ -321,14 +334,23 @@ export default function InventoryPage() {
       {/* Riwayat Penghapusan */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            Riwayat Penghapusan Aset
-            {disposals.length > 0 && (
-              <span className="text-sm font-normal text-muted-foreground ml-2">
-                ({disposals.length} terakhir)
-              </span>
-            )}
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>
+              Riwayat Penghapusan Aset
+              {disposals.length > 0 && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  ({disposals.length}{" "}
+                  {disposalStartDate || disposalEndDate ? "data" : "terakhir"})
+                </span>
+              )}
+            </CardTitle>
+            <DateRangeFilter
+              startDate={disposalStartDate}
+              endDate={disposalEndDate}
+              onStartDateChange={setDisposalStartDate}
+              onEndDateChange={setDisposalEndDate}
+            />
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>

@@ -1,4 +1,6 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { DEFAULT_USER_PASSWORD } from "@/lib/auth-constants";
 import {
   apiOk,
   apiCreated,
@@ -8,8 +10,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
-import type { PaginationParams } from "@/lib/types/api";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 // GET /api/profiles?page=1&limit=25&search=&role=&status=&division_id=&sort=full_name&order=asc
 export async function GET(request: Request) {
@@ -62,8 +64,9 @@ export async function GET(request: Request) {
 // POST /api/profiles (Admin/Pengurus Inti only - manual add member)
 export async function POST(request: Request) {
   try {
+    const uid = getUid(request);
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(role, "members", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -86,10 +89,16 @@ export async function POST(request: Request) {
       return apiBadRequest("NIM atau Email sudah terdaftar dalam sistem.");
     }
 
-    // Create auth user via service role (invited)
+    // Buat akun auth via service role dengan password default.
+    // User langsung bisa login memakai email/Nama Lengkap + password default,
+    // lalu mengganti password-nya sendiri di Pengaturan > Profil Saya.
+    const admin = createSupabaseAdmin();
     const { data: authData, error: authError } =
-      await supabase.auth.admin.inviteUserByEmail(email, {
-        data: {
+      await admin.auth.admin.createUser({
+        email,
+        password: DEFAULT_USER_PASSWORD,
+        email_confirm: true,
+        user_metadata: {
           full_name,
           nim,
           phone_number,
@@ -100,11 +109,34 @@ export async function POST(request: Request) {
         },
       });
 
-    if (authError) return apiInternalError(authError.message);
+    if (authError) {
+      if (authError.message.toLowerCase().includes("already been registered")) {
+        return apiBadRequest("Email sudah terdaftar dalam sistem.");
+      }
+      return apiInternalError(authError.message);
+    }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "profiles",
+      targetId: authData.user.id,
+      userId: uid,
+      newValue: {
+        email,
+        full_name,
+        nim,
+        phone_number: phone_number || null,
+        role: userRole || "ANGGOTA",
+        division_id: division_id || null,
+        fakultas_id: fakultas_id || null,
+        jurusan_id: jurusan_id || null,
+      },
+    });
 
     return apiCreated({
       id: authData.user.id,
-      message: "Anggota berhasil ditambahkan. Email undangan telah dikirim.",
+      message:
+        "User berhasil dibuat. Password login default: tapaksuciunisa1! Silakan ganti di Pengaturan > Profil Saya.",
     });
   } catch {
     return apiInternalError();

@@ -7,19 +7,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import { achievementFormSchema } from "@/lib/validations/achievement";
+import {
+  JUARA_OPTIONS,
+  JUARA_LABELS,
+  LEVEL_OPTIONS,
+  CATEGORY_OPTIONS,
+} from "@/lib/achievement";
 import type { Achievement } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
 type FormErrors = Record<string, string>;
+
+interface AchievementSummary {
+  juara: Record<string, number>;
+  level: Record<string, number>;
+  kategori: Record<string, number>;
+}
 
 interface ParticipantRow {
   user_id: string;
@@ -31,6 +36,13 @@ interface MemberOption {
   id: string;
   full_name: string;
   nim: string;
+}
+
+interface HandoverOption {
+  id: string;
+  period_from: string;
+  period_to: string;
+  status: string;
 }
 
 const statusVariant: Record<string, "success" | "warning" | "destructive"> = {
@@ -53,7 +65,7 @@ const typeLabel: Record<string, string> = {
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     year: "numeric",
   });
 }
@@ -67,8 +79,14 @@ export default function AchievementsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
+  const [juaraFilter, setJuaraFilter] = useState("");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
   const [page, setPage] = useState(1);
   const limit = 15;
+
+  // Summary state
+  const [summary, setSummary] = useState<AchievementSummary | null>(null);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -78,10 +96,15 @@ export default function AchievementsPage() {
   // Members data for dropdown
   const [members, setMembers] = useState<MemberOption[]>([]);
 
+  // Periode Berjalan (Sertijab aktif)
+  const [handovers, setHandovers] = useState<HandoverOption[]>([]);
+  const [formHandoverId, setFormHandoverId] = useState("");
+
   // Form state
   const [formTitle, setFormTitle] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formType, setFormType] = useState<"ORGANIZATION" | "INDIVIDUAL">("ORGANIZATION");
+  const [formJuara, setFormJuara] = useState("");
   const [formCategory, setFormCategory] = useState("");
   const [formLevel, setFormLevel] = useState("");
   const [formOrganizer, setFormOrganizer] = useState("");
@@ -101,6 +124,9 @@ export default function AchievementsPage() {
     if (typeFilter) params.set("type", typeFilter);
     if (statusFilter) params.set("status", statusFilter);
     if (levelFilter) params.set("level", levelFilter);
+    if (juaraFilter) params.set("juara", juaraFilter);
+    if (filterStartDate) params.set("start_date", filterStartDate);
+    if (filterEndDate) params.set("end_date", filterEndDate);
 
     const res = await fetch(`/api/achievements?${params}`);
     const json = await res.json();
@@ -110,11 +136,23 @@ export default function AchievementsPage() {
       setMeta(json.meta);
     }
     setLoading(false);
-  }, [page, search, typeFilter, statusFilter, levelFilter]);
+  }, [page, search, typeFilter, statusFilter, levelFilter, juaraFilter, filterStartDate, filterEndDate]);
 
   useEffect(() => {
     fetchAchievements();
   }, [fetchAchievements]);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/achievements/summary");
+      const json = await res.json();
+      if (json.success) setSummary(json.data);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
 
   const fetchMembers = async () => {
     const res = await fetch("/api/profiles?limit=500");
@@ -130,15 +168,28 @@ export default function AchievementsPage() {
     }
   };
 
+  const fetchActivePeriods = async () => {
+    try {
+      const res = await fetch("/api/handovers/active");
+      const json = await res.json();
+      if (json.success) {
+        setHandovers(json.data);
+        if (json.data.length > 0) setFormHandoverId(json.data[0].id);
+      }
+    } catch {}
+  };
+
   const resetForm = () => {
     setFormTitle("");
     setFormDescription("");
     setFormType("ORGANIZATION");
+    setFormJuara("");
     setFormCategory("");
     setFormLevel("");
     setFormOrganizer("");
     setFormDate(new Date().toISOString().split("T")[0]);
     setFormProofUrl("");
+    setFormHandoverId("");
     setFormParticipants([]);
     setErrors({});
   };
@@ -146,6 +197,7 @@ export default function AchievementsPage() {
   const openModal = () => {
     resetForm();
     fetchMembers();
+    fetchActivePeriods();
     setShowModal(true);
   };
 
@@ -177,11 +229,13 @@ export default function AchievementsPage() {
       title: formTitle,
       description: formDescription || undefined,
       type: formType,
+      juara: formType === "ORGANIZATION" ? formJuara : undefined,
       category: formCategory,
       level: formLevel,
       organizer: formOrganizer || undefined,
       achievement_date: formDate,
       proof_url: formProofUrl || undefined,
+      handover_id: formHandoverId || undefined,
       participants:
         formParticipants.length > 0
           ? formParticipants.map((p) => ({
@@ -212,11 +266,13 @@ export default function AchievementsPage() {
         title: formTitle,
         description: formDescription || undefined,
         type: formType,
+        juara: formType === "ORGANIZATION" ? formJuara : undefined,
         category: formCategory,
         level: formLevel,
         organizer: formOrganizer || undefined,
         achievement_date: formDate,
         proof_url: formProofUrl || undefined,
+        handover_id: formHandoverId || undefined,
         participants:
           formParticipants.length > 0
             ? formParticipants.map((p) => ({
@@ -239,6 +295,7 @@ export default function AchievementsPage() {
     setShowModal(false);
     setFormLoading(false);
     fetchAchievements();
+    fetchSummary();
   };
 
   const totalPages = meta.totalPages || 1;
@@ -306,6 +363,76 @@ export default function AchievementsPage() {
           <option value="Universitas">Universitas</option>
           <option value="Fakultas">Fakultas</option>
         </Select>
+        <Select
+          value={juaraFilter}
+          onChange={(e) => {
+            setJuaraFilter(e.target.value);
+            setPage(1);
+          }}
+          className="w-36"
+        >
+          <option value="">Semua Juara</option>
+          {JUARA_OPTIONS.map((j) => (
+            <option key={j.value} value={j.value}>
+              {j.label}
+            </option>
+          ))}
+        </Select>
+        <DateRangeFilter
+          startDate={filterStartDate}
+          endDate={filterEndDate}
+          onStartDateChange={(v) => {
+            setFilterStartDate(v);
+            setPage(1);
+          }}
+          onEndDateChange={(v) => {
+            setFilterEndDate(v);
+            setPage(1);
+          }}
+        />
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Summary Juara</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {JUARA_OPTIONS.map((j) => (
+              <div key={j.value} className="flex items-center justify-between">
+                <span className="text-sm">{j.label}</span>
+                <Badge variant="outline">{summary?.juara[j.value] ?? 0}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Summary Level</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {LEVEL_OPTIONS.map((l) => (
+              <div key={l} className="flex items-center justify-between">
+                <span className="text-sm">{l}</span>
+                <Badge variant="outline">{summary?.level[l] ?? 0}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Summary Kategori</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {CATEGORY_OPTIONS.map((c) => (
+              <div key={c} className="flex items-center justify-between">
+                <span className="text-sm">{c}</span>
+                <Badge variant="outline">{summary?.kategori[c] ?? 0}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Achievement Cards */}
@@ -328,7 +455,15 @@ export default function AchievementsPage() {
                     <div className="flex items-center gap-2">
                       <Badge variant="outline">{a.category}</Badge>
                       <Badge variant="outline">{a.level}</Badge>
+                      {a.juara && (
+                        <Badge variant="success">{JUARA_LABELS[a.juara]}</Badge>
+                      )}
                       <Badge variant="outline">{typeLabel[a.type] || a.type}</Badge>
+                      {a.handovers && (
+                        <Badge variant="secondary">
+                          Periode {a.handovers.period_to}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <Badge variant={statusVariant[a.status] || "secondary"}>
@@ -454,6 +589,58 @@ export default function AchievementsPage() {
                     <p className="text-sm text-red-500">{errors.type}</p>
                   )}
                 </div>
+
+                {/* Periode Berjalan */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="handover_id">
+                    Periode Berjalan
+                  </label>
+                  <Select
+                    id="handover_id"
+                    value={formHandoverId}
+                    onChange={(e) => setFormHandoverId(e.target.value)}
+                  >
+                    <option value="">Pilih periode</option>
+                    {handovers.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        Periode {h.period_to}
+                        {h.status === "ONGOING" ? " (Berjalan)" : ""}
+                      </option>
+                    ))}
+                  </Select>
+                  {handovers.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Belum ada periode Sertijab yang berjalan.
+                    </p>
+                  )}
+                  {errors.handover_id && (
+                    <p className="text-sm text-red-500">{errors.handover_id}</p>
+                  )}
+                </div>
+
+                {/* Juara (khusus tipe Organisasi) */}
+                {formType === "ORGANIZATION" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="juara">
+                      Juara <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      id="juara"
+                      value={formJuara}
+                      onChange={(e) => setFormJuara(e.target.value)}
+                    >
+                      <option value="">Pilih juara</option>
+                      {JUARA_OPTIONS.map((j) => (
+                        <option key={j.value} value={j.value}>
+                          {j.label}
+                        </option>
+                      ))}
+                    </Select>
+                    {errors.juara && (
+                      <p className="text-sm text-red-500">{errors.juara}</p>
+                    )}
+                  </div>
+                )}
 
                 {/* Judul */}
                 <div className="space-y-2">
@@ -633,21 +820,29 @@ export default function AchievementsPage() {
                         )}
 
                         <div className="flex gap-2">
-                          <div className="flex-1">
-                            <Input
-                              placeholder="Juara (contoh: Juara 1)"
-                              value={p.juara}
-                              onChange={(e) =>
-                                updateParticipant(idx, "juara", e.target.value)
-                              }
-                            />
-                            {errors[`participants.${idx}.juara`] && (
-                              <p className="text-xs text-red-500">
-                                {errors[`participants.${idx}.juara`]}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex-1">
+                          {formType === "INDIVIDUAL" && (
+                            <div className="flex-1">
+                              <Select
+                                value={p.juara}
+                                onChange={(e) =>
+                                  updateParticipant(idx, "juara", e.target.value)
+                                }
+                              >
+                                <option value="">Pilih juara</option>
+                                {JUARA_OPTIONS.map((j) => (
+                                  <option key={j.value} value={j.value}>
+                                    {j.label}
+                                  </option>
+                                ))}
+                              </Select>
+                              {errors[`participants.${idx}.juara`] && (
+                                <p className="text-xs text-red-500">
+                                  {errors[`participants.${idx}.juara`]}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          <div className={formType === "INDIVIDUAL" ? "flex-1" : "w-full"}>
                             <Input
                               placeholder="Keterangan (opsional)"
                               value={p.keterangan}

@@ -7,6 +7,7 @@ import {
   apiInternalError,
   getUid,
 } from "@/lib/api-response";
+import { writeAuditLog } from "@/lib/audit";
 
 // GET /api/inventory/[id]/damage-logs
 export async function GET(
@@ -80,6 +81,20 @@ export async function POST(
         .update({ condition: "DAMAGED_HEAVY" })
         .eq("id", id);
     }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "inventory_damage_logs",
+      targetId: log.id,
+      userId: uid,
+      newValue: {
+        item_id: id,
+        incident_date,
+        type,
+        description,
+        estimated_cost: estimated_cost || 0,
+      },
+    });
 
     return apiCreated(log);
   } catch {

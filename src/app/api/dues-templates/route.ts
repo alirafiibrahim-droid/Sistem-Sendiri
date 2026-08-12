@@ -8,7 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(role, "finances", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -79,6 +80,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return apiInternalError();
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "dues_templates",
+      targetId: data.id,
+      userId: uid,
+      newValue: {
+        title: data.title,
+        amount: data.amount,
+        due_date: data.due_date,
+      },
+    });
 
     return apiCreated(data);
   } catch {

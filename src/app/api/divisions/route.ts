@@ -8,7 +8,8 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 // GET /api/divisions
 export async function GET(request: Request) {
@@ -29,13 +30,14 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/divisions (Admin/Pengurus Inti only)
+// POST /api/divisions (hanya role dengan akses create Divisi)
 export async function POST(request: Request) {
   try {
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(userRole, "settings-divisions", "create");
     if (forbidden) return forbidden;
 
+    const uid = getUid(request);
     const body = await request.json();
     const { name, description } = body;
 
@@ -53,6 +55,14 @@ export async function POST(request: Request) {
         return apiBadRequest("Nama divisi sudah ada.");
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "divisions",
+      targetId: data.id,
+      userId: uid,
+      newValue: { name: data.name, description: data.description },
+    });
 
     return apiCreated(data);
   } catch {

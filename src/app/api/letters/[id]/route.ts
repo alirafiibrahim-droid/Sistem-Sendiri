@@ -2,15 +2,17 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiNotFound,
   apiBadRequest,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { letterFormSchema } from "@/lib/validations/letter";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { attachHandovers } from "@/lib/handover";
+import { writeAuditLog } from "@/lib/audit";
 import { NextRequest } from "next/server";
 import type { LetterWithCreator, Profile } from "@/lib/types/database";
 
@@ -47,6 +49,10 @@ export async function GET(
     const uid = getUid(request);
     if (!uid) return apiUnauthorized();
 
+    const role = getUserRole(request);
+    const forbidden = requireAccess(role, "letters-detail", "read");
+    if (forbidden) return forbidden;
+
     const { id } = await params;
 
     const { data, error } = await supabase
@@ -62,7 +68,9 @@ export async function GET(
 
     const result = (await attachProfiles([data as LetterWithCreator], supabase))[0];
 
-    return apiOk(result);
+    const [withPeriod] = await attachHandovers([result], createSupabaseAdmin());
+
+    return apiOk(withPeriod);
   } catch (e) {
     console.error("LETTERS GET ERROR:", e);
     return apiInternalError();
@@ -79,7 +87,7 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    const forbidden = requireRole(role, ["PENGURUS_INTI", "KABID"]);
+    const forbidden = requireAccess(role, "letters", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -93,7 +101,7 @@ export async function PATCH(
 
     const { data: existing } = await supabase
       .from("letters")
-      .select("id")
+      .select("id, type, title, sender, date_received_sent, classification")
       .eq("id", id)
       .single();
 
@@ -110,6 +118,26 @@ export async function PATCH(
       console.error("LETTERS PATCH ERROR:", error);
       return apiInternalError(error.message);
     }
+
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const existingRow = existing as unknown as Record<string, unknown>;
+    const updatedRow = data as unknown as Record<string, unknown>;
+    for (const key of ["type", "title", "sender", "date_received_sent", "classification"]) {
+      if (JSON.stringify(existingRow[key]) !== JSON.stringify(updatedRow[key])) {
+        oldValue[key] = existingRow[key] ?? null;
+        newValue[key] = updatedRow[key] ?? null;
+      }
+    }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "letters",
+      targetId: id,
+      userId: uid,
+      oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+      newValue: Object.keys(newValue).length > 0 ? newValue : null,
+    });
 
     const result = (await attachProfiles([data as LetterWithCreator], supabase))[0];
 
@@ -130,13 +158,14 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const role = getUserRole(request);
-    if (!isAdmin(role)) return apiForbidden();
+    const forbidden = requireAccess(role, "letters", "delete");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
 
     const { data: existing } = await supabase
       .from("letters")
-      .select("id")
+      .select("id, type, reference_number, title, sender")
       .eq("id", id)
       .single();
 
@@ -148,6 +177,19 @@ export async function DELETE(
       console.error("LETTERS DELETE ERROR:", error);
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "letters",
+      targetId: id,
+      userId: uid,
+      oldValue: {
+        type: existing.type,
+        reference_number: existing.reference_number,
+        title: existing.title,
+        sender: existing.sender,
+      },
+    });
 
     return apiOk({ message: "Letter deleted" });
   } catch (e) {

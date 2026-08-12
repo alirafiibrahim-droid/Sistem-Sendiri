@@ -1,4 +1,4 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+﻿import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiCreated,
@@ -7,8 +7,9 @@ import {
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
 import { fakultasFormSchema } from "@/lib/validations/settings";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET() {
   try {
@@ -24,7 +25,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(userRole, "settings-fakultas-jurusan", "create");
     if (forbidden) return forbidden;
 
     const body = await request.json();
@@ -47,6 +48,14 @@ export async function POST(request: Request) {
       if (error.code === "23505") return apiBadRequest("Nama fakultas sudah ada.");
       return apiInternalError(error.message);
     }
+
+    await writeAuditLog({
+      action: "CREATE",
+      targetTable: "fakultas",
+      targetId: data.id,
+      userId: getUid(request),
+      newValue: { name: data.name, description: data.description },
+    });
 
     return apiCreated(data);
   } catch {

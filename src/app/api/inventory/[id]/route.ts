@@ -2,14 +2,14 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import {
   apiOk,
   apiUnauthorized,
-  apiForbidden,
   apiBadRequest,
   apiNotFound,
   apiInternalError,
   getUid,
   getUserRole,
 } from "@/lib/api-response";
-import { isAdmin, requireRole } from "@/lib/authz";
+import { requireAccess } from "@/lib/access";
+import { writeAuditLog } from "@/lib/audit";
 
 // GET /api/inventory/[id]
 export async function GET(
@@ -46,7 +46,7 @@ export async function PATCH(
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    const forbidden = requireRole(userRole, ["PENGURUS_INTI"]);
+    const forbidden = requireAccess(userRole, "inventory-add", "update");
     if (forbidden) return forbidden;
 
     const { id } = await params;
@@ -54,6 +54,14 @@ export async function PATCH(
     const { name, category, stock, unit_price, condition, location, description, photo_url, is_active } = body;
 
     const supabase = await createSupabaseServer();
+
+    const { data: existing } = await supabase
+      .from("inventory_items")
+      .select("id, name, category, stock, unit_price, condition, location")
+      .eq("id", id)
+      .single();
+
+    if (!existing) return apiNotFound("Barang tidak ditemukan.");
 
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;
@@ -78,6 +86,27 @@ export async function PATCH(
       .single();
 
     if (error) return apiInternalError(error.message);
+
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const existingRow = existing as unknown as Record<string, unknown>;
+    const updatedRow = data as unknown as Record<string, unknown>;
+    for (const key of ["name", "category", "stock", "unit_price", "condition", "location", "is_active"]) {
+      if (JSON.stringify(existingRow[key]) !== JSON.stringify(updatedRow[key])) {
+        oldValue[key] = existingRow[key] ?? null;
+        newValue[key] = updatedRow[key] ?? null;
+      }
+    }
+
+    await writeAuditLog({
+      action: "UPDATE",
+      targetTable: "inventory_items",
+      targetId: id,
+      userId: uid,
+      oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+      newValue: Object.keys(newValue).length > 0 ? newValue : null,
+    });
+
     return apiOk(data);
   } catch {
     return apiInternalError();
@@ -94,13 +123,34 @@ export async function DELETE(
     if (!uid) return apiUnauthorized();
 
     const userRole = getUserRole(request);
-    if (!isAdmin(userRole)) return apiForbidden();
+    const forbidden = requireAccess(userRole, "inventory-add", "delete");
+    if (forbidden) return forbidden;
 
     const { id } = await params;
     const supabase = await createSupabaseServer();
 
+    const { data: existing } = await supabase
+      .from("inventory_items")
+      .select("id, name, code")
+      .eq("id", id)
+      .single();
+
+    if (!existing) return apiNotFound("Barang tidak ditemukan.");
+
     const { error } = await supabase.from("inventory_items").delete().eq("id", id);
     if (error) return apiInternalError(error.message);
+
+    await writeAuditLog({
+      action: "DELETE",
+      targetTable: "inventory_items",
+      targetId: id,
+      userId: uid,
+      oldValue: {
+        name: existing.name,
+        code: existing.code,
+      },
+    });
+
     return apiOk(null);
   } catch {
     return apiInternalError();

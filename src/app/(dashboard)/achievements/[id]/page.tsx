@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { achievementFormSchema } from "@/lib/validations/achievement";
+import { JUARA_OPTIONS, JUARA_LABELS } from "@/lib/achievement";
 import type {
   AchievementWithParticipants,
   AchievementParticipantWithProfile,
@@ -45,7 +46,7 @@ const typeLabel: Record<string, string> = {
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("id-ID", {
     day: "2-digit",
-    month: "long",
+    month: "2-digit",
     year: "numeric",
   });
 }
@@ -70,6 +71,7 @@ export default function AchievementDetailPage() {
   const [formTitle, setFormTitle] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formType, setFormType] = useState<"ORGANIZATION" | "INDIVIDUAL">("ORGANIZATION");
+  const [formJuara, setFormJuara] = useState("");
   const [formCategory, setFormCategory] = useState("");
   const [formLevel, setFormLevel] = useState("");
   const [formOrganizer, setFormOrganizer] = useState("");
@@ -121,6 +123,7 @@ export default function AchievementDetailPage() {
     setFormTitle(achievement.title);
     setFormDescription(achievement.description || "");
     setFormType(achievement.type);
+    setFormJuara(achievement.juara || "");
     setFormCategory(achievement.category);
     setFormLevel(achievement.level);
     setFormOrganizer(achievement.organizer || "");
@@ -137,6 +140,7 @@ export default function AchievementDetailPage() {
       title: formTitle,
       description: formDescription || undefined,
       type: formType,
+      juara: formType === "ORGANIZATION" ? formJuara : undefined,
       category: formCategory,
       level: formLevel,
       organizer: formOrganizer || undefined,
@@ -164,6 +168,7 @@ export default function AchievementDetailPage() {
         title: formTitle,
         description: formDescription || null,
         type: formType,
+        juara: formType === "ORGANIZATION" ? (formJuara || null) : null,
         category: formCategory,
         level: formLevel,
         organizer: formOrganizer || null,
@@ -231,7 +236,7 @@ export default function AchievementDetailPage() {
   };
 
   const isCreator = achievement?.created_by === userId;
-  const canEdit = userRole === "ADMIN" || userRole === "PENGURUS_INTI" || isCreator;
+  const canEdit = ["ADMIN", "PEMBINA", "WAKIL_KETUA", "KETUA_UMUM"].includes(userRole) || isCreator;
   const canVerify = userRole === "ADMIN" || userRole === "PENGURUS_INTI";
   const canDelete = userRole === "ADMIN";
 
@@ -323,6 +328,23 @@ export default function AchievementDetailPage() {
                 </div>
                 {editErrors.type && <p className="text-sm text-red-500">{editErrors.type}</p>}
               </div>
+
+              {formType === "ORGANIZATION" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Juara <span className="text-red-500">*</span>
+                  </label>
+                  <Select value={formJuara} onChange={(e) => setFormJuara(e.target.value)}>
+                    <option value="">Pilih juara</option>
+                    {JUARA_OPTIONS.map((j) => (
+                      <option key={j.value} value={j.value}>
+                        {j.label}
+                      </option>
+                    ))}
+                  </Select>
+                  {editErrors.juara && <p className="text-sm text-red-500">{editErrors.juara}</p>}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">
@@ -452,6 +474,12 @@ export default function AchievementDetailPage() {
                 <span className="text-muted-foreground">Level</span>
                 <Badge variant="outline">{achievement.level}</Badge>
               </div>
+              {achievement.juara && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Juara</span>
+                  <Badge variant="success">{JUARA_LABELS[achievement.juara] || achievement.juara}</Badge>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Penyelenggara</span>
                 <span>{achievement.organizer || "-"}</span>
@@ -460,6 +488,12 @@ export default function AchievementDetailPage() {
                 <span className="text-muted-foreground">Tanggal</span>
                 <span>{formatDate(achievement.achievement_date)}</span>
               </div>
+              {achievement.handovers && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Periode</span>
+                  <span>Periode {achievement.handovers.period_to}</span>
+                </div>
+              )}
               {achievement.description && (
                 <div className="pt-2 border-t">
                   <span className="text-muted-foreground text-sm">Deskripsi</span>
@@ -599,14 +633,17 @@ export default function AchievementDetailPage() {
                 <TableHead>No.</TableHead>
                 <TableHead>Nama Anggota</TableHead>
                 <TableHead>NIM</TableHead>
-                <TableHead>Juara</TableHead>
+                {achievement.type === "INDIVIDUAL" && <TableHead>Juara</TableHead>}
                 <TableHead>Keterangan</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {participants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell
+                    colSpan={achievement.type === "INDIVIDUAL" ? 5 : 4}
+                    className="text-center text-muted-foreground py-8"
+                  >
                     Tidak ada anggota berprestasi terdaftar.
                   </TableCell>
                 </TableRow>
@@ -620,9 +657,11 @@ export default function AchievementDetailPage() {
                     <TableCell className="font-mono text-sm">
                       {p.profiles?.nim || "-"}
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="success">{p.juara || "-"}</Badge>
-                    </TableCell>
+                    {achievement.type === "INDIVIDUAL" && (
+                      <TableCell>
+                        <Badge variant="success">{JUARA_LABELS[p.juara] || p.juara || "-"}</Badge>
+                      </TableCell>
+                    )}
                     <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                       {p.keterangan || "-"}
                     </TableCell>
