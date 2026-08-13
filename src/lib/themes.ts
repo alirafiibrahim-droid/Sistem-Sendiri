@@ -184,10 +184,13 @@ export function getContrastText(hex: string): string {
 // ----------------------------------------------------------------------------
 
 export function applyTheme(def: ThemeDefinition) {
-  const { background, sidebarBg, foreground, primary } = def.colors;
+  const { background, sidebarBg, primary } = def.colors;
   const root = document.documentElement;
   const set = (key: string, value: string) => root.style.setProperty(key, value);
 
+  // Warna font selalu disesuaikan agar kontras dengan latar agar mudah dibaca:
+  // latar terang -> font gelap, latar gelap -> font terang.
+  const foreground = getContrastText(background);
   const primaryForeground = getContrastText(primary);
   const sidebarForeground = getContrastText(sidebarBg);
 

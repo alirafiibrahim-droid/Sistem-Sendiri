@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { financeFormSchema } from "@/lib/validations/finance";
+import CameraCapture from "@/components/camera-capture";
 import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount, IncidentalProject, UserRole, HandoverWithCreator } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
@@ -140,6 +141,7 @@ export default function FinancesPage() {
   const [formSubjectId, setFormSubjectId] = useState("");
   const [formReceiptUrls, setFormReceiptUrls] = useState<string[]>([]);
   const [receiptUploading, setReceiptUploading] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [formWalletId, setFormWalletId] = useState("");
   const [formHandoverId, setFormHandoverId] = useState("");
 
@@ -356,25 +358,23 @@ export default function FinancesPage() {
 
   const addReceiptUrl = () => setFormReceiptUrls([...formReceiptUrls, ""]);
 
-  // Upload foto nota transaksi langsung ke storage (bucket: receipts)
-  const handleReceiptFile = async (file: File) => {
-    if (!file) return;
+  // Simpan hasil capture kamera ke storage (bucket: receipts) lalu tambah ke bukti
+  const handleCaptureBlob = async (blob: Blob) => {
     setReceiptUploading(true);
     setErrors((prev) => ({ ...prev, _form: "" }));
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const {
       data: { user },
     } = await supabase.auth.getUser();
     const filePath = `receipts/${user?.id || "anon"}/${Date.now()}-${Math.random()
       .toString(36)
-      .slice(2, 10)}.${ext}`;
+      .slice(2, 10)}.jpg`;
     const { error } = await supabase.storage
       .from("receipts")
-      .upload(filePath, file, { upsert: false });
+      .upload(filePath, blob, { upsert: false, contentType: "image/jpeg" });
     if (error) {
       setErrors((prev) => ({
         ...prev,
-        _form: "Gagal mengunggah foto nota: " + error.message,
+        _form: "Gagal menyimpan foto nota: " + error.message,
       }));
       setReceiptUploading(false);
       return;
@@ -382,6 +382,7 @@ export default function FinancesPage() {
     const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(filePath);
     setFormReceiptUrls((prev) => [...prev, urlData.publicUrl]);
     setReceiptUploading(false);
+    setCameraOpen(false);
   };
 
   const updateReceiptUrl = (index: number, value: string) => {
@@ -1181,22 +1182,19 @@ export default function FinancesPage() {
                       ))}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50">
-                        <Camera className="h-4 w-4" />
-                        {receiptUploading ? "Mengunggah..." : "Foto Nota"}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="hidden"
-                          disabled={receiptUploading}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleReceiptFile(file);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={receiptUploading}
+                        onClick={() => {
+                          setCameraOpen(true);
+                          setErrors((prev) => ({ ...prev, _form: "" }));
+                        }}
+                      >
+                        <Camera className="mr-1.5 h-4 w-4" />
+                        {receiptUploading ? "Menyimpan..." : "Capture"}
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -1238,6 +1236,13 @@ export default function FinancesPage() {
           </div>
         </div>
       )}
+
+      {/* Camera Capture Nota */}
+      <CameraCapture
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={handleCaptureBlob}
+      />
 
       {/* Modal Konfirmasi Hapus Transaksi */}
       {confirmDelete && (

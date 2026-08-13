@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
 import type { OrganizationSettings, Division, Fakultas, Jurusan, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
-import { THEMES, type ThemeKey } from "@/lib/themes";
+import { THEMES, getContrastText, type ThemeKey } from "@/lib/themes";
 import { useTheme } from "@/components/layout/theme-provider";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
@@ -1043,7 +1043,7 @@ export default function SettingsPage() {
                     )}
                   >
                     <div className="flex overflow-hidden rounded-lg border border-border h-10">
-                      {[t.colors.background, t.colors.sidebarBg, t.colors.foreground, t.colors.primary].map((c, i) => (
+                      {[t.colors.background, t.colors.sidebarBg, getContrastText(t.colors.background), t.colors.primary].map((c, i) => (
                         <span key={i} className="flex-1" style={{ backgroundColor: c }} />
                       ))}
                     </div>
