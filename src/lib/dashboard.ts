@@ -92,6 +92,15 @@ export interface InventoryLoanItem {
   status: string;
 }
 
+export interface TrainingSessionItem {
+  id: string;
+  name: string;
+  date: string;
+  duration_minutes: number | null;
+  intensity: string | null;
+  attendance: number;
+}
+
 export interface DashboardData {
   overview: {
     orgName: string;
@@ -133,6 +142,7 @@ export interface DashboardData {
     sessionCount: number;
     attendanceCount: number;
     assessmentCount: number;
+    recentSessions: TrainingSessionItem[];
   };
   achievements: {
     total: number;
@@ -636,13 +646,29 @@ async function buildAthletics(supabase: SupabaseClient): Promise<DashboardData["
       .from("assessments")
       .select("id", { count: "exact", head: true });
 
+    const { data: recentRows } = await supabase
+      .from("training_sessions")
+      .select("id, name, session_type, date, duration_minutes, intensity, training_session_attendants(count)")
+      .order("date", { ascending: false })
+      .limit(5);
+
+    const recentSessions: TrainingSessionItem[] = (recentRows || []).map((r) => ({
+      id: r.id,
+      name: r.name || r.session_type || "Sesi Latihan",
+      date: r.date,
+      duration_minutes: r.duration_minutes,
+      intensity: r.intensity,
+      attendance: (r.training_session_attendants as Array<{ count: number }> | null)?.[0]?.count || 0,
+    }));
+
     return {
       athleteCount: athleteCount || 0,
       sessionCount: sessionCount || 0,
       attendanceCount: attendanceCount || 0,
       assessmentCount: assessmentCount || 0,
+      recentSessions,
     };
-  }, { athleteCount: 0, sessionCount: 0, attendanceCount: 0, assessmentCount: 0 });
+  }, { athleteCount: 0, sessionCount: 0, attendanceCount: 0, assessmentCount: 0, recentSessions: [] });
 }
 
 // ----------------------------------------------------------------------------

@@ -373,10 +373,30 @@ function AthleticsSection({ data }: { data: DashboardData["athletics"] }) {
         <StatCard label="Penilaian" value={formatNumber(data.assessmentCount)} tone="muted" />
       </div>
       <Card className="mt-4">
-        <CardContent className="p-4 text-sm text-muted-foreground">
-          {data.athleteCount > 0
-            ? `Tercatat ${formatNumber(data.athleteCount)} atlet aktif dengan ${formatNumber(data.sessionCount)} sesi latihan dan ${formatNumber(data.assessmentCount)} penilaian performa.`
-            : "Belum ada data keatletan."}
+        <CardContent className="p-4">
+          <h4 className="mb-2 text-sm font-semibold text-muted-foreground">Sesi Latihan Terbaru</h4>
+          {data.recentSessions.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <div className="space-y-2">
+              {data.recentSessions.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{s.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(s.date)}
+                      {s.duration_minutes ? ` · ${s.duration_minutes} menit` : ""}
+                      {s.intensity ? ` · Intensitas ${s.intensity}` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold">{formatNumber(s.attendance)}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Hadir</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </SectionCard>
