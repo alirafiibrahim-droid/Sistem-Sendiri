@@ -109,6 +109,7 @@ CREATE TABLE public.profiles (
     phone_number VARCHAR(20),
     status       public.user_status NOT NULL DEFAULT 'AKTIF',
     avatar_url   TEXT,
+    theme        VARCHAR(50) NOT NULL DEFAULT 'default',
     joined_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -687,7 +688,9 @@ COMMENT ON TABLE public.inventory_damage_logs IS 'Log kerusakan/kehilangan/pemel
 CREATE TABLE public.inventory_purchases (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     item_id         UUID NOT NULL REFERENCES public.inventory_items(id) ON DELETE CASCADE,
+    quantity        INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
     amount          NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
     date            DATE NOT NULL,
     wallet_id       UUID REFERENCES public.wallets(id) ON DELETE SET NULL,
     bank_id         UUID REFERENCES public.banks(id) ON DELETE SET NULL,

@@ -254,8 +254,8 @@ BEGIN
   ON CONFLICT (code) DO NOTHING;
 
   -- Pembelian inventaris (RPT-INV-03)
-  INSERT INTO public.inventory_purchases (item_id, amount, date, wallet_id, description, created_by)
-  SELECT i.id, 9000000, '2026-05-10',
+  INSERT INTO public.inventory_purchases (item_id, quantity, amount, subtotal, date, wallet_id, description, created_by)
+  SELECT i.id, 2, 4500000, 9000000, '2026-05-10',
          (SELECT id FROM public.wallets WHERE name = 'Dompet BNI'),
          'Pembelian 2 unit proyektor', v_creator
   FROM public.inventory_items i WHERE i.code = 'BRG-9001'

@@ -89,7 +89,7 @@ export function MobileNav() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={orgData.org_logo_url} alt="Logo" className="h-8 w-8 rounded-lg object-cover" />
                 ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white font-bold text-sm">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
                     S
                   </div>
                 )}
@@ -98,7 +98,7 @@ export function MobileNav() {
               <button
                 onClick={() => setOpen(false)}
                 aria-label="Tutup menu"
-                className="rounded-full bg-white/15 p-2 text-white transition-colors hover:bg-white/30"
+                className="rounded-full bg-sidebar-accent/60 p-2 text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -118,11 +118,11 @@ export function MobileNav() {
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                       isActive
-                        ? "bg-sidebar-accent text-white"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white"
+                        ? "bg-sidebar-accent text-sidebar-foreground"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                     )}
                   >
-                    <item.icon className="h-5 w-5 shrink-0 text-white" strokeWidth={2.5} aria-hidden="true" />
+                    <item.icon className="h-5 w-5 shrink-0 text-sidebar-foreground" strokeWidth={2.5} aria-hidden="true" />
                     {item.label}
                   </Link>
                 );

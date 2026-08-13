@@ -129,6 +129,7 @@ export default function InventoryDetailPage() {
   const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [purchaseDate, setPurchaseDate] = useState("");
+  const [purchaseQty, setPurchaseQty] = useState("1");
   const [purchaseAmount, setPurchaseAmount] = useState("");
   const [purchaseSource, setPurchaseSource] = useState("");
   const [purchaseDesc, setPurchaseDesc] = useState("");
@@ -336,7 +337,9 @@ export default function InventoryDetailPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        quantity: Number(purchaseQty) || 1,
         amount: Number(purchaseAmount),
+        subtotal: (Number(purchaseQty) || 1) * (Number(purchaseAmount) || 0),
         date: purchaseDate,
         wallet_id: walletId || undefined,
         bank_id: bankId || undefined,
@@ -348,10 +351,12 @@ export default function InventoryDetailPage() {
     if (res.ok) {
       setShowPurchaseForm(false);
       setPurchaseDate("");
+      setPurchaseQty("1");
       setPurchaseAmount("");
       setPurchaseSource("");
       setPurchaseDesc("");
       fetchPurchases();
+      fetchData();
     }
     setPurchaseLoading(false);
   };
@@ -705,15 +710,25 @@ export default function InventoryDetailPage() {
               <CardHeader><CardTitle>Form Pembelian Barang</CardTitle></CardHeader>
               <CardContent>
                 <form onSubmit={handlePurchase} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Tanggal Pembelian</label>
                       <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} required />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Nominal (Rp)</label>
+                      <label className="text-sm font-medium">Jumlah (unit)</label>
+                      <Input type="number" min="1" placeholder="1" value={purchaseQty} onChange={(e) => setPurchaseQty(e.target.value)} required />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Nominal per Unit (Rp)</label>
                       <Input type="number" min="1" placeholder="0" value={purchaseAmount} onChange={(e) => setPurchaseAmount(e.target.value)} required />
                     </div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+                    <span className="text-muted-foreground">Subtotal ({Number(purchaseQty) || 0} x {new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 }).format(Number(purchaseAmount) || 0)})</span>
+                    <span className="font-bold">
+                      {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format((Number(purchaseQty) || 0) * (Number(purchaseAmount) || 0))}
+                    </span>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Sumber Dana</label>
@@ -761,7 +776,9 @@ export default function InventoryDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tanggal</TableHead>
+                    <TableHead>Jumlah</TableHead>
                     <TableHead>Nominal</TableHead>
+                    <TableHead>Subtotal</TableHead>
                     <TableHead>Sumber</TableHead>
                     <TableHead>Deskripsi</TableHead>
                     <TableHead>Dicatat oleh</TableHead>
@@ -770,14 +787,18 @@ export default function InventoryDetailPage() {
                 <TableBody>
                   {purchases.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Belum ada catatan pembelian.</TableCell>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">Belum ada catatan pembelian.</TableCell>
                     </TableRow>
                   ) : (
                     purchases.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell className="text-sm">{p.date}</TableCell>
-                        <TableCell className="text-sm font-medium">
+                        <TableCell className="text-sm">{p.quantity} unit</TableCell>
+                        <TableCell className="text-sm">
                           {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(p.amount)}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">
+                          {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(p.subtotal)}
                         </TableCell>
                         <TableCell className="text-sm">{(p as unknown as Record<string, unknown>).wallets ? ((p as unknown as Record<string, unknown>).wallets as Record<string, string>).name : (p as unknown as Record<string, unknown>).banks ? ((p as unknown as Record<string, unknown>).banks as Record<string, string>).name : (p as unknown as Record<string, unknown>).cash_accounts ? ((p as unknown as Record<string, unknown>).cash_accounts as Record<string, string>).name : "-"}</TableCell>
                         <TableCell className="text-sm max-w-xs truncate">{p.description || "-"}</TableCell>

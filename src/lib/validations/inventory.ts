@@ -81,10 +81,18 @@ export const inventoryDisposalFormSchema = z.object({
 
 export const inventoryPurchaseFormSchema = z
   .object({
+    quantity: z.coerce
+      .number()
+      .int("Jumlah harus bilangan bulat.")
+      .positive("Jumlah minimal 1 unit."),
     amount: z.coerce
       .number()
-      .positive("Jumlah harus lebih dari 0.")
-      .max(999999999999, "Jumlah terlalu besar."),
+      .positive("Nominal harus lebih dari 0.")
+      .max(999999999999, "Nominal terlalu besar."),
+    subtotal: z.coerce
+      .number()
+      .positive("Subtotal harus lebih dari 0.")
+      .optional(),
     date: z.string().min(1, "Tanggal pembelian wajib diisi."),
     wallet_id: z.string().uuid("ID dompet tidak valid.").optional().or(z.literal("")),
     bank_id: z.string().uuid("ID bank tidak valid.").optional().or(z.literal("")),

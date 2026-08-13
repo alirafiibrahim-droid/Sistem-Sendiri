@@ -97,7 +97,7 @@ export async function PATCH(
 
     // Self-update non-admin: limited fields only
     if (id === uid && userRole !== "ADMIN") {
-      const allowedFields = ["full_name", "phone_number", "avatar_url"];
+      const allowedFields = ["full_name", "phone_number", "avatar_url", "theme"];
       const safeUpdate: Record<string, unknown> = {};
       for (const key of allowedFields) {
         if (body[key] !== undefined) safeUpdate[key] = body[key];

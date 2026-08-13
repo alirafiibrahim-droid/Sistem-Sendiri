@@ -90,27 +90,29 @@ export async function POST(
       return apiBadRequest(msg);
     }
 
-    const { amount, date, wallet_id, bank_id, cash_account_id, description } =
+    const { quantity, amount, date, wallet_id, bank_id, cash_account_id, description } =
       parsed.data;
+
+    const subtotal = Number(quantity) * Number(amount);
 
     const supabase = await createSupabaseServer();
 
     // Verify item exists
     const { data: item, error: itemError } = await supabase
       .from("inventory_items")
-      .select("id, name, code")
+      .select("id, name, code, stock")
       .eq("id", id)
       .single();
 
     if (itemError || !item) return apiNotFound("Barang tidak ditemukan.");
 
-    // Create finance entry (EXPENSE)
+    // Create finance entry (EXPENSE) — nominal biaya yang dibayarkan = subtotal
     const financeDesc = `Pembelian ${item.name} (${item.code})${description ? " - " + description : ""}`;
     const { data: finance, error: financeError } = await supabase
       .from("finances")
       .insert({
         type: "EXPENSE",
-        amount,
+        amount: subtotal,
         description: financeDesc,
         date,
         receipt_url: "",
@@ -133,7 +135,9 @@ export async function POST(
       .from("inventory_purchases")
       .insert({
         item_id: id,
+        quantity,
         amount,
+        subtotal,
         date,
         wallet_id: wallet_id || null,
         bank_id: bank_id || null,
@@ -150,6 +154,17 @@ export async function POST(
     if (purchaseError) {
       console.error("PURCHASE INSERT ERROR:", purchaseError);
       return apiInternalError("Gagal menyimpan pembelian: " + purchaseError.message);
+    }
+
+    // Tambah stok inventaris sesuai Jumlah pembelian
+    const { error: stockError } = await supabase
+      .from("inventory_items")
+      .update({ stock: Number(item.stock) + Number(quantity) })
+      .eq("id", id);
+
+    if (stockError) {
+      console.error("STOCK UPDATE ERROR:", stockError);
+      return apiInternalError("Pembelian tersimpan, tetapi gagal menambah stok: " + stockError.message);
     }
 
     // Attach creator profile
@@ -171,7 +186,9 @@ export async function POST(
       userId: uid,
       newValue: {
         item_id: id,
+        quantity,
         amount,
+        subtotal,
         date,
         wallet_id: wallet_id || null,
         bank_id: bank_id || null,

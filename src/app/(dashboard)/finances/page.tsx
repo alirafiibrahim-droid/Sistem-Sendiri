@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,6 +139,7 @@ export default function FinancesPage() {
   );
   const [formSubjectId, setFormSubjectId] = useState("");
   const [formReceiptUrls, setFormReceiptUrls] = useState<string[]>([]);
+  const [receiptUploading, setReceiptUploading] = useState(false);
   const [formWalletId, setFormWalletId] = useState("");
   const [formHandoverId, setFormHandoverId] = useState("");
 
@@ -321,6 +323,7 @@ export default function FinancesPage() {
     setFormDate(new Date().toISOString().split("T")[0]);
     setFormSubjectId("");
     setFormReceiptUrls([]);
+    setReceiptUploading(false);
     setFormWalletId("");
     setFormHandoverId(activeHandoverId);
     setErrors({});
@@ -352,6 +355,34 @@ export default function FinancesPage() {
   };
 
   const addReceiptUrl = () => setFormReceiptUrls([...formReceiptUrls, ""]);
+
+  // Upload foto nota transaksi langsung ke storage (bucket: receipts)
+  const handleReceiptFile = async (file: File) => {
+    if (!file) return;
+    setReceiptUploading(true);
+    setErrors((prev) => ({ ...prev, _form: "" }));
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const filePath = `receipts/${user?.id || "anon"}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}.${ext}`;
+    const { error } = await supabase.storage
+      .from("receipts")
+      .upload(filePath, file, { upsert: false });
+    if (error) {
+      setErrors((prev) => ({
+        ...prev,
+        _form: "Gagal mengunggah foto nota: " + error.message,
+      }));
+      setReceiptUploading(false);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(filePath);
+    setFormReceiptUrls((prev) => [...prev, urlData.publicUrl]);
+    setReceiptUploading(false);
+  };
 
   const updateReceiptUrl = (index: number, value: string) => {
     const updated = [...formReceiptUrls];
@@ -1108,47 +1139,77 @@ export default function FinancesPage() {
                 </div>
 
                 {/* URL Bukti */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="receipt">
-                    URL Bukti (Opsional)
-                    <span className="text-muted-foreground text-xs font-normal ml-1">
-                      (boleh lebih dari satu)
-                    </span>
-                  </label>
                   <div className="space-y-2">
-                    {formReceiptUrls.map((url, i) => (
-                      <div key={i} className="flex gap-2">
-                        <Input
-                          id={i === 0 ? "receipt" : undefined}
-                          type="url"
-                          placeholder="https://..."
-                          value={url}
-                          onChange={(e) => updateReceiptUrl(i, e.target.value)}
-                          className="flex-1"
+                    <label className="text-sm font-medium" htmlFor="receipt">
+                      Bukti Transaksi
+                      <span className="text-muted-foreground text-xs font-normal ml-1">
+                        (boleh lebih dari satu)
+                      </span>
+                    </label>
+                    <div className="space-y-2">
+                      {formReceiptUrls.map((url, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          {/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(url) ? (
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={url}
+                                alt="Bukti"
+                                className="h-9 w-9 rounded-md object-cover border"
+                              />
+                            </a>
+                          ) : (
+                            <div className="h-9 w-9 shrink-0 rounded-md border bg-muted/30" />
+                          )}
+                          <Input
+                            id={i === 0 ? "receipt" : undefined}
+                            type="url"
+                            placeholder="https://..."
+                            value={url}
+                            onChange={(e) => updateReceiptUrl(i, e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeReceiptUrl(i)}
+                          >
+                            Hapus
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50">
+                        <Camera className="h-4 w-4" />
+                        {receiptUploading ? "Mengunggah..." : "Foto Nota"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          disabled={receiptUploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleReceiptFile(file);
+                            e.target.value = "";
+                          }}
                         />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeReceiptUrl(i)}
-                        >
-                          Hapus
-                        </Button>
-                      </div>
-                    ))}
+                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addReceiptUrl}
+                      >
+                        + Tambah URL
+                      </Button>
+                    </div>
+                    {errors.receipt_urls && (
+                      <p className="text-sm text-red-500">{errors.receipt_urls}</p>
+                    )}
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addReceiptUrl}
-                  >
-                    + Tambah URL
-                  </Button>
-                  {errors.receipt_urls && (
-                    <p className="text-sm text-red-500">{errors.receipt_urls}</p>
-                  )}
-                </div>
 
                 {errors._form && (
                   <p className="text-sm text-red-500 text-center">

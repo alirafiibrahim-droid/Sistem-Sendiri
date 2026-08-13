@@ -142,7 +142,9 @@ interface InventoryItemRow {
 }
 
 interface InventoryPurchaseRow {
+  quantity: number;
   amount: number;
+  subtotal: number;
   date: string;
   description: string | null;
   inventory_items: { name: string } | null;
@@ -1314,7 +1316,7 @@ async function buildInvPembelian(ctx: ReportBuilderContext): Promise<ReportData>
   let q = supabase
     .from("inventory_purchases")
     .select(
-      "id, amount, date, description, inventory_items(name), wallets(name), banks(name), cash_accounts(name)"
+      "id, quantity, amount, subtotal, date, description, inventory_items(name), wallets(name), banks(name), cash_accounts(name)"
     );
   if (f.date_from) q = q.gte("date", f.date_from);
   if (f.date_to) q = q.lte("date", f.date_to);
@@ -1324,23 +1326,27 @@ async function buildInvPembelian(ctx: ReportBuilderContext): Promise<ReportData>
 
   let total = 0;
   const rows = ((data || []) as unknown as InventoryPurchaseRow[]).map((p) => {
-    const amount = num(p.amount);
-    total += amount;
+    const subtotal = num(p.subtotal);
+    total += subtotal;
     return {
       tanggal: formatDate(p.date),
       barang: p.inventory_items?.name || "-",
+      jumlah: `${formatNumber(p.quantity)} unit`,
+      nominal: formatRp(num(p.amount)),
+      subtotal: formatRp(subtotal),
       deskripsi: p.description || "-",
       sumber: p.wallets?.name || p.banks?.name || p.cash_accounts?.name || "-",
-      jumlah: formatRp(amount),
     };
   });
 
   const columns: ReportColumn[] = [
     { key: "tanggal", label: "Tanggal" },
     { key: "barang", label: "Barang" },
+    { key: "jumlah", label: "Jumlah", align: "right" },
+    { key: "nominal", label: "Nominal", align: "right" },
+    { key: "subtotal", label: "Subtotal", align: "right" },
     { key: "deskripsi", label: "Deskripsi" },
     { key: "sumber", label: "Sumber" },
-    { key: "jumlah", label: "Jumlah", align: "right" },
   ];
 
   return {

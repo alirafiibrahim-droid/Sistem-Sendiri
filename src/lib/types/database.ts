@@ -59,6 +59,7 @@ export interface Profile {
   phone_number: string | null;
   status: UserStatus;
   avatar_url: string | null;
+  theme: string;
   fakultas_id: string | null;
   jurusan_id: string | null;
   joined_at: string;
@@ -612,7 +613,9 @@ export interface InventoryDamageLogWithDetails extends InventoryDamageLog {
 export interface InventoryPurchase {
   id: string;
   item_id: string;
+  quantity: number;
   amount: number;
+  subtotal: number;
   date: string;
   wallet_id: string | null;
   bank_id: string | null;

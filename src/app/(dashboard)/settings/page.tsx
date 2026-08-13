@@ -18,6 +18,10 @@ import {
 } from "@/components/ui/table";
 import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
 import type { OrganizationSettings, Division, Fakultas, Jurusan, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
+import { THEMES, type ThemeKey } from "@/lib/themes";
+import { useTheme } from "@/components/layout/theme-provider";
+import { cn } from "@/lib/utils";
+import { Check } from "lucide-react";
 import SpiderChart from "@/components/charts/spider-chart";
 import BarChart from "@/components/charts/bar-chart";
 import LineChart from "@/components/charts/line-chart";
@@ -54,6 +58,7 @@ const allTabs: { id: TabId; label: string; adminOnly?: boolean }[] = [
 
 export default function SettingsPage() {
   const supabase = createSupabaseClient();
+  const { setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [user, setUser] = useState<ProfileWithDivision | null>(null);
 
@@ -65,6 +70,10 @@ export default function SettingsPage() {
   const [profileAvatarPreview, setProfileAvatarPreview] = useState("");
   const [profileErrors, setProfileErrors] = useState<FormErrors>({});
   const [profileLoading, setProfileLoading] = useState(false);
+
+  // ─── Theme ───
+  const [profileTheme, setProfileTheme] = useState<ThemeKey>("default");
+  const [themeSaving, setThemeSaving] = useState(false);
 
   // ─── Atur Password Login ───
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -197,6 +206,7 @@ export default function SettingsPage() {
             setProfilePhone(data.phone_number || "");
             setProfileAvatarUrl(data.avatar_url || "");
             setProfileAvatarPreview(data.avatar_url || "");
+            if (data.theme) setProfileTheme(data.theme as ThemeKey);
             if (data.role !== "ADMIN" && (activeTab === "organization" || activeTab === "pengaturan-user")) {
               setActiveTab("profile");
             }
@@ -561,6 +571,23 @@ export default function SettingsPage() {
       window.dispatchEvent(new Event("profile-updated"));
     }
     setProfileLoading(false);
+  };
+
+  // ─── Theme ───
+  const handleThemeSelect = async (key: ThemeKey) => {
+    if (!user || key === profileTheme || themeSaving) return;
+    setThemeSaving(true);
+    const res = await fetch(`/api/profiles/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: key }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      setProfileTheme(key);
+      setTheme(key);
+    }
+    setThemeSaving(false);
   };
 
   // ─── Atur Password Login ───
@@ -986,6 +1013,51 @@ export default function SettingsPage() {
             ) : (
               <p className="text-muted-foreground">Memuat data...</p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tema Tampilan (theme selector) */}
+      {activeTab === "profile" && user && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Tema Tampilan</CardTitle>
+            <CardDescription>Pilih kombinasi warna untuk tampilan dashboard Anda</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {THEMES.map((t) => {
+                const selected = profileTheme === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    disabled={themeSaving}
+                    onClick={() => handleThemeSelect(t.key)}
+                    aria-pressed={selected}
+                    className={cn(
+                      "relative flex flex-col gap-2 rounded-xl border p-3 text-left transition-all",
+                      selected
+                        ? "border-primary ring-2 ring-primary/30 bg-card"
+                        : "border-border hover:border-primary/50 bg-card"
+                    )}
+                  >
+                    <div className="flex overflow-hidden rounded-lg border border-border h-10">
+                      {[t.colors.background, t.colors.sidebarBg, t.colors.foreground, t.colors.primary].map((c, i) => (
+                        <span key={i} className="flex-1" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                    <span className="text-sm font-medium">{t.name}</span>
+                    {selected && (
+                      <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="h-4 w-4" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {themeSaving && <p className="text-sm text-muted-foreground">Menyimpan tema...</p>}
           </CardContent>
         </Card>
       )}

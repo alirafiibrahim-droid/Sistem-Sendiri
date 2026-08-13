@@ -96,7 +96,7 @@ export function Sidebar() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={orgData.org_logo_url} alt="Logo" className="h-8 w-8 rounded-lg object-cover" />
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white font-bold text-sm">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
               S
             </div>
           )}
@@ -117,11 +117,11 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-sidebar-accent text-white"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white"
+                  ? "bg-sidebar-accent text-sidebar-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
               )}
             >
-              <item.icon className="h-5 w-5 shrink-0 text-white" strokeWidth={2.5} aria-hidden="true" />
+              <item.icon className="h-5 w-5 shrink-0 text-sidebar-foreground" strokeWidth={2.5} aria-hidden="true" />
               {item.label}
             </Link>
           );
