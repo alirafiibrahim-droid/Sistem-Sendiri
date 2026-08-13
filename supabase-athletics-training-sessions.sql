@@ -2,9 +2,16 @@
 -- Migration: Keatletan - Training Sessions, Metrics, Assessments, Targets
 -- ============================================================================
 
--- Enums
-CREATE TYPE IF NOT EXISTS public.metric_type AS ENUM ('QUANTITATIVE', 'QUALITATIVE');
-CREATE TYPE IF NOT EXISTS public.intensity_level AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+-- Enums (PostgreSQL tidak mendukung CREATE TYPE IF NOT EXISTS)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'metric_type') THEN
+        CREATE TYPE public.metric_type AS ENUM ('QUANTITATIVE', 'QUALITATIVE');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'intensity_level') THEN
+        CREATE TYPE public.intensity_level AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+    END IF;
+END $$;
 
 -- Athletic Metrics
 CREATE TABLE IF NOT EXISTS public.athletic_metrics (
@@ -30,6 +37,8 @@ CREATE TABLE IF NOT EXISTS public.training_sessions (
     coach_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     date             DATE NOT NULL,
     session_type     VARCHAR(50),
+    start_time       VARCHAR(5),
+    handover_id      UUID REFERENCES public.handovers(id) ON DELETE SET NULL,
     duration_minutes INTEGER,
     intensity        public.intensity_level,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()

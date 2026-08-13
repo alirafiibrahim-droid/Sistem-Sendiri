@@ -247,6 +247,14 @@ export default function SessionDetailPage() {
             <p className="font-semibold">{session.profiles?.full_name || "-"}</p>
           </div>
           <div>
+            <p className="text-xs text-muted-foreground">Periode Berjalan</p>
+            <p className="font-semibold">
+              {session.handovers
+                ? `Periode ${session.handovers.period_to}`
+                : "-"}
+            </p>
+          </div>
+          <div>
             <p className="text-xs text-muted-foreground">Jam</p>
             <p className="font-semibold">{timeRange(session.start_time, session.duration_minutes)}</p>
           </div>

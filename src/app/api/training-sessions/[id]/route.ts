@@ -9,6 +9,7 @@ import {
 } from "@/lib/api-response";
 import { requireAccess } from "@/lib/access";
 import { writeAuditLog } from "@/lib/audit";
+import { attachHandovers } from "@/lib/handover";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -44,7 +45,6 @@ export async function GET(
       .from("training_session_trainings")
       .select("training_id")
       .eq("session_id", id);
-
     const trainings: Array<{ id: string; name: string; category: string }> = [];
     const trainingIds = (links || []).map((l) => l.training_id);
     if (session.training_id && !trainingIds.includes(session.training_id)) {
@@ -67,7 +67,6 @@ export async function GET(
       .from("training_session_attendants")
       .select("*")
       .eq("session_id", id);
-
     let attendants: Array<Record<string, unknown>> = attendantsRaw || [];
     if (attendants.length > 0) {
       const athleteIds = [...new Set(attendants.map((a) => a.athlete_id))];
@@ -82,11 +81,15 @@ export async function GET(
       }));
     }
 
+    // Step 5: attach periode Sertijab (handover)
+    const [attached] = await attachHandovers([session as { handover_id: string | null }], supabase);
+
     return apiOk({
       ...session,
       profiles,
       trainings,
       training_session_attendants: attendants,
+      handovers: attached.handovers,
     });
   } catch {
     return apiInternalError();

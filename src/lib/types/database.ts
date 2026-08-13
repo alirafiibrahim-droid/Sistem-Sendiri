@@ -379,6 +379,7 @@ export interface TrainingSession {
   session_code: string | null;
   session_type: string | null;
   start_time: string | null;
+  handover_id: string | null;
   duration_minutes: number | null;
   intensity: IntensityLevel | null;
   created_at: string;
@@ -386,6 +387,7 @@ export interface TrainingSession {
 
 export interface TrainingSessionWithCoach extends TrainingSession {
   profiles: Pick<Profile, "id" | "full_name"> | null;
+  handovers?: Pick<Handover, "id" | "period_from" | "period_to" | "status"> | null;
   trainings: Array<Pick<Training, "id" | "name" | "category">>;
   training_session_attendants: TrainingSessionAttendant[];
 }

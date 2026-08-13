@@ -40,6 +40,7 @@ export const trainingSessionSchema = z.object({
     message: "Tingkat intensitas wajib dipilih.",
   }),
   athlete_ids: z.array(z.string()).optional(),
+  handover_id: z.string().uuid("Periode tidak valid.").optional().or(z.literal("")),
 });
 
 export type TrainingSessionFormValues = z.infer<typeof trainingSessionSchema>;

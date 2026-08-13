@@ -12,6 +12,7 @@ import {
 import { requireAccess } from "@/lib/access";
 import { trainingSessionSchema } from "@/lib/validations/training";
 import { writeAuditLog } from "@/lib/audit";
+import { attachHandovers } from "@/lib/handover";
 import { NextRequest } from "next/server";
 import type { Profile, Training, TrainingSessionWithCoach } from "@/lib/types/database";
 
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
     }
 
     let result = await attachProfiles(data as TrainingSessionWithCoach[], supabase);
+    result = await attachHandovers(result, supabase);
 
     // Attach trainings (banyak latihan per sesi via junction)
     const sessionIds = result.map((s) => s.id);
@@ -139,7 +141,7 @@ export async function POST(request: NextRequest) {
       return apiBadRequest(msg);
     }
 
-    const { name, dates, training_ids, start_time, duration_minutes, intensity, athlete_ids } = parsed.data;
+    const { name, dates, training_ids, start_time, duration_minutes, intensity, athlete_ids, handover_id } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
@@ -152,6 +154,7 @@ export async function POST(request: NextRequest) {
       session_code: sessionCodes[i],
       session_type: name,
       start_time,
+      handover_id: handover_id || null,
       duration_minutes,
       intensity,
     }));
@@ -213,6 +216,7 @@ export async function POST(request: NextRequest) {
           date: s.date,
           session_code: s.session_code,
           start_time: s.start_time,
+          handover_id: s.handover_id,
           duration_minutes: s.duration_minutes,
           intensity: s.intensity,
         },

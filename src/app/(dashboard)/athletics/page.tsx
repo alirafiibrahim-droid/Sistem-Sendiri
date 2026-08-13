@@ -26,6 +26,13 @@ import Link from "next/link";
 type FormErrors = Record<string, string>;
 type TabId = "matrix" | "sessions" | "trainings";
 
+interface HandoverOption {
+  id: string;
+  period_from: string;
+  period_to: string;
+  status: string;
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   STRENGTH: "Strength",
   POWER: "Power",
@@ -97,6 +104,22 @@ export default function AthleticsPage() {
   const [formIntensity, setFormIntensity] = useState("MEDIUM");
   const [formStartTime, setFormStartTime] = useState("");
   const [trainingsList, setTrainingsList] = useState<Training[]>([]);
+
+  // ─── Periode Berjalan (Sertijab) ───
+  const [activePeriods, setActivePeriods] = useState<HandoverOption[]>([]);
+  const [formHandoverId, setFormHandoverId] = useState("");
+
+  // Default ke periode berjalan yang aktif
+  useEffect(() => {
+    fetch("/api/handovers/active")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success && Array.isArray(json.data)) {
+          setActivePeriods(json.data);
+          if (json.data.length > 0) setFormHandoverId(json.data[0].id);
+        }
+      });
+  }, []);
 
   // ─── Trainings tab state ───
   const [trainings, setTrainings] = useState<Training[]>([]);
@@ -231,6 +254,8 @@ export default function AthleticsPage() {
     setFormDuration("");
     setFormIntensity("MEDIUM");
     setFormStartTime("");
+    if (activePeriods.length > 0) setFormHandoverId(activePeriods[0].id);
+    else setFormHandoverId("");
     setErrors({});
   };
 
@@ -262,6 +287,7 @@ export default function AthleticsPage() {
       start_time: formStartTime,
       duration_minutes: formDuration,
       intensity: formIntensity,
+      handover_id: formHandoverId,
     });
 
     if (!result.success) {
@@ -285,6 +311,7 @@ export default function AthleticsPage() {
         dates: formDates,
         training_ids: formTrainingIds,
         start_time: formStartTime,
+        handover_id: formHandoverId,
         duration_minutes: Number(formDuration),
         intensity: formIntensity,
       }),
@@ -634,6 +661,7 @@ export default function AthleticsPage() {
                     <TableHead>Tanggal</TableHead>
                     <TableHead>Kode Unit</TableHead>
                     <TableHead>Jenis Latihan</TableHead>
+                    <TableHead>Periode</TableHead>
                     <TableHead>Jam</TableHead>
                     <TableHead>Durasi</TableHead>
                     <TableHead>Intensitas</TableHead>
@@ -643,13 +671,13 @@ export default function AthleticsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         Memuat data...
                       </TableCell>
                     </TableRow>
                   ) : sessions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         Belum ada sesi latihan.
                       </TableCell>
                     </TableRow>
@@ -672,6 +700,15 @@ export default function AthleticsPage() {
                                 </Badge>
                               ))}
                             </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {s.handovers ? (
+                            <span className="text-sm">
+                              Periode {s.handovers.period_to}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
                           )}
                         </TableCell>
                         <TableCell className="text-sm">{timeRange(s.start_time, s.duration_minutes)}</TableCell>
@@ -933,6 +970,25 @@ export default function AthleticsPage() {
                     + Tambah Tanggal
                   </Button>
                   {errors.dates && <p className="text-sm text-red-500">{errors.dates}</p>}
+                </div>
+
+                {/* Periode Berjalan (Sertijab) */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Periode Berjalan</label>
+                  <Select value={formHandoverId} onChange={(e) => setFormHandoverId(e.target.value)}>
+                    <option value="">Tanpa periode</option>
+                    {activePeriods.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        Periode {p.period_from} – {p.period_to}
+                      </option>
+                    ))}
+                  </Select>
+                  {activePeriods.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Belum ada periode Sertijab yang berjalan.
+                    </p>
+                  )}
+                  {errors.handover_id && <p className="text-sm text-red-500">{errors.handover_id}</p>}
                 </div>
 
                 {/* Jam Mulai */}

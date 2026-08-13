@@ -16,3 +16,10 @@ ALTER TABLE public.project_sessions
 
 ALTER TABLE public.training_sessions
     ADD COLUMN IF NOT EXISTS start_time VARCHAR(5);
+
+-- Periode Berjalan (Sertijab) pada Sesi Latihan
+ALTER TABLE public.training_sessions
+    ADD COLUMN IF NOT EXISTS handover_id UUID REFERENCES public.handovers(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_training_sessions_handover
+    ON public.training_sessions(handover_id);

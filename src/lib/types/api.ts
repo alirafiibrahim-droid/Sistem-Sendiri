@@ -235,6 +235,7 @@ export interface CreateTrainingSessionRequest {
   duration_minutes?: number;
   intensity?: string;
   athlete_ids?: string[];
+  handover_id?: string;
 }
 
 export interface CreateAssessmentRequest {
