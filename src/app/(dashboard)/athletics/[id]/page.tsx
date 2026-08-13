@@ -250,7 +250,13 @@ export default function SessionDetailPage() {
             <p className="text-xs text-muted-foreground">Periode Berjalan</p>
             <p className="font-semibold">
               {session.handovers
-                ? `Periode ${session.handovers.period_to}`
+                ? `Periode ${session.handovers.period_to}${
+                    session.handovers.status === "ONGOING"
+                      ? " (Berjalan)"
+                      : session.handovers.status === "COMPLETED"
+                        ? " (Selesai)"
+                        : ""
+                  }`
                 : "-"}
             </p>
           </div>

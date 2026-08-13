@@ -706,6 +706,11 @@ export default function AthleticsPage() {
                           {s.handovers ? (
                             <span className="text-sm">
                               Periode {s.handovers.period_to}
+                              {s.handovers.status === "ONGOING" ? (
+                                <span className="text-muted-foreground"> (Berjalan)</span>
+                              ) : s.handovers.status === "COMPLETED" ? (
+                                <span className="text-muted-foreground"> (Selesai)</span>
+                              ) : null}
                             </span>
                           ) : (
                             <span className="text-sm text-muted-foreground">-</span>
@@ -979,7 +984,8 @@ export default function AthleticsPage() {
                     <option value="">Tanpa periode</option>
                     {activePeriods.map((p) => (
                       <option key={p.id} value={p.id}>
-                        Periode {p.period_from} – {p.period_to}
+                        Periode {p.period_to}
+                        {p.status === "ONGOING" ? " (Berjalan)" : ""}
                       </option>
                     ))}
                   </Select>
