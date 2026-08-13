@@ -903,7 +903,7 @@ export default function FinancesPage() {
           />
 
           {/* Modal Content */}
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -949,7 +949,7 @@ export default function FinancesPage() {
                       className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
                         formType === "INCOME"
                           ? "bg-green-50 border-green-300 text-green-700"
-                          : "bg-white border-border text-muted-foreground hover:bg-muted"
+                          : "bg-card border-border text-muted-foreground hover:bg-muted"
                       }`}
                     >
                       Pemasukan
@@ -960,7 +960,7 @@ export default function FinancesPage() {
                       className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
                         formType === "EXPENSE"
                           ? "bg-red-50 border-red-300 text-red-700"
-                          : "bg-white border-border text-muted-foreground hover:bg-muted"
+                          : "bg-card border-border text-muted-foreground hover:bg-muted"
                       }`}
                     >
                       Pengeluaran
@@ -1251,7 +1251,7 @@ export default function FinancesPage() {
             className="absolute inset-0 bg-black/50"
             onClick={() => setConfirmDelete(null)}
           />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <h3 className="text-lg font-bold mb-2">Hapus Transaksi</h3>
             <p className="text-sm text-muted-foreground mb-1">
               Apakah Anda yakin ingin menghapus transaksi berikut?

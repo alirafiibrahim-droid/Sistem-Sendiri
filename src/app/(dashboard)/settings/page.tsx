@@ -1686,7 +1686,7 @@ export default function SettingsPage() {
       {showTambahUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowTambahUser(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">Tambah User</h3>
               <button onClick={() => setShowTambahUser(false)} className="p-1 hover:bg-muted rounded-lg">
@@ -1741,7 +1741,7 @@ export default function SettingsPage() {
       {(showDivModal || showFjModal) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowDivModal(false); setShowFjModal(false); }} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-lg font-bold">
@@ -1797,7 +1797,7 @@ export default function SettingsPage() {
       {showBankModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowBankModal(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">{bankEditId ? "Edit Bank" : "Tambah Bank"}</h3>
               <button onClick={() => setShowBankModal(false)} className="p-1 hover:bg-muted rounded-lg">
@@ -1842,7 +1842,7 @@ export default function SettingsPage() {
       {showCashModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowCashModal(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">{cashEditId ? "Edit Kas" : "Tambah Kas"}</h3>
               <button onClick={() => setShowCashModal(false)} className="p-1 hover:bg-muted rounded-lg">
@@ -1877,7 +1877,7 @@ export default function SettingsPage() {
       {showWalletModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowWalletModal(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">{walletEditId ? "Edit Dompet" : "Tambah Dompet"}</h3>
               <button onClick={() => setShowWalletModal(false)} className="p-1 hover:bg-muted rounded-lg">

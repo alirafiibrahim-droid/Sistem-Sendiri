@@ -309,7 +309,7 @@ export default function AchievementDetailPage() {
                     className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
                       formType === "ORGANIZATION"
                         ? "bg-blue-50 border-blue-300 text-blue-700"
-                        : "bg-white border-border text-muted-foreground hover:bg-muted"
+                        : "bg-card border-border text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     Organisasi
@@ -320,7 +320,7 @@ export default function AchievementDetailPage() {
                     className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
                       formType === "INDIVIDUAL"
                         ? "bg-purple-50 border-purple-300 text-purple-700"
-                        : "bg-white border-border text-muted-foreground hover:bg-muted"
+                        : "bg-card border-border text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     Individu

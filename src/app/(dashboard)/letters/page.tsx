@@ -396,7 +396,7 @@ export default function LettersPage() {
                               Hapus
                             </Button>
                             {deleteId === l.id && (
-                              <div className="absolute right-0 top-full mt-1 z-10 bg-white border border-border rounded-lg shadow-lg p-3 min-w-40">
+                              <div className="absolute right-0 top-full mt-1 z-10 bg-card border border-border rounded-lg shadow-lg p-3 min-w-40">
                                 <p className="text-xs text-muted-foreground mb-2">
                                   Yakin hapus surat ini?
                                 </p>
@@ -467,7 +467,7 @@ export default function LettersPage() {
             onClick={() => setShowModal(false)}
           />
 
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -513,7 +513,7 @@ export default function LettersPage() {
                       className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
                         formType === "INCOMING"
                           ? "bg-blue-50 border-blue-300 text-blue-700"
-                          : "bg-white border-border text-muted-foreground hover:bg-muted"
+                          : "bg-card border-border text-muted-foreground hover:bg-muted"
                       }`}
                     >
                       Surat Masuk
@@ -524,7 +524,7 @@ export default function LettersPage() {
                       className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
                         formType === "OUTGOING"
                           ? "bg-purple-50 border-purple-300 text-purple-700"
-                          : "bg-white border-border text-muted-foreground hover:bg-muted"
+                          : "bg-card border-border text-muted-foreground hover:bg-muted"
                       }`}
                     >
                       Surat Keluar
@@ -682,7 +682,7 @@ export default function LettersPage() {
             onClick={() => setDetailLetter(null)}
           />
 
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="space-y-1">

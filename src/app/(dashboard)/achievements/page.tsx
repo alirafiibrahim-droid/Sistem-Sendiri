@@ -526,7 +526,7 @@ export default function AchievementsPage() {
             onClick={() => setShowModal(false)}
           />
 
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -568,7 +568,7 @@ export default function AchievementsPage() {
                       className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
                         formType === "ORGANIZATION"
                           ? "bg-blue-50 border-blue-300 text-blue-700"
-                          : "bg-white border-border text-muted-foreground hover:bg-muted"
+                          : "bg-card border-border text-muted-foreground hover:bg-muted"
                       }`}
                     >
                       Organisasi
@@ -579,7 +579,7 @@ export default function AchievementsPage() {
                       className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium border transition-colors ${
                         formType === "INDIVIDUAL"
                           ? "bg-purple-50 border-purple-300 text-purple-700"
-                          : "bg-white border-border text-muted-foreground hover:bg-muted"
+                          : "bg-card border-border text-muted-foreground hover:bg-muted"
                       }`}
                     >
                       Individu
