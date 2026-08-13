@@ -15,6 +15,10 @@ export const trainingFormSchema = z.object({
 
 export type TrainingFormValues = z.infer<typeof trainingFormSchema>;
 
+const timeFormat = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Jam mulai harus format HH:MM.");
+
 export const trainingSessionSchema = z.object({
   name: z
     .string()
@@ -26,6 +30,7 @@ export const trainingSessionSchema = z.object({
   training_ids: z
     .array(z.string().uuid("Latihan tidak valid."))
     .min(1, "Minimal satu latihan harus dipilih."),
+  start_time: timeFormat,
   duration_minutes: z.coerce
     .number()
     .int("Durasi harus bilangan bulat.")

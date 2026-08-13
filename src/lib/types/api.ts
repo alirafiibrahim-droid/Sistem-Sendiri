@@ -231,6 +231,7 @@ export interface CreateTrainingSessionRequest {
   dates: string[];
   training_id?: string;
   session_type?: string;
+  start_time?: string;
   duration_minutes?: number;
   intensity?: string;
   athlete_ids?: string[];

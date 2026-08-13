@@ -53,10 +53,23 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { dates, title } = body as { dates?: string[]; title?: string };
+    const { dates, title, start_time, end_time } = body as {
+      dates?: string[];
+      title?: string;
+      start_time?: string;
+      end_time?: string;
+    };
 
     if (!dates || !Array.isArray(dates) || dates.length === 0) {
       return apiBadRequest("Minimal satu tanggal harus diisi.");
+    }
+
+    const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (start_time && !timePattern.test(start_time)) {
+      return apiBadRequest("Jam mulai harus format HH:MM.");
+    }
+    if (end_time && !timePattern.test(end_time)) {
+      return apiBadRequest("Jam selesai harus format HH:MM.");
     }
 
     const supabase = await createSupabaseServer();
@@ -68,6 +81,8 @@ export async function POST(
       date,
       title: title || null,
       session_code: sessionCodes[i],
+      start_time: start_time || null,
+      end_time: end_time || null,
       created_by: uid,
     }));
 
@@ -90,6 +105,8 @@ export async function POST(
           date: row.date,
           title: row.title ?? null,
           session_code: row.session_code,
+          start_time: row.start_time,
+          end_time: row.end_time,
         },
       });
     }

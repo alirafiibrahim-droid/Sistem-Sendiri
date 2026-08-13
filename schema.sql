@@ -397,6 +397,7 @@ CREATE TABLE public.training_sessions (
     date             DATE NOT NULL,
     session_code     VARCHAR(7) UNIQUE,
     session_type     VARCHAR(50),
+    start_time       VARCHAR(5),
     duration_minutes INTEGER,
     intensity        public.intensity_level,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -378,6 +378,7 @@ export interface TrainingSession {
   date: string;
   session_code: string | null;
   session_type: string | null;
+  start_time: string | null;
   duration_minutes: number | null;
   intensity: IntensityLevel | null;
   created_at: string;

@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       return apiBadRequest(msg);
     }
 
-    const { name, dates, training_ids, duration_minutes, intensity, athlete_ids } = parsed.data;
+    const { name, dates, training_ids, start_time, duration_minutes, intensity, athlete_ids } = parsed.data;
 
     const supabase = await createSupabaseServer();
 
@@ -151,6 +151,7 @@ export async function POST(request: NextRequest) {
       date,
       session_code: sessionCodes[i],
       session_type: name,
+      start_time,
       duration_minutes,
       intensity,
     }));
@@ -211,6 +212,7 @@ export async function POST(request: NextRequest) {
           name: s.name,
           date: s.date,
           session_code: s.session_code,
+          start_time: s.start_time,
           duration_minutes: s.duration_minutes,
           intensity: s.intensity,
         },

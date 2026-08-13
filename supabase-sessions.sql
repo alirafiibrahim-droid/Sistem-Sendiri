@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS public.program_sessions (
     date         DATE NOT NULL,
     title        VARCHAR(200),
     session_code VARCHAR(7) UNIQUE,
+    start_time   VARCHAR(5),
+    end_time     VARCHAR(5),
     created_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -98,6 +100,8 @@ CREATE TABLE IF NOT EXISTS public.project_sessions (
     date         DATE NOT NULL,
     title        VARCHAR(200),
     session_code VARCHAR(7) UNIQUE,
+    start_time   VARCHAR(5),
+    end_time     VARCHAR(5),
     created_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -96,12 +96,14 @@ export default function ProgramDetailPage() {
 
   const [activeTab, setActiveTab] = useState<"detail" | "anggota" | "sesi" | "anggaran">("detail");
 
-  const [sessions, setSessions] = useState<Array<{id: string; date: string; title: string | null; session_code: string | null; created_at: string; program_session_attendants: Array<{count: number}>}>>([]);
+  const [sessions, setSessions] = useState<Array<{id: string; date: string; title: string | null; session_code: string | null; start_time: string | null; end_time: string | null; created_at: string; program_session_attendants: Array<{count: number}>}>>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [submittingSessions, setSubmittingSessions] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [sessionDateInput, setSessionDateInput] = useState(new Date().toISOString().split("T")[0]);
   const [sessionDateList, setSessionDateList] = useState<string[]>([]);
+  const [sessionStartTime, setSessionStartTime] = useState("");
+  const [sessionEndTime, setSessionEndTime] = useState("");
   const [sessionMessage, setSessionMessage] = useState<{type: "success" | "error"; text: string} | null>(null);
 
   const [qrSession, setQrSession] = useState<{id: string; date: string} | null>(null);
@@ -229,13 +231,15 @@ export default function ProgramDetailPage() {
       const res = await fetch(`/api/programs/${id}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dates: sessionDateList }),
+        body: JSON.stringify({ dates: sessionDateList, start_time: sessionStartTime || undefined, end_time: sessionEndTime || undefined }),
       });
       const json = await res.json();
       if (json.success) {
         setSessionMessage({ type: "success", text: "Sesi berhasil dibuat!" });
         setSessionDateList([]);
         setSessionDateInput(new Date().toISOString().split("T")[0]);
+        setSessionStartTime("");
+        setSessionEndTime("");
         setShowCreateForm(false);
         fetchSessions();
       } else {
@@ -1010,6 +1014,25 @@ export default function ProgramDetailPage() {
                         )}
                       </div>
 
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Jam Mulai</label>
+                          <Input
+                            type="time"
+                            value={sessionStartTime}
+                            onChange={(e) => setSessionStartTime(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Jam Sampai</label>
+                          <Input
+                            type="time"
+                            value={sessionEndTime}
+                            onChange={(e) => setSessionEndTime(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
                       {sessionMessage && (
                         <p className={`text-sm ${sessionMessage.type === "success" ? "text-green-500" : "text-red-500"}`}>
                           {sessionMessage.text}
@@ -1034,6 +1057,7 @@ export default function ProgramDetailPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Tanggal</TableHead>
+                          <TableHead>Jam</TableHead>
                           <TableHead>Kode Unit</TableHead>
                           <TableHead>Aksi</TableHead>
                         </TableRow>
@@ -1042,6 +1066,13 @@ export default function ProgramDetailPage() {
                         {sessions.map((session) => (
                           <TableRow key={session.id}>
                             <TableCell>{formatDate(session.date)}</TableCell>
+                            <TableCell className="text-sm">
+                              {session.start_time && session.end_time
+                                ? `${session.start_time} - ${session.end_time}`
+                                : session.start_time
+                                  ? session.start_time
+                                  : "-"}
+                            </TableCell>
                             <TableCell>
                               <code className="rounded bg-muted px-2 py-1 font-mono text-xs font-semibold tracking-widest text-primary">
                                 {session.session_code || "-"}

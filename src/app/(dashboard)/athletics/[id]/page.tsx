@@ -35,6 +35,22 @@ function formatDate(dateStr: string) {
   });
 }
 
+// Menghitung jam selesai dari jam mulai + durasi (menit). Format HH:MM.
+function addMinutes(time: string, minutes: number): string {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return time;
+  const [h, m] = time.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  const nh = ((Math.floor(total / 60) % 24) + 24) % 24;
+  const nm = total % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
+// Menampilkan rentang jam "HH:MM - HH:MM" atau "-"
+function timeRange(start: string | null, duration: number | null): string {
+  if (!start) return "-";
+  return `${start} - ${addMinutes(start, duration || 0)}`;
+}
+
 interface AssessmentRow {
   id: string;
   athlete_id: string;
@@ -229,6 +245,10 @@ export default function SessionDetailPage() {
           <div>
             <p className="text-xs text-muted-foreground">Pelatih</p>
             <p className="font-semibold">{session.profiles?.full_name || "-"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Jam</p>
+            <p className="font-semibold">{timeRange(session.start_time, session.duration_minutes)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Durasi / Intensitas</p>

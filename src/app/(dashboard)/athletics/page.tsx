@@ -52,6 +52,23 @@ function formatDate(dateStr: string) {
   });
 }
 
+// Menghitung jam selesai dari jam mulai + durasi (menit). Format HH:MM.
+function addMinutes(time: string, minutes: number): string {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return time;
+  const [h, m] = time.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  const nh = ((Math.floor(total / 60) % 24) + 24) % 24;
+  const nm = total % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
+// Menampilkan rentang jam "HH:MM - HH:MM" atau "-"
+function timeRange(start: string | null, duration: number | null): string {
+  if (!start) return "-";
+  const end = addMinutes(start, duration || 0);
+  return `${start} - ${end}`;
+}
+
 const supabase = createSupabaseClient();
 
 export default function AthleticsPage() {
@@ -78,6 +95,7 @@ export default function AthleticsPage() {
   const trainingDropdownRef = useRef<HTMLDivElement>(null);
   const [formDuration, setFormDuration] = useState("");
   const [formIntensity, setFormIntensity] = useState("MEDIUM");
+  const [formStartTime, setFormStartTime] = useState("");
   const [trainingsList, setTrainingsList] = useState<Training[]>([]);
 
   // ─── Trainings tab state ───
@@ -212,6 +230,7 @@ export default function AthleticsPage() {
     setFormTrainingIds([]);
     setFormDuration("");
     setFormIntensity("MEDIUM");
+    setFormStartTime("");
     setErrors({});
   };
 
@@ -240,6 +259,7 @@ export default function AthleticsPage() {
       name: formSessionName,
       dates: formDates,
       training_ids: formTrainingIds,
+      start_time: formStartTime,
       duration_minutes: formDuration,
       intensity: formIntensity,
     });
@@ -264,6 +284,7 @@ export default function AthleticsPage() {
         name: formSessionName,
         dates: formDates,
         training_ids: formTrainingIds,
+        start_time: formStartTime,
         duration_minutes: Number(formDuration),
         intensity: formIntensity,
       }),
@@ -613,6 +634,7 @@ export default function AthleticsPage() {
                     <TableHead>Tanggal</TableHead>
                     <TableHead>Kode Unit</TableHead>
                     <TableHead>Jenis Latihan</TableHead>
+                    <TableHead>Jam</TableHead>
                     <TableHead>Durasi</TableHead>
                     <TableHead>Intensitas</TableHead>
                     <TableHead>Aksi</TableHead>
@@ -621,13 +643,13 @@ export default function AthleticsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         Memuat data...
                       </TableCell>
                     </TableRow>
                   ) : sessions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         Belum ada sesi latihan.
                       </TableCell>
                     </TableRow>
@@ -652,6 +674,7 @@ export default function AthleticsPage() {
                             </div>
                           )}
                         </TableCell>
+                        <TableCell className="text-sm">{timeRange(s.start_time, s.duration_minutes)}</TableCell>
                         <TableCell>{s.duration_minutes} menit</TableCell>
                         <TableCell>
                           <Badge variant={intensityVariant[s.intensity || ""] || "secondary"}>
@@ -910,6 +933,22 @@ export default function AthleticsPage() {
                     + Tambah Tanggal
                   </Button>
                   {errors.dates && <p className="text-sm text-red-500">{errors.dates}</p>}
+                </div>
+
+                {/* Jam Mulai */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Jam Mulai <span className="text-red-500">*</span></label>
+                  <Input
+                    type="time"
+                    value={formStartTime}
+                    onChange={(e) => setFormStartTime(e.target.value)}
+                  />
+                  {errors.start_time && <p className="text-sm text-red-500">{errors.start_time}</p>}
+                  {formStartTime && formDuration && (
+                    <p className="text-xs text-muted-foreground">
+                      Jam selesai: {addMinutes(formStartTime, Number(formDuration) || 0)}
+                    </p>
+                  )}
                 </div>
 
                 {/* Durasi & Intensitas */}
