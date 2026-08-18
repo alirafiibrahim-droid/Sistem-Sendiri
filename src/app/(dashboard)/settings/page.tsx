@@ -5,9 +5,9 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -866,12 +866,10 @@ export default function SettingsPage() {
                 {/* Avatar Upload */}
                 <div className="flex items-start gap-6">
                   <div className="shrink-0">
-                    <Avatar
-                      src={profileAvatarPreview || profileAvatarUrl}
-                      alt={user.full_name}
-                      fallback={user.full_name.charAt(0).toUpperCase()}
-                      className="h-24 w-24 text-2xl"
-                    />
+                    <Avatar className="h-24 w-24 text-2xl">
+                      <AvatarImage src={profileAvatarPreview || profileAvatarUrl} alt={user.full_name} />
+                      <AvatarFallback>{user.full_name.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
                   </div>
                   <div className="flex-1 space-y-2">
                     <label className="text-sm font-medium">Foto Profil</label>
@@ -1268,19 +1266,24 @@ export default function SettingsPage() {
                         <TableCell>
                           <Select
                             value={u.role}
-                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                            onValueChange={(value) => handleRoleChange(u.id, value)}
                             disabled={savingRole === u.id}
                           >
-                            <option value="ANGGOTA">Anggota</option>
-                            <option value="KABID">Kabid</option>
-                            <option value="PELATIH">Pelatih</option>
-                            <option value="PEMBINA">Pembina</option>
-                            <option value="BENDAHARA">Bendahara</option>
-                            <option value="SEKRETARIS">Sekretaris</option>
-                            <option value="PENGURUS_INTI">Pengurus Inti</option>
-                            <option value="WAKIL_KETUA">Wakil Ketua</option>
-                            <option value="KETUA_UMUM">Ketua Umum</option>
-                            <option value="ADMIN">Admin</option>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ANGGOTA">Anggota</SelectItem>
+                              <SelectItem value="KABID">Kabid</SelectItem>
+                              <SelectItem value="PELATIH">Pelatih</SelectItem>
+                              <SelectItem value="PEMBINA">Pembina</SelectItem>
+                              <SelectItem value="BENDAHARA">Bendahara</SelectItem>
+                              <SelectItem value="SEKRETARIS">Sekretaris</SelectItem>
+                              <SelectItem value="PENGURUS_INTI">Pengurus Inti</SelectItem>
+                              <SelectItem value="WAKIL_KETUA">Wakil Ketua</SelectItem>
+                              <SelectItem value="KETUA_UMUM">Ketua Umum</SelectItem>
+                              <SelectItem value="ADMIN">Admin</SelectItem>
+                            </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell>
@@ -1696,31 +1699,41 @@ export default function SettingsPage() {
             <form onSubmit={handleTambahUser} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Pilih Anggota <span className="text-red-500">*</span></label>
-                <Select value={tambahUserId} onChange={(e) => setTambahUserId(e.target.value)}>
-                  <option value="">-- Pilih anggota --</option>
-                  {allUsers
-                    .filter((u) => u.id !== user?.id)
-                    .sort((a, b) => a.full_name.localeCompare(b.full_name))
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.full_name} ({u.nim}) - {u.role}
-                      </option>
-                    ))}
+                <Select value={tambahUserId === "" ? "__none__" : tambahUserId} onValueChange={(value) => setTambahUserId(value === "__none__" ? "" : value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="-- Pilih anggota --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">-- Pilih anggota --</SelectItem>
+                    {allUsers
+                      .filter((u) => u.id !== user?.id)
+                      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+                      .map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.full_name} ({u.nim}) - {u.role}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Role <span className="text-red-500">*</span></label>
-                <Select value={tambahUserRole} onChange={(e) => setTambahUserRole(e.target.value)}>
-                  <option value="ANGGOTA">Anggota</option>
-                  <option value="KABID">Kabid</option>
-                  <option value="PELATIH">Pelatih</option>
-                  <option value="PEMBINA">Pembina</option>
-                  <option value="BENDAHARA">Bendahara</option>
-                  <option value="SEKRETARIS">Sekretaris</option>
-                  <option value="PENGURUS_INTI">Pengurus Inti</option>
-                  <option value="WAKIL_KETUA">Wakil Ketua</option>
-                  <option value="KETUA_UMUM">Ketua Umum</option>
-                  <option value="ADMIN">Admin</option>
+                <Select value={tambahUserRole} onValueChange={(value) => setTambahUserRole(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ANGGOTA">Anggota</SelectItem>
+                    <SelectItem value="KABID">Kabid</SelectItem>
+                    <SelectItem value="PELATIH">Pelatih</SelectItem>
+                    <SelectItem value="PEMBINA">Pembina</SelectItem>
+                    <SelectItem value="BENDAHARA">Bendahara</SelectItem>
+                    <SelectItem value="SEKRETARIS">Sekretaris</SelectItem>
+                    <SelectItem value="PENGURUS_INTI">Pengurus Inti</SelectItem>
+                    <SelectItem value="WAKIL_KETUA">Wakil Ketua</SelectItem>
+                    <SelectItem value="KETUA_UMUM">Ketua Umum</SelectItem>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
               {tambahUserError && <p className="text-sm text-red-500 text-center">{tambahUserError}</p>}
@@ -1768,11 +1781,16 @@ export default function SettingsPage() {
               {showFjModal && fjTab === "jurusan" && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Fakultas</label>
-                  <Select value={fjFakultasId} onChange={(e) => setFjFakultasId(e.target.value)}>
-                    <option value="">Pilih fakultas</option>
-                    {fakultasList.map((f) => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
+                  <Select value={fjFakultasId === "" ? "__none__" : fjFakultasId} onValueChange={(value) => setFjFakultasId(value === "__none__" ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih fakultas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Pilih fakultas</SelectItem>
+                      {fakultasList.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   {fjErrors.fakultas_id && <p className="text-sm text-red-500">{fjErrors.fakultas_id}</p>}
                 </div>
@@ -1892,20 +1910,30 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Milik Bank</label>
-                <Select value={walletBankId} onChange={(e) => { setWalletBankId(e.target.value); if (e.target.value) setWalletCashId(""); }}>
-                  <option value="">Tidak dari bank</option>
-                  {banksList.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name} - {b.account_number}</option>
-                  ))}
+                <Select value={walletBankId === "" ? "__none__" : walletBankId} onValueChange={(value) => { setWalletBankId(value === "__none__" ? "" : value); if (value !== "__none__") setWalletCashId(""); }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tidak dari bank" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Tidak dari bank</SelectItem>
+                    {banksList.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name} - {b.account_number}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Milik Kas</label>
-                <Select value={walletCashId} onChange={(e) => { setWalletCashId(e.target.value); if (e.target.value) setWalletBankId(""); }}>
-                  <option value="">Tidak dari kas</option>
-                  {cashList.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                <Select value={walletCashId === "" ? "__none__" : walletCashId} onValueChange={(value) => { setWalletCashId(value === "__none__" ? "" : value); if (value !== "__none__") setWalletBankId(""); }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tidak dari kas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Tidak dari kas</SelectItem>
+                    {cashList.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
                 {walletErrors.bank_id && <p className="text-sm text-red-500">{walletErrors.bank_id}</p>}
               </div>

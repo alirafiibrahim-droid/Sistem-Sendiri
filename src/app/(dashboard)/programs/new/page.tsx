@@ -6,7 +6,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Division } from "@/lib/types/database";
 import { programFormSchema } from "@/lib/validations/program";
 
@@ -254,17 +254,21 @@ export default function NewProgramPage() {
                 Periode (Sertijab)
               </label>
               <Select
-                id="period"
-                value={handoverId}
-                onChange={(e) => setHandoverId(e.target.value)}
+                value={handoverId === "" ? "__none__" : handoverId}
+                onValueChange={(value) => setHandoverId(value === "__none__" ? "" : value)}
               >
-                <option value="">Pilih periode</option>
-                {activePeriods.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    Periode {p.period_to}
-                    {p.status === "ONGOING" ? " (Berjalan)" : ""}
-                  </option>
-                ))}
+                <SelectTrigger id="period">
+                  <SelectValue placeholder="Pilih periode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Pilih periode</SelectItem>
+                  {activePeriods.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      Periode {p.period_to}
+                      {p.status === "ONGOING" ? " (Berjalan)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
               {activePeriods.length === 0 && (
                 <p className="text-xs text-muted-foreground">
@@ -282,16 +286,20 @@ export default function NewProgramPage() {
                   Divisi Penanggung Jawab
                 </label>
                 <Select
-                  id="division"
-                  value={divisionId}
-                  onChange={(e) => setDivisionId(e.target.value)}
+                  value={divisionId === "" ? "__none__" : divisionId}
+                  onValueChange={(value) => setDivisionId(value === "__none__" ? "" : value)}
                 >
-                  <option value="">Pilih divisi</option>
-                  {divisions.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
+                  <SelectTrigger id="division">
+                    <SelectValue placeholder="Pilih divisi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Pilih divisi</SelectItem>
+                    {divisions.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
                 {errors.division_id && <p className="text-sm text-red-500">{errors.division_id}</p>}
               </div>
@@ -331,15 +339,20 @@ export default function NewProgramPage() {
               <div className="flex gap-2 mb-3">
                 <div className="flex-1">
                   <Select
-                    value={selectedMemberId}
-                    onChange={(e) => setSelectedMemberId(e.target.value)}
+                    value={selectedMemberId === "" ? "__none__" : selectedMemberId}
+                    onValueChange={(value) => setSelectedMemberId(value === "__none__" ? "" : value)}
                   >
-                    <option value="">Pilih anggota...</option>
-                    {availableProfiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.full_name} — {p.nim}
-                      </option>
-                    ))}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih anggota..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Pilih anggota...</SelectItem>
+                      {availableProfiles.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.full_name} — {p.nim}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </div>
                 <Button type="button" onClick={addMember} disabled={!selectedMemberId}>

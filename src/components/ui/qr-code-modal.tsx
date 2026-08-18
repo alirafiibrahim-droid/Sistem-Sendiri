@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface QrCodeModalProps {
   open: boolean;
@@ -15,8 +22,6 @@ interface QrCodeModalProps {
 
 export function QrCodeModal({ open, label, title, dateText, url, loading, onClose }: QrCodeModalProps) {
   const [copied, setCopied] = useState(false);
-
-  if (!open) return null;
 
   const qrImage = url
     ? `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(url)}`
@@ -34,35 +39,20 @@ export function QrCodeModal({ open, label, title, dateText, url, loading, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-background shadow-2xl">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden">
         <div className="bg-gradient-to-br from-primary to-blue-600 px-6 pb-6 pt-5 text-primary-foreground">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <DialogHeader className="text-left">
+            <DialogTitle className="text-primary-foreground">
               <p className="text-[11px] font-medium uppercase tracking-widest text-primary-foreground/70">
                 {label}
               </p>
-              <h2 className="mt-1 text-xl font-semibold">{title}</h2>
-              <p className="mt-1 text-sm text-primary-foreground/80">{dateText}</p>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="Tutup"
-              className="rounded-full bg-white/15 p-2 text-white transition-colors hover:bg-white/30"
-            >
-              <svg
-                className="h-4 w-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+              <span className="text-xl font-semibold">{title}</span>
+            </DialogTitle>
+            <DialogDescription className="text-primary-foreground/80">
+              {dateText}
+            </DialogDescription>
+          </DialogHeader>
         </div>
 
         <div className="p-6">
@@ -101,7 +91,7 @@ export function QrCodeModal({ open, label, title, dateText, url, loading, onClos
             Tutup
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

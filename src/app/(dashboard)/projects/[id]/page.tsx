@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
-import { Select } from "@/components/ui/select";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -584,10 +584,15 @@ export default function ProjectDetailPage() {
                   <label className="text-sm font-medium">
                     Tingkat Urgensi <span className="text-red-500">*</span>
                   </label>
-                  <Select value={formUrgency} onChange={(e) => setFormUrgency(e.target.value)}>
-                    <option value="LOW">Rendah</option>
-                    <option value="NORMAL">Normal</option>
-                    <option value="HIGH">Tinggi</option>
+                  <Select value={formUrgency} onValueChange={(value) => setFormUrgency(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LOW">Rendah</SelectItem>
+                      <SelectItem value="NORMAL">Normal</SelectItem>
+                      <SelectItem value="HIGH">Tinggi</SelectItem>
+                    </SelectContent>
                   </Select>
                   {editErrors.urgency_level && <p className="text-sm text-red-500">{editErrors.urgency_level}</p>}
                 </div>
@@ -627,11 +632,16 @@ export default function ProjectDetailPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Status</label>
-                <Select value={formStatus} onChange={(e) => setFormStatus(e.target.value)}>
-                  <option value="PROPOSED">Diajukan</option>
-                  <option value="APPROVED">Disetujui</option>
-                  <option value="ONGOING">Berjalan</option>
-                  <option value="CLOSED">Selesai</option>
+                <Select value={formStatus} onValueChange={(value) => setFormStatus(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PROPOSED">Diajukan</SelectItem>
+                    <SelectItem value="APPROVED">Disetujui</SelectItem>
+                    <SelectItem value="ONGOING">Berjalan</SelectItem>
+                    <SelectItem value="CLOSED">Selesai</SelectItem>
+                  </SelectContent>
                 </Select>
                 {editErrors.status && <p className="text-sm text-red-500">{editErrors.status}</p>}
               </div>
@@ -832,15 +842,20 @@ export default function ProjectDetailPage() {
                         <label className="text-sm font-medium">
                           Pilih Anggota <span className="text-red-500">*</span>
                         </label>
-                        <Select value={newMemberId} onChange={(e) => setNewMemberId(e.target.value)}>
-                          <option value="">Pilih anggota...</option>
-                          {allProfiles
-                            .filter((p) => !members.some((m) => m.user_id === p.id))
-                            .map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.full_name} — {p.nim}
-                              </option>
-                            ))}
+                        <Select value={newMemberId === "" ? "__none__" : newMemberId} onValueChange={(value) => setNewMemberId(value === "__none__" ? "" : value)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih anggota..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Pilih anggota...</SelectItem>
+                            {allProfiles
+                              .filter((p) => !members.some((m) => m.user_id === p.id))
+                              .map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.full_name} — {p.nim}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
@@ -1120,11 +1135,10 @@ export default function ProjectDetailPage() {
                           return (
                             <div key={a.id} className="flex flex-col gap-2">
                               <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-primary/40">
-                                <Avatar
-                                  src={a.profiles?.avatar_url}
-                                  fallback={initials}
-                                  className="h-10 w-10 ring-2 ring-border"
-                                />
+                                <Avatar className="h-10 w-10 ring-2 ring-border">
+                                   <AvatarImage src={a.profiles?.avatar_url ?? undefined} alt={a.profiles?.full_name ?? ""} />
+                                  <AvatarFallback>{initials}</AvatarFallback>
+                                </Avatar>
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-sm font-semibold">
                                     {a.profiles?.full_name || "Unknown"}

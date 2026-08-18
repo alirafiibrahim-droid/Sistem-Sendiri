@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
-import { Select } from "@/components/ui/select";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -593,11 +593,16 @@ export default function ProgramDetailPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Status</label>
-                  <Select value={formStatus} onChange={(e) => setFormStatus(e.target.value)}>
-                    <option value="PLANNED">Direncanakan</option>
-                    <option value="ONGOING">Berlangsung</option>
-                    <option value="COMPLETED">Selesai</option>
-                    <option value="CANCELLED">Dibatalkan</option>
+                  <Select value={formStatus} onValueChange={(value) => setFormStatus(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PLANNED">Direncanakan</SelectItem>
+                      <SelectItem value="ONGOING">Berlangsung</SelectItem>
+                      <SelectItem value="COMPLETED">Selesai</SelectItem>
+                      <SelectItem value="CANCELLED">Dibatalkan</SelectItem>
+                    </SelectContent>
                   </Select>
                   {editErrors.status && <p className="text-sm text-red-500">{editErrors.status}</p>}
                 </div>
@@ -605,25 +610,35 @@ export default function ProgramDetailPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Periode (Sertijab)</label>
-                <Select value={formHandoverId} onChange={(e) => setFormHandoverId(e.target.value)}>
-                  <option value="">Pilih periode</option>
-                  {activePeriods.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      Periode {p.period_to}
-                      {p.status === "ONGOING" ? " (Berjalan)" : ""}
-                    </option>
-                  ))}
+                <Select value={formHandoverId === "" ? "__none__" : formHandoverId} onValueChange={(value) => setFormHandoverId(value === "__none__" ? "" : value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih periode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Pilih periode</SelectItem>
+                    {activePeriods.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        Periode {p.period_to}
+                        {p.status === "ONGOING" ? " (Berjalan)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
                 {editErrors.handover_id && <p className="text-sm text-red-500">{editErrors.handover_id}</p>}
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Divisi Penanggung Jawab</label>
-                <Select value={formDivisionId} onChange={(e) => setFormDivisionId(e.target.value)}>
-                  <option value="">Pilih divisi</option>
-                  {divisions.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
+                <Select value={formDivisionId === "" ? "__none__" : formDivisionId} onValueChange={(value) => setFormDivisionId(value === "__none__" ? "" : value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih divisi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Pilih divisi</SelectItem>
+                    {divisions.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
                 {editErrors.division_id && <p className="text-sm text-red-500">{editErrors.division_id}</p>}
               </div>
@@ -655,15 +670,20 @@ export default function ProgramDetailPage() {
 
                 <div className="flex gap-2 mb-3">
                   <div className="flex-1">
-                    <Select value={newMemberId} onChange={(e) => setNewMemberId(e.target.value)}>
-                      <option value="">Pilih anggota...</option>
-                      {allProfiles
-                        .filter((p) => !formMembers.some((m) => m.user_id === p.id))
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.full_name} — {p.nim}
-                          </option>
-                        ))}
+                    <Select value={newMemberId === "" ? "__none__" : newMemberId} onValueChange={(value) => setNewMemberId(value === "__none__" ? "" : value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih anggota..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Pilih anggota...</SelectItem>
+                        {allProfiles
+                          .filter((p) => !formMembers.some((m) => m.user_id === p.id))
+                          .map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.full_name} — {p.nim}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
                     </Select>
                   </div>
                   <Button
@@ -1183,11 +1203,10 @@ export default function ProgramDetailPage() {
                           return (
                             <div key={a.id} className="flex flex-col gap-2">
                               <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-primary/40">
-                                <Avatar
-                                  src={a.profiles?.avatar_url}
-                                  fallback={initials}
-                                  className="h-10 w-10 ring-2 ring-border"
-                                />
+                                <Avatar className="h-10 w-10 ring-2 ring-border">
+                                   <AvatarImage src={a.profiles?.avatar_url ?? undefined} alt={a.profiles?.full_name ?? ""} />
+                                  <AvatarFallback>{initials}</AvatarFallback>
+                                </Avatar>
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-sm font-semibold">
                                     {a.profiles?.full_name || "Unknown"}

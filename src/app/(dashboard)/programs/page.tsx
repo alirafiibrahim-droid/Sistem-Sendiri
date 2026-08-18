@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -288,29 +288,44 @@ export default function ProgramsPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
-        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="ALL">Semua Status</option>
-          <option value="PLANNED">Planned</option>
-          <option value="ONGOING">Ongoing</option>
-          <option value="COMPLETED">Completed</option>
-          <option value="CANCELLED">Cancelled</option>
+        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Status</SelectItem>
+            <SelectItem value="PLANNED">Planned</SelectItem>
+            <SelectItem value="ONGOING">Ongoing</SelectItem>
+            <SelectItem value="COMPLETED">Completed</SelectItem>
+            <SelectItem value="CANCELLED">Cancelled</SelectItem>
+          </SelectContent>
         </Select>
-        <Select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)}>
-          <option value="ALL">Semua Periode</option>
-          {handovers.map((h) => (
-            <option key={h.id} value={h.id}>
-              Periode {h.period_to}
-              {h.status === "ONGOING" ? " (Berjalan)" : ""}
-            </option>
-          ))}
+        <Select value={periodFilter} onValueChange={(value) => setPeriodFilter(value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Periode</SelectItem>
+            {handovers.map((h) => (
+              <SelectItem key={h.id} value={h.id}>
+                Periode {h.period_to}
+                {h.status === "ONGOING" ? " (Berjalan)" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-        <Select value={divisionFilter} onChange={(e) => setDivisionFilter(e.target.value)}>
-          <option value="ALL">Semua Divisi</option>
-          {divisions.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
+        <Select value={divisionFilter} onValueChange={(value) => setDivisionFilter(value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Divisi</SelectItem>
+            {divisions.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </div>
 

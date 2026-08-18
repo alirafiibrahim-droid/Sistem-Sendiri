@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { handoverSchema } from "@/lib/validations/handover";
 import type { HandoverWithCreator, HandoverStatus } from "@/lib/types/database";
@@ -383,15 +383,19 @@ export default function HandoversPage() {
                       Status Periode
                     </label>
                     <Select
-                      id="status"
                       value={formStatus}
-                      onChange={(e) => setFormStatus(e.target.value as HandoverStatus)}
+                      onValueChange={(value) => setFormStatus(value as HandoverStatus)}
                     >
-                      {allowedStatuses.map((s) => (
-                        <option key={s} value={s}>
-                          {statusLabel[s]}
-                        </option>
-                      ))}
+                      <SelectTrigger id="status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allowedStatuses.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {statusLabel[s]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
                       Status berubah secara berurutan: Belum Berjalan &rarr; Berjalan (perlu URL

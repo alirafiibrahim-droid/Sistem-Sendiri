@@ -5,7 +5,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
@@ -454,14 +454,18 @@ export default function AthleticsPage() {
             <CardContent>
               <Select
                 value={selectedAthlete}
-                onChange={(e) => setSelectedAthlete(e.target.value)}
+                onValueChange={(value) => setSelectedAthlete(value)}
               >
-                <option value="">— Pilih Atlet —</option>
-                {athletes.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.full_name} {a.nim ? `(${a.nim})` : ""}
-                  </option>
-                ))}
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih Atlet" />
+                </SelectTrigger>
+                <SelectContent>
+                  {athletes.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.full_name} {a.nim ? `(${a.nim})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </CardContent>
           </Card>
@@ -980,15 +984,19 @@ export default function AthleticsPage() {
                 {/* Periode Berjalan (Sertijab) */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Periode Berjalan</label>
-                  <Select value={formHandoverId} onChange={(e) => setFormHandoverId(e.target.value)}>
-                    <option value="">Tanpa periode</option>
+                  <Select value={formHandoverId} onValueChange={(value) => setFormHandoverId(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tanpa periode" />
+                  </SelectTrigger>
+                  <SelectContent>
                     {activePeriods.map((p) => (
-                      <option key={p.id} value={p.id}>
+                      <SelectItem key={p.id} value={p.id}>
                         Periode {p.period_to}
                         {p.status === "ONGOING" ? " (Berjalan)" : ""}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </Select>
+                  </SelectContent>
+                </Select>
                   {activePeriods.length === 0 && (
                     <p className="text-xs text-muted-foreground">
                       Belum ada periode Sertijab yang berjalan.
@@ -1028,10 +1036,15 @@ export default function AthleticsPage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Intensitas <span className="text-red-500">*</span></label>
-                    <Select value={formIntensity} onChange={(e) => setFormIntensity(e.target.value)}>
-                      <option value="LOW">Rendah</option>
-                      <option value="MEDIUM">Sedang</option>
-                      <option value="HIGH">Tinggi</option>
+                    <Select value={formIntensity} onValueChange={(value) => setFormIntensity(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LOW">Rendah</SelectItem>
+                        <SelectItem value="MEDIUM">Sedang</SelectItem>
+                        <SelectItem value="HIGH">Tinggi</SelectItem>
+                      </SelectContent>
                     </Select>
                     {errors.intensity && <p className="text-sm text-red-500">{errors.intensity}</p>}
                   </div>
@@ -1088,11 +1101,15 @@ export default function AthleticsPage() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Kategori <span className="text-red-500">*</span></label>
-                  <Select value={trainingCategory} onChange={(e) => setTrainingCategory(e.target.value)}>
-                    <option value="">— Pilih Kategori —</option>
-                    {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
+                  <Select value={trainingCategory} onValueChange={(value) => setTrainingCategory(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih Kategori" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   {trainingErrors.category && <p className="text-sm text-red-500">{trainingErrors.category}</p>}
                 </div>

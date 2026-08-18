@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -289,31 +289,39 @@ export default function AuditLogsPage() {
         />
         <Select
           value={actionFilter}
-          onChange={(e) => {
-            const value = e.target.value;
+          onValueChange={(value) => {
             setActionFilter(value);
             fetchLogs(1, { action: value, table: tableFilter, q: search });
           }}
         >
-          <option value="ALL">Semua Aksi</option>
-          <option value="CREATE">Buat</option>
-          <option value="UPDATE">Ubah</option>
-          <option value="DELETE">Hapus</option>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Aksi</SelectItem>
+            <SelectItem value="CREATE">Buat</SelectItem>
+            <SelectItem value="UPDATE">Ubah</SelectItem>
+            <SelectItem value="DELETE">Hapus</SelectItem>
+          </SelectContent>
         </Select>
         <Select
           value={tableFilter}
-          onChange={(e) => {
-            const value = e.target.value;
+          onValueChange={(value) => {
             setTableFilter(value);
             fetchLogs(1, { action: actionFilter, table: value, q: search });
           }}
         >
-          <option value="ALL">Semua Tabel</option>
-          {TABLE_OPTIONS.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Tabel</SelectItem>
+            {TABLE_OPTIONS.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
         <Button size="sm" onClick={applyFilters}>
           Terapkan Filter
@@ -370,14 +378,13 @@ export default function AuditLogsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2.5">
-                          <Avatar
-                            fallback={
-                              log.profiles?.full_name
+                          <Avatar className="h-7 w-7 text-xs">
+                            <AvatarFallback>
+                              {log.profiles?.full_name
                                 ? log.profiles.full_name.charAt(0).toUpperCase()
-                                : "S"
-                            }
-                            className="h-7 w-7 text-xs"
-                          />
+                                : "S"}
+                            </AvatarFallback>
+                          </Avatar>
                           <span className="font-medium">
                             {log.profiles?.full_name ?? "Sistem"}
                           </span>
@@ -408,13 +415,17 @@ export default function AuditLogsPage() {
         <div className="flex items-center gap-3">
           <Select
             value={String(meta.limit)}
-            onChange={(e) => fetchLogs(1, { limit: Number(e.target.value) })}
-            className="w-24"
+            onValueChange={(value) => fetchLogs(1, { limit: Number(value) })}
           >
-            <option value="10">10</option>
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
+            <SelectTrigger className="w-24">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
           </Select>
           <div className="flex items-center gap-2">
             <Button

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import { achievementFormSchema } from "@/lib/validations/achievement";
@@ -323,60 +323,76 @@ export default function AchievementsPage() {
           className="max-w-sm"
         />
         <Select
-          value={typeFilter}
-          onChange={(e) => {
-            setTypeFilter(e.target.value);
+          value={typeFilter === "" ? "all" : typeFilter}
+          onValueChange={(value) => {
+            setTypeFilter(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-36"
         >
-          <option value="">Semua Tipe</option>
-          <option value="ORGANIZATION">Organisasi</option>
-          <option value="INDIVIDUAL">Individu</option>
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Tipe</SelectItem>
+            <SelectItem value="ORGANIZATION">Organisasi</SelectItem>
+            <SelectItem value="INDIVIDUAL">Individu</SelectItem>
+          </SelectContent>
         </Select>
         <Select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
+          value={statusFilter === "" ? "all" : statusFilter}
+          onValueChange={(value) => {
+            setStatusFilter(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-36"
         >
-          <option value="">Semua Status</option>
-          <option value="APPROVED">Disetujui</option>
-          <option value="PENDING">Menunggu</option>
-          <option value="REJECTED">Ditolak</option>
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Status</SelectItem>
+            <SelectItem value="APPROVED">Disetujui</SelectItem>
+            <SelectItem value="PENDING">Menunggu</SelectItem>
+            <SelectItem value="REJECTED">Ditolak</SelectItem>
+          </SelectContent>
         </Select>
         <Select
-          value={levelFilter}
-          onChange={(e) => {
-            setLevelFilter(e.target.value);
+          value={levelFilter === "" ? "all" : levelFilter}
+          onValueChange={(value) => {
+            setLevelFilter(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-36"
         >
-          <option value="">Semua Level</option>
-          <option value="Internasional">Internasional</option>
-          <option value="Nasional">Nasional</option>
-          <option value="Provinsi">Provinsi</option>
-          <option value="Kabupaten/Kota">Kabupaten/Kota</option>
-          <option value="Universitas">Universitas</option>
-          <option value="Fakultas">Fakultas</option>
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Level</SelectItem>
+            <SelectItem value="Internasional">Internasional</SelectItem>
+            <SelectItem value="Nasional">Nasional</SelectItem>
+            <SelectItem value="Provinsi">Provinsi</SelectItem>
+            <SelectItem value="Kabupaten/Kota">Kabupaten/Kota</SelectItem>
+            <SelectItem value="Universitas">Universitas</SelectItem>
+            <SelectItem value="Fakultas">Fakultas</SelectItem>
+          </SelectContent>
         </Select>
         <Select
-          value={juaraFilter}
-          onChange={(e) => {
-            setJuaraFilter(e.target.value);
+          value={juaraFilter === "" ? "all" : juaraFilter}
+          onValueChange={(value) => {
+            setJuaraFilter(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-36"
         >
-          <option value="">Semua Juara</option>
-          {JUARA_OPTIONS.map((j) => (
-            <option key={j.value} value={j.value}>
-              {j.label}
-            </option>
-          ))}
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Juara</SelectItem>
+            {JUARA_OPTIONS.map((j) => (
+              <SelectItem key={j.value} value={j.value}>
+                {j.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
         <DateRangeFilter
           startDate={filterStartDate}
@@ -596,17 +612,20 @@ export default function AchievementsPage() {
                     Periode Berjalan
                   </label>
                   <Select
-                    id="handover_id"
                     value={formHandoverId}
-                    onChange={(e) => setFormHandoverId(e.target.value)}
+                    onValueChange={(value) => setFormHandoverId(value)}
                   >
-                    <option value="">Pilih periode</option>
-                    {handovers.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        Periode {h.period_to}
-                        {h.status === "ONGOING" ? " (Berjalan)" : ""}
-                      </option>
-                    ))}
+                    <SelectTrigger id="handover_id">
+                      <SelectValue placeholder="Pilih periode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {handovers.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          Periode {h.period_to}
+                          {h.status === "ONGOING" ? " (Berjalan)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   {handovers.length === 0 && (
                     <p className="text-xs text-muted-foreground">
@@ -625,16 +644,19 @@ export default function AchievementsPage() {
                       Juara <span className="text-red-500">*</span>
                     </label>
                     <Select
-                      id="juara"
                       value={formJuara}
-                      onChange={(e) => setFormJuara(e.target.value)}
+                      onValueChange={(value) => setFormJuara(value)}
                     >
-                      <option value="">Pilih juara</option>
-                      {JUARA_OPTIONS.map((j) => (
-                        <option key={j.value} value={j.value}>
-                          {j.label}
-                        </option>
-                      ))}
+                      <SelectTrigger id="juara">
+                        <SelectValue placeholder="Pilih juara" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {JUARA_OPTIONS.map((j) => (
+                          <SelectItem key={j.value} value={j.value}>
+                            {j.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                     {errors.juara && (
                       <p className="text-sm text-red-500">{errors.juara}</p>
@@ -683,18 +705,21 @@ export default function AchievementsPage() {
                       Kategori <span className="text-red-500">*</span>
                     </label>
                     <Select
-                      id="category"
                       value={formCategory}
-                      onChange={(e) => setFormCategory(e.target.value)}
+                      onValueChange={(value) => setFormCategory(value)}
                     >
-                      <option value="">Pilih kategori</option>
-                      <option value="Akademik">Akademik</option>
-                      <option value="Olahraga">Olahraga</option>
-                      <option value="Seni">Seni</option>
-                      <option value="Penelitian">Penelitian</option>
-                      <option value="Teknologi">Teknologi</option>
-                      <option value="Sosial">Sosial</option>
-                      <option value="Lainnya">Lainnya</option>
+                      <SelectTrigger id="category">
+                        <SelectValue placeholder="Pilih kategori" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Akademik">Akademik</SelectItem>
+                        <SelectItem value="Olahraga">Olahraga</SelectItem>
+                        <SelectItem value="Seni">Seni</SelectItem>
+                        <SelectItem value="Penelitian">Penelitian</SelectItem>
+                        <SelectItem value="Teknologi">Teknologi</SelectItem>
+                        <SelectItem value="Sosial">Sosial</SelectItem>
+                        <SelectItem value="Lainnya">Lainnya</SelectItem>
+                      </SelectContent>
                     </Select>
                     {errors.category && (
                       <p className="text-sm text-red-500">{errors.category}</p>
@@ -705,17 +730,20 @@ export default function AchievementsPage() {
                       Level <span className="text-red-500">*</span>
                     </label>
                     <Select
-                      id="level"
                       value={formLevel}
-                      onChange={(e) => setFormLevel(e.target.value)}
+                      onValueChange={(value) => setFormLevel(value)}
                     >
-                      <option value="">Pilih level</option>
-                      <option value="Internasional">Internasional</option>
-                      <option value="Nasional">Nasional</option>
-                      <option value="Provinsi">Provinsi</option>
-                      <option value="Kabupaten/Kota">Kabupaten/Kota</option>
-                      <option value="Universitas">Universitas</option>
-                      <option value="Fakultas">Fakultas</option>
+                      <SelectTrigger id="level">
+                        <SelectValue placeholder="Pilih level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Internasional">Internasional</SelectItem>
+                        <SelectItem value="Nasional">Nasional</SelectItem>
+                        <SelectItem value="Provinsi">Provinsi</SelectItem>
+                        <SelectItem value="Kabupaten/Kota">Kabupaten/Kota</SelectItem>
+                        <SelectItem value="Universitas">Universitas</SelectItem>
+                        <SelectItem value="Fakultas">Fakultas</SelectItem>
+                      </SelectContent>
                     </Select>
                     {errors.level && (
                       <p className="text-sm text-red-500">{errors.level}</p>
@@ -802,16 +830,20 @@ export default function AchievementsPage() {
                       <div className="flex-1 space-y-2">
                         <Select
                           value={p.user_id}
-                          onChange={(e) =>
-                            updateParticipant(idx, "user_id", e.target.value)
+                          onValueChange={(value) =>
+                            updateParticipant(idx, "user_id", value)
                           }
                         >
-                          <option value="">Pilih anggota</option>
-                          {members.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.full_name} ({m.nim})
-                            </option>
-                          ))}
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih anggota" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {members.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                {m.full_name} ({m.nim})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
                         </Select>
                         {errors[`participants.${idx}.user_id`] && (
                           <p className="text-xs text-red-500">
@@ -824,16 +856,20 @@ export default function AchievementsPage() {
                             <div className="flex-1">
                               <Select
                                 value={p.juara}
-                                onChange={(e) =>
-                                  updateParticipant(idx, "juara", e.target.value)
+                                onValueChange={(value) =>
+                                  updateParticipant(idx, "juara", value)
                                 }
                               >
-                                <option value="">Pilih juara</option>
-                                {JUARA_OPTIONS.map((j) => (
-                                  <option key={j.value} value={j.value}>
-                                    {j.label}
-                                  </option>
-                                ))}
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih juara" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {JUARA_OPTIONS.map((j) => (
+                                    <SelectItem key={j.value} value={j.value}>
+                                      {j.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
                               </Select>
                               {errors[`participants.${idx}.juara`] && (
                                 <p className="text-xs text-red-500">

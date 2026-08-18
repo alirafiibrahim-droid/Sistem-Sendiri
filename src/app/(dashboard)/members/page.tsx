@@ -13,8 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
-import { Select } from "@/components/ui/select";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -263,42 +263,62 @@ export default function MembersPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
-        <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-          <option value="ALL">Semua Role</option>
-          <option value="ADMIN">Admin</option>
-          <option value="KETUA_UMUM">Ketua Umum</option>
-          <option value="WAKIL_KETUA">Wakil Ketua</option>
-          <option value="PENGURUS_INTI">Pengurus Inti</option>
-          <option value="SEKRETARIS">Sekretaris</option>
-          <option value="BENDAHARA">Bendahara</option>
-          <option value="KABID">Kabid</option>
-          <option value="PELATIH">Pelatih</option>
-          <option value="PEMBINA">Pembina</option>
-          <option value="ANGGOTA">Anggota</option>
+        <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Role</SelectItem>
+            <SelectItem value="ADMIN">Admin</SelectItem>
+            <SelectItem value="KETUA_UMUM">Ketua Umum</SelectItem>
+            <SelectItem value="WAKIL_KETUA">Wakil Ketua</SelectItem>
+            <SelectItem value="PENGURUS_INTI">Pengurus Inti</SelectItem>
+            <SelectItem value="SEKRETARIS">Sekretaris</SelectItem>
+            <SelectItem value="BENDAHARA">Bendahara</SelectItem>
+            <SelectItem value="KABID">Kabid</SelectItem>
+            <SelectItem value="PELATIH">Pelatih</SelectItem>
+            <SelectItem value="PEMBINA">Pembina</SelectItem>
+            <SelectItem value="ANGGOTA">Anggota</SelectItem>
+          </SelectContent>
         </Select>
-        <Select value={divisionFilter} onChange={(e) => setDivisionFilter(e.target.value)}>
-          <option value="ALL">Semua Divisi</option>
-          {divisions.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
+        <Select value={divisionFilter} onValueChange={(value) => setDivisionFilter(value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Divisi</SelectItem>
+            {divisions.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-        <Select value={fakultasFilter} onChange={(e) => setFakultasFilter(e.target.value)}>
-          <option value="ALL">Semua Fakultas</option>
-          {fakultasList.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
+        <Select value={fakultasFilter} onValueChange={(value) => setFakultasFilter(value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Fakultas</SelectItem>
+            {fakultasList.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                {f.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-        <Select value={jurusanFilter} onChange={(e) => setJurusanFilter(e.target.value)}>
-          <option value="ALL">Semua Jurusan</option>
-          {jurusanList.map((j) => (
-            <option key={j.id} value={j.id}>
-              {j.name}
-            </option>
-          ))}
+        <Select value={jurusanFilter} onValueChange={(value) => setJurusanFilter(value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Semua Jurusan</SelectItem>
+            {jurusanList.map((j) => (
+              <SelectItem key={j.id} value={j.id}>
+                {j.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </div>
 
@@ -336,10 +356,9 @@ export default function MembersPage() {
                   <TableRow key={m.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <Avatar
-                          fallback={m.full_name.split(" ").map((n) => n[0]).join("")}
-                          className="h-8 w-8"
-                        />
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback>{m.full_name.split(" ").map((n) => n[0]).join("")}</AvatarFallback>
+                        </Avatar>
                         <div>
                           <p className="font-medium">{m.full_name}</p>
                           <p className="text-xs text-muted-foreground">{m.email}</p>

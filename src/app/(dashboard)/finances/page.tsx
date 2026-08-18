@@ -6,7 +6,7 @@ import { Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
@@ -670,16 +670,20 @@ export default function FinancesPage() {
           className="max-w-sm"
         />
         <Select
-          value={filterType}
-          onChange={(e) => {
-            setFilterType(e.target.value);
+          value={filterType === "" ? "all" : filterType}
+          onValueChange={(value) => {
+            setFilterType(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-48"
         >
-          <option value="">Semua Tipe</option>
-          <option value="INCOME">Pemasukan</option>
-          <option value="EXPENSE">Pengeluaran</option>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Tipe</SelectItem>
+            <SelectItem value="INCOME">Pemasukan</SelectItem>
+            <SelectItem value="EXPENSE">Pengeluaran</SelectItem>
+          </SelectContent>
         </Select>
         <DateRangeFilter
           startDate={filterStartDate}
@@ -694,48 +698,60 @@ export default function FinancesPage() {
           }}
         />
         <Select
-          value={filterHandoverId}
-          onChange={(e) => {
-            setFilterHandoverId(e.target.value);
+          value={filterHandoverId === "" ? "all" : filterHandoverId}
+          onValueChange={(value) => {
+            setFilterHandoverId(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-56"
         >
-          <option value="">Semua Periode</option>
-          {handovers.map((h) => (
-            <option key={h.id} value={h.id}>
-              {h.status === "COMPLETED"
-                ? `Periode ${h.period_to} (Selesai)`
-                : `Periode ${h.period_to}`}
-            </option>
-          ))}
+          <SelectTrigger className="w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Periode</SelectItem>
+            {handovers.map((h) => (
+              <SelectItem key={h.id} value={h.id}>
+                {h.status === "COMPLETED"
+                  ? `Periode ${h.period_to} (Selesai)`
+                  : `Periode ${h.period_to}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
         <Select
-          value={filterBankCash}
-          onChange={(e) => {
-            setFilterBankCash(e.target.value);
+          value={filterBankCash === "" ? "all" : filterBankCash}
+          onValueChange={(value) => {
+            setFilterBankCash(value === "all" ? "" : value);
             setFilterWalletId("");
             setPage(1);
           }}
-          className="w-56"
         >
-          <option value="">Semua Bank/Kas</option>
-          {bankCashOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>{opt.label}</option>
-          ))}
+          <SelectTrigger className="w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Bank/Kas</SelectItem>
+            {bankCashOptions.map((opt) => (
+              <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
         </Select>
         <Select
-          value={filterWalletId}
-          onChange={(e) => {
-            setFilterWalletId(e.target.value);
+          value={filterWalletId === "" ? "all" : filterWalletId}
+          onValueChange={(value) => {
+            setFilterWalletId(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-56"
         >
-          <option value="">Semua Sumber</option>
-          {availableWallets.map((w) => (
-            <option key={w.id} value={w.id}>{w.name}</option>
-          ))}
+          <SelectTrigger className="w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Sumber</SelectItem>
+            {availableWallets.map((w) => (
+              <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </div>
 
@@ -1014,25 +1030,26 @@ export default function FinancesPage() {
                     </span>
                   </label>
                   <Select
-                    id="handover_id"
                     value={formHandoverId}
-                    onChange={(e) => setFormHandoverId(e.target.value)}
+                    onValueChange={(value) => setFormHandoverId(value)}
                   >
-                    {activePeriods.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        Periode {h.period_to}
-                      </option>
-                    ))}
-                    {formHandoverId &&
-                      !activePeriods.some((h) => h.id === formHandoverId) &&
-                      editingTx?.handovers && (
-                        <option value={formHandoverId}>
-                          Periode {editingTx.handovers.period_to} (Selesai)
-                        </option>
-                      )}
-                    {activePeriods.length === 0 && !formHandoverId && (
-                      <option value="">Tidak ada periode berjalan</option>
-                    )}
+                    <SelectTrigger id="handover_id">
+                      <SelectValue placeholder="Pilih periode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activePeriods.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          Periode {h.period_to}
+                        </SelectItem>
+                      ))}
+                      {formHandoverId &&
+                        !activePeriods.some((h) => h.id === formHandoverId) &&
+                        editingTx?.handovers && (
+                          <SelectItem value={formHandoverId}>
+                            Periode {editingTx.handovers.period_to} (Selesai)
+                          </SelectItem>
+                        )}
+                    </SelectContent>
                   </Select>
                   {errors.handover_id && (
                     <p className="text-sm text-red-500">{errors.handover_id}</p>
@@ -1063,38 +1080,45 @@ export default function FinancesPage() {
                     Sumber
                   </label>
                   <Select
-                    id="wallet"
-                    value={formWalletId}
-                    onChange={(e) => setFormWalletId(e.target.value)}
+                    value={formWalletId === "" ? "__none__" : formWalletId}
+                    onValueChange={(value) => setFormWalletId(value === "__none__" ? "" : value)}
                   >
-                    <option value="">Tanpa sumber tertentu</option>
-                    {banksWithoutWallet.length > 0 && (
-                      <optgroup label="Bank">
-                        {banksWithoutWallet.map((b) => (
-                          <option key={`bank-${b.id}`} value={`bank:${b.id}`}>
-                            {b.name} - {b.account_number}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {cashWithoutWallet.length > 0 && (
-                      <optgroup label="Kas">
-                        {cashWithoutWallet.map((c) => (
-                          <option key={`cash-${c.id}`} value={`cash:${c.id}`}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {walletsList.length > 0 && (
-                      <optgroup label="Dompet">
-                        {walletsList.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    <SelectTrigger id="wallet">
+                      <SelectValue placeholder="Tanpa sumber tertentu" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Tanpa sumber tertentu</SelectItem>
+                      {banksWithoutWallet.length > 0 && (
+                        <>
+                          <SelectItem value="__bank_header__" disabled>Bank</SelectItem>
+                          {banksWithoutWallet.map((b) => (
+                            <SelectItem key={`bank-${b.id}`} value={`bank:${b.id}`}>
+                              {b.name} - {b.account_number}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {cashWithoutWallet.length > 0 && (
+                        <>
+                          <SelectItem value="__cash_header__" disabled>Kas</SelectItem>
+                          {cashWithoutWallet.map((c) => (
+                            <SelectItem key={`cash-${c.id}`} value={`cash:${c.id}`}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {walletsList.length > 0 && (
+                        <>
+                          <SelectItem value="__wallet_header__" disabled>Dompet</SelectItem>
+                          {walletsList.map((w) => (
+                            <SelectItem key={w.id} value={w.id}>
+                              {w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
                   </Select>
                   {errors.wallet_id && (
                     <p className="text-sm text-red-500">{errors.wallet_id}</p>
@@ -1107,29 +1131,35 @@ export default function FinancesPage() {
                     Program / Proyek Terkait
                   </label>
                   <Select
-                    id="program"
-                    value={formSubjectId}
-                    onChange={(e) => setFormSubjectId(e.target.value)}
+                    value={formSubjectId === "" ? "__none__" : formSubjectId}
+                    onValueChange={(value) => setFormSubjectId(value === "__none__" ? "" : value)}
                   >
-                    <option value="">Tidak terkait program/proyek</option>
-                    {programs.length > 0 && (
-                      <optgroup label="Program">
-                        {programs.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {projects.length > 0 && (
-                      <optgroup label="Proyek Insidental">
-                        {projects.map((p) => (
-                          <option key={p.id} value={`project:${p.id}`}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    <SelectTrigger id="program">
+                      <SelectValue placeholder="Tidak terkait program/proyek" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Tidak terkait program/proyek</SelectItem>
+                      {programs.length > 0 && (
+                        <>
+                          <SelectItem value="__program_header__" disabled>Program</SelectItem>
+                          {programs.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {projects.length > 0 && (
+                        <>
+                          <SelectItem value="__project_header__" disabled>Proyek Insidental</SelectItem>
+                          {projects.map((p) => (
+                            <SelectItem key={p.id} value={`project:${p.id}`}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
                   </Select>
                   {errors.program_id && (
                     <p className="text-sm text-red-500">{errors.program_id}</p>

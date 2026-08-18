@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -325,18 +325,22 @@ export default function ReportConfigPage() {
                   )}
                   {(field.type === "select" || field.type === "mode") && (
                     <Select
-                      value={value}
-                      onChange={(e) =>
-                        setFilters((prev) => ({ ...prev, [field.key]: e.target.value }))
+                      value={value || "__none__"}
+                      onValueChange={(v) =>
+                        setFilters((prev) => ({ ...prev, [field.key]: v === "__none__" ? "" : v }))
                       }
                     >
-                      <option value="">— Pilih —</option>
-                      {loadingOpts && <option disabled>Memuat…</option>}
-                      {opts.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
+                      <SelectTrigger>
+                        <SelectValue placeholder="— Pilih —" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— Pilih —</SelectItem>
+                        {opts.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                   )}
                   {field.help && <p className="mt-1 text-xs text-muted-foreground">{field.help}</p>}

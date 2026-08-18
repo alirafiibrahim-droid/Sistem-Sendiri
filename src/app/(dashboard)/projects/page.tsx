@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { projectFormSchema } from "@/lib/validations/project";
 import type { IncidentalProject } from "@/lib/types/database";
@@ -248,18 +248,22 @@ export default function ProjectsPage() {
           className="max-w-sm"
         />
         <Select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
+          value={statusFilter === "" ? "all" : statusFilter}
+          onValueChange={(value) => {
+            setStatusFilter(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-48"
         >
-          <option value="">Semua Status</option>
-          <option value="PROPOSED">Diajukan</option>
-          <option value="APPROVED">Disetujui</option>
-          <option value="ONGOING">Berjalan</option>
-          <option value="CLOSED">Selesai</option>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Status</SelectItem>
+            <SelectItem value="PROPOSED">Diajukan</SelectItem>
+            <SelectItem value="APPROVED">Disetujui</SelectItem>
+            <SelectItem value="ONGOING">Berjalan</SelectItem>
+            <SelectItem value="CLOSED">Selesai</SelectItem>
+          </SelectContent>
         </Select>
       </div>
 
@@ -409,17 +413,21 @@ export default function ProjectsPage() {
                     Periode Berjalan
                   </label>
                   <Select
-                    id="handover_id"
-                    value={formHandoverId}
-                    onChange={(e) => setFormHandoverId(e.target.value)}
+                    value={formHandoverId === "" ? "__none__" : formHandoverId}
+                    onValueChange={(value) => setFormHandoverId(value === "__none__" ? "" : value)}
                   >
-                    <option value="">Pilih periode</option>
-                    {handovers.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        Periode {h.period_to}
-                        {h.status === "ONGOING" ? " (Berjalan)" : ""}
-                      </option>
-                    ))}
+                    <SelectTrigger id="handover_id">
+                      <SelectValue placeholder="Pilih periode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Pilih periode</SelectItem>
+                      {handovers.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          Periode {h.period_to}
+                          {h.status === "ONGOING" ? " (Berjalan)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   {handovers.length === 0 && (
                     <p className="text-xs text-muted-foreground">
@@ -456,13 +464,17 @@ export default function ProjectsPage() {
                       Tingkat Urgensi <span className="text-red-500">*</span>
                     </label>
                     <Select
-                      id="urgency"
                       value={formUrgency}
-                      onChange={(e) => setFormUrgency(e.target.value)}
+                      onValueChange={(value) => setFormUrgency(value)}
                     >
-                      <option value="LOW">Rendah</option>
-                      <option value="NORMAL">Normal</option>
-                      <option value="HIGH">Tinggi</option>
+                      <SelectTrigger id="urgency">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LOW">Rendah</SelectItem>
+                        <SelectItem value="NORMAL">Normal</SelectItem>
+                        <SelectItem value="HIGH">Tinggi</SelectItem>
+                      </SelectContent>
                     </Select>
                     {errors.urgency_level && (
                       <p className="text-sm text-red-500">{errors.urgency_level}</p>

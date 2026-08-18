@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -334,13 +334,17 @@ export default function AchievementDetailPage() {
                   <label className="text-sm font-medium">
                     Juara <span className="text-red-500">*</span>
                   </label>
-                  <Select value={formJuara} onChange={(e) => setFormJuara(e.target.value)}>
-                    <option value="">Pilih juara</option>
-                    {JUARA_OPTIONS.map((j) => (
-                      <option key={j.value} value={j.value}>
-                        {j.label}
-                      </option>
-                    ))}
+                  <Select value={formJuara} onValueChange={(value) => setFormJuara(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih juara" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {JUARA_OPTIONS.map((j) => (
+                        <SelectItem key={j.value} value={j.value}>
+                          {j.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   {editErrors.juara && <p className="text-sm text-red-500">{editErrors.juara}</p>}
                 </div>
@@ -375,15 +379,19 @@ export default function AchievementDetailPage() {
                   <label className="text-sm font-medium">
                     Kategori <span className="text-red-500">*</span>
                   </label>
-                  <Select value={formCategory} onChange={(e) => setFormCategory(e.target.value)}>
-                    <option value="">Pilih kategori</option>
-                    <option value="Akademik">Akademik</option>
-                    <option value="Olahraga">Olahraga</option>
-                    <option value="Seni">Seni</option>
-                    <option value="Penelitian">Penelitian</option>
-                    <option value="Teknologi">Teknologi</option>
-                    <option value="Sosial">Sosial</option>
-                    <option value="Lainnya">Lainnya</option>
+                  <Select value={formCategory} onValueChange={(value) => setFormCategory(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih kategori" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Akademik">Akademik</SelectItem>
+                      <SelectItem value="Olahraga">Olahraga</SelectItem>
+                      <SelectItem value="Seni">Seni</SelectItem>
+                      <SelectItem value="Penelitian">Penelitian</SelectItem>
+                      <SelectItem value="Teknologi">Teknologi</SelectItem>
+                      <SelectItem value="Sosial">Sosial</SelectItem>
+                      <SelectItem value="Lainnya">Lainnya</SelectItem>
+                    </SelectContent>
                   </Select>
                   {editErrors.category && <p className="text-sm text-red-500">{editErrors.category}</p>}
                 </div>
@@ -391,14 +399,18 @@ export default function AchievementDetailPage() {
                   <label className="text-sm font-medium">
                     Level <span className="text-red-500">*</span>
                   </label>
-                  <Select value={formLevel} onChange={(e) => setFormLevel(e.target.value)}>
-                    <option value="">Pilih level</option>
-                    <option value="Internasional">Internasional</option>
-                    <option value="Nasional">Nasional</option>
-                    <option value="Provinsi">Provinsi</option>
-                    <option value="Kabupaten/Kota">Kabupaten/Kota</option>
-                    <option value="Universitas">Universitas</option>
-                    <option value="Fakultas">Fakultas</option>
+                  <Select value={formLevel} onValueChange={(value) => setFormLevel(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Internasional">Internasional</SelectItem>
+                      <SelectItem value="Nasional">Nasional</SelectItem>
+                      <SelectItem value="Provinsi">Provinsi</SelectItem>
+                      <SelectItem value="Kabupaten/Kota">Kabupaten/Kota</SelectItem>
+                      <SelectItem value="Universitas">Universitas</SelectItem>
+                      <SelectItem value="Fakultas">Fakultas</SelectItem>
+                    </SelectContent>
                   </Select>
                   {editErrors.level && <p className="text-sm text-red-500">{editErrors.level}</p>}
                 </div>

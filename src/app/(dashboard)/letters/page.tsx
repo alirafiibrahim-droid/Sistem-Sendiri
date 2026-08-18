@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
   Table,
@@ -281,16 +281,20 @@ export default function LettersPage() {
           className="max-w-sm"
         />
         <Select
-          value={typeFilter}
-          onChange={(e) => {
-            setTypeFilter(e.target.value);
+          value={typeFilter === "" ? "all" : typeFilter}
+          onValueChange={(value) => {
+            setTypeFilter(value === "all" ? "" : value);
             setPage(1);
           }}
-          className="w-48"
         >
-          <option value="">Semua Tipe</option>
-          <option value="INCOMING">Surat Masuk</option>
-          <option value="OUTGOING">Surat Keluar</option>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Tipe</SelectItem>
+            <SelectItem value="INCOMING">Surat Masuk</SelectItem>
+            <SelectItem value="OUTGOING">Surat Keluar</SelectItem>
+          </SelectContent>
         </Select>
         <DateRangeFilter
           startDate={filterStartDate}
@@ -589,12 +593,16 @@ export default function LettersPage() {
                     Klasifikasi
                   </label>
                   <Select
-                    id="classification"
                     value={formClassification}
-                    onChange={(e) => setFormClassification(e.target.value)}
+                    onValueChange={(value) => setFormClassification(value)}
                   >
-                    <option value="PUBLIC">Publik</option>
-                    <option value="CONFIDENTIAL">Rahasia</option>
+                    <SelectTrigger id="classification">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PUBLIC">Publik</SelectItem>
+                      <SelectItem value="CONFIDENTIAL">Rahasia</SelectItem>
+                    </SelectContent>
                   </Select>
                   {errors.classification && (
                     <p className="text-sm text-red-500">{errors.classification}</p>
@@ -607,17 +615,20 @@ export default function LettersPage() {
                     Periode Berjalan
                   </label>
                   <Select
-                    id="handover_id"
                     value={formHandoverId}
-                    onChange={(e) => setFormHandoverId(e.target.value)}
+                    onValueChange={(value) => setFormHandoverId(value)}
                   >
-                    <option value="">Pilih periode</option>
-                    {handovers.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        Periode {h.period_to}
-                        {h.status === "ONGOING" ? " (Berjalan)" : ""}
-                      </option>
-                    ))}
+                    <SelectTrigger id="handover_id">
+                      <SelectValue placeholder="Pilih periode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {handovers.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          Periode {h.period_to}
+                          {h.status === "ONGOING" ? " (Berjalan)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   {handovers.length === 0 && (
                     <p className="text-xs text-muted-foreground">

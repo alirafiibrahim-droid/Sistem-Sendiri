@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
-import { Select } from "@/components/ui/select";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ProfileWithDivision, Division, Fakultas, Jurusan } from "@/lib/types/database";
 
 const roleLabels: Record<string, string> = {
@@ -175,11 +175,10 @@ export default function MemberDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-4">
-            <Avatar
-              src={member.avatar_url}
-              fallback={member.full_name.split(" ").map((n) => n[0]).join("")}
-              className="h-16 w-16"
-            />
+            <Avatar className="h-16 w-16">
+              <AvatarImage src={member.avatar_url ?? undefined} alt={member.full_name} />
+              <AvatarFallback>{member.full_name.split(" ").map((n) => n[0]).join("")}</AvatarFallback>
+            </Avatar>
             <div>
               <h3 className="text-xl font-bold">{member.full_name}</h3>
               <p className="text-muted-foreground">{member.email}</p>
@@ -213,17 +212,22 @@ export default function MemberDetailPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Role</label>
-              <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="ANGGOTA">Anggota</option>
-                <option value="KABID">Kabid (Kepala Bidang)</option>
-                <option value="PELATIH">Pelatih</option>
-                <option value="PEMBINA">Pembina</option>
-                <option value="BENDAHARA">Bendahara</option>
-                <option value="SEKRETARIS">Sekretaris</option>
-                <option value="PENGURUS_INTI">Pengurus Inti</option>
-                <option value="WAKIL_KETUA">Wakil Ketua</option>
-                <option value="KETUA_UMUM">Ketua Umum</option>
-                <option value="ADMIN">Admin</option>
+              <Select value={role} onValueChange={(value) => setRole(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ANGGOTA">Anggota</SelectItem>
+                  <SelectItem value="KABID">Kabid (Kepala Bidang)</SelectItem>
+                  <SelectItem value="PELATIH">Pelatih</SelectItem>
+                  <SelectItem value="PEMBINA">Pembina</SelectItem>
+                  <SelectItem value="BENDAHARA">Bendahara</SelectItem>
+                  <SelectItem value="SEKRETARIS">Sekretaris</SelectItem>
+                  <SelectItem value="PENGURUS_INTI">Pengurus Inti</SelectItem>
+                  <SelectItem value="WAKIL_KETUA">Wakil Ketua</SelectItem>
+                  <SelectItem value="KETUA_UMUM">Ketua Umum</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
                 Admin: akses penuh. Ketua Umum & Wakil: pengawasan. Pengurus Inti, Sekretaris & Bendahara: CRUD & approval. Kabid: kelola divisi. Pelatih: bimbingan atlet. Pembina: pengawasan keatletan. Anggota: akses terbatas.
@@ -232,41 +236,61 @@ export default function MemberDetailPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Status Keaktifan</label>
-              <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="AKTIF">Aktif</option>
-                <option value="CUTI">Cuti</option>
-                <option value="ALUMNI">Alumni</option>
-                <option value="NONAKTIF">Nonaktif</option>
+              <Select value={status} onValueChange={(value) => setStatus(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AKTIF">Aktif</SelectItem>
+                  <SelectItem value="CUTI">Cuti</SelectItem>
+                  <SelectItem value="ALUMNI">Alumni</SelectItem>
+                  <SelectItem value="NONAKTIF">Nonaktif</SelectItem>
+                </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Divisi</label>
-              <Select value={divisionId} onChange={(e) => setDivisionId(e.target.value)}>
-                <option value="">Tidak ada divisi</option>
-                {divisions.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
+              <Select value={divisionId === "" ? "__none__" : divisionId} onValueChange={(value) => setDivisionId(value === "__none__" ? "" : value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tidak ada divisi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Tidak ada divisi</SelectItem>
+                  {divisions.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Fakultas</label>
-              <Select value={fakultasId} onChange={(e) => { setFakultasId(e.target.value); setJurusanId(""); }}>
-                <option value="">Tidak ada fakultas</option>
-                {fakultasList.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
+              <Select value={fakultasId === "" ? "__none__" : fakultasId} onValueChange={(value) => { setFakultasId(value === "__none__" ? "" : value); setJurusanId(""); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tidak ada fakultas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Tidak ada fakultas</SelectItem>
+                  {fakultasList.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Jurusan</label>
-              <Select value={jurusanId} onChange={(e) => setJurusanId(e.target.value)}>
-                <option value="">Tidak ada jurusan</option>
-                {jurusanList.filter((j) => !fakultasId || j.fakultas_id === fakultasId).map((j) => (
-                  <option key={j.id} value={j.id}>{j.name}</option>
-                ))}
+              <Select value={jurusanId === "" ? "__none__" : jurusanId} onValueChange={(value) => setJurusanId(value === "__none__" ? "" : value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tidak ada jurusan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Tidak ada jurusan</SelectItem>
+                  {jurusanList.filter((j) => !fakultasId || j.fakultas_id === fakultasId).map((j) => (
+                    <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -129,12 +129,10 @@ export function Sidebar() {
       </nav>
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <Avatar
-            src={userAvatar}
-            alt={userName}
-            fallback={userName ? userName.charAt(0).toUpperCase() : "?"}
-            className="h-9 w-9 text-sm"
-          />
+          <Avatar className="h-9 w-9">
+            <AvatarImage src={userAvatar} alt={userName} />
+            <AvatarFallback>{userName ? userName.charAt(0).toUpperCase() : "?"}</AvatarFallback>
+          </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{userName || "Memuat..."}</p>
             <p className="text-xs text-sidebar-foreground/50 truncate">{userEmail}</p>

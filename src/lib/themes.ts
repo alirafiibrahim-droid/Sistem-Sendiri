@@ -198,6 +198,8 @@ export function applyTheme(def: ThemeDefinition) {
   set("--foreground", foreground);
   set("--card", mixColors(foreground, background, 0.06));
   set("--card-foreground", foreground);
+  set("--popover", mixColors(foreground, background, 0.06));
+  set("--popover-foreground", foreground);
   set("--primary", primary);
   set("--primary-foreground", primaryForeground);
   set("--secondary", mixColors(foreground, background, 0.06));

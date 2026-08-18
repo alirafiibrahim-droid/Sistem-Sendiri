@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
   Table,
@@ -255,20 +255,30 @@ export default function InventoryPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
-        <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-          <option value="">Semua Kategori</option>
-          <option value="ELECTRONICS">Elektronik</option>
-          <option value="FURNITURE">Meubelair</option>
-          <option value="STATIONERY">ATK</option>
-          <option value="DOCUMENTS">Dokumen</option>
-          <option value="OTHER">Lainnya</option>
+        <Select value={categoryFilter === "" ? "all" : categoryFilter} onValueChange={(value) => setCategoryFilter(value === "all" ? "" : value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Kategori</SelectItem>
+            <SelectItem value="ELECTRONICS">Elektronik</SelectItem>
+            <SelectItem value="FURNITURE">Meubelair</SelectItem>
+            <SelectItem value="STATIONERY">ATK</SelectItem>
+            <SelectItem value="DOCUMENTS">Dokumen</SelectItem>
+            <SelectItem value="OTHER">Lainnya</SelectItem>
+          </SelectContent>
         </Select>
-        <Select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)}>
-          <option value="">Semua Kondisi</option>
-          <option value="GOOD">Baik</option>
-          <option value="DAMAGED_LIGHT">Rusak Ringan</option>
-          <option value="DAMAGED_HEAVY">Rusak Berat</option>
-          <option value="LOST">Hilang</option>
+        <Select value={conditionFilter === "" ? "all" : conditionFilter} onValueChange={(value) => setConditionFilter(value === "all" ? "" : value)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Kondisi</SelectItem>
+            <SelectItem value="GOOD">Baik</SelectItem>
+            <SelectItem value="DAMAGED_LIGHT">Rusak Ringan</SelectItem>
+            <SelectItem value="DAMAGED_HEAVY">Rusak Berat</SelectItem>
+            <SelectItem value="LOST">Hilang</SelectItem>
+          </SelectContent>
         </Select>
       </div>
 
@@ -438,15 +448,19 @@ export default function InventoryPage() {
                   <label className="text-sm font-medium">
                     Pilih Aset <span className="text-red-500">*</span>
                   </label>
-                  <Select value={disposalItemId} onChange={(e) => setDisposalItemId(e.target.value)}>
-                    <option value="">Pilih aset...</option>
-                    {items
-                      .filter((i) => i.stock > 0)
-                      .map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.code} - {i.name} (stok {i.stock} unit)
-                        </option>
-                      ))}
+                  <Select value={disposalItemId} onValueChange={(value) => setDisposalItemId(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih aset..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {items
+                        .filter((i) => i.stock > 0)
+                        .map((i) => (
+                          <SelectItem key={i.id} value={i.id}>
+                            {i.code} - {i.name} (stok {i.stock} unit)
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
                   </Select>
                 </div>
 

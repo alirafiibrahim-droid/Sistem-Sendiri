@@ -6,7 +6,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { inventoryItemFormSchema } from "@/lib/validations/inventory";
 import type { WalletWithOwner, Bank, CashAccount } from "@/lib/types/database";
 
@@ -195,12 +195,17 @@ export default function NewInventoryItemPage() {
                 <label className="text-sm font-medium" htmlFor="category">
                   Kategori <span className="text-red-500">*</span>
                 </label>
-                <Select id="category" value={category} onChange={(e) => setCategory(e.target.value)}>
-                  <option value="ELECTRONICS">Elektronik</option>
-                  <option value="FURNITURE">Meubelair</option>
-                  <option value="STATIONERY">ATK</option>
-                  <option value="DOCUMENTS">Dokumen</option>
-                  <option value="OTHER">Lainnya</option>
+                <Select value={category} onValueChange={(value) => setCategory(value)}>
+                  <SelectTrigger id="category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ELECTRONICS">Elektronik</SelectItem>
+                    <SelectItem value="FURNITURE">Meubelair</SelectItem>
+                    <SelectItem value="STATIONERY">ATK</SelectItem>
+                    <SelectItem value="DOCUMENTS">Dokumen</SelectItem>
+                    <SelectItem value="OTHER">Lainnya</SelectItem>
+                  </SelectContent>
                 </Select>
                 {errors.category && <p className="text-sm text-red-500">{errors.category}</p>}
               </div>
@@ -208,11 +213,16 @@ export default function NewInventoryItemPage() {
                 <label className="text-sm font-medium" htmlFor="condition">
                   Kondisi <span className="text-red-500">*</span>
                 </label>
-                <Select id="condition" value={condition} onChange={(e) => setCondition(e.target.value)}>
-                  <option value="GOOD">Baik</option>
-                  <option value="DAMAGED_LIGHT">Rusak Ringan</option>
-                  <option value="DAMAGED_HEAVY">Rusak Berat</option>
-                  <option value="LOST">Hilang</option>
+                <Select value={condition} onValueChange={(value) => setCondition(value)}>
+                  <SelectTrigger id="condition">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GOOD">Baik</SelectItem>
+                    <SelectItem value="DAMAGED_LIGHT">Rusak Ringan</SelectItem>
+                    <SelectItem value="DAMAGED_HEAVY">Rusak Berat</SelectItem>
+                    <SelectItem value="LOST">Hilang</SelectItem>
+                  </SelectContent>
                 </Select>
                 {errors.condition && <p className="text-sm text-red-500">{errors.condition}</p>}
               </div>
@@ -354,29 +364,37 @@ export default function NewInventoryItemPage() {
                   <label className="text-sm font-medium" htmlFor="purchase-source">
                     Sumber Dana <span className="text-red-500">*</span>
                   </label>
-                  <Select id="purchase-source" value={purchaseSource} onChange={(e) => setPurchaseSource(e.target.value)}>
-                    <option value="">Pilih sumber dana...</option>
-                    {banksWithoutWallet.length > 0 && (
-                      <optgroup label="Bank">
-                        {banksWithoutWallet.map((b) => (
-                          <option key={`bank-${b.id}`} value={`bank:${b.id}`}>{b.name} - {b.account_number}</option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {cashWithoutWallet.length > 0 && (
-                      <optgroup label="Kas">
-                        {cashWithoutWallet.map((c) => (
-                          <option key={`cash-${c.id}`} value={`cash:${c.id}`}>{c.name}</option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {walletsList.length > 0 && (
-                      <optgroup label="Dompet">
-                        {walletsList.map((w) => (
-                          <option key={w.id} value={w.id}>{w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})</option>
-                        ))}
-                      </optgroup>
-                    )}
+                  <Select value={purchaseSource === "" ? "__none__" : purchaseSource} onValueChange={(value) => setPurchaseSource(value === "__none__" ? "" : value)}>
+                    <SelectTrigger id="purchase-source">
+                      <SelectValue placeholder="Pilih sumber dana..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Pilih sumber dana...</SelectItem>
+                      {banksWithoutWallet.length > 0 && (
+                        <>
+                          <SelectItem value="__bank_header__" disabled>Bank</SelectItem>
+                          {banksWithoutWallet.map((b) => (
+                            <SelectItem key={`bank-${b.id}`} value={`bank:${b.id}`}>{b.name} - {b.account_number}</SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {cashWithoutWallet.length > 0 && (
+                        <>
+                          <SelectItem value="__cash_header__" disabled>Kas</SelectItem>
+                          {cashWithoutWallet.map((c) => (
+                            <SelectItem key={`cash-${c.id}`} value={`cash:${c.id}`}>{c.name}</SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {walletsList.length > 0 && (
+                        <>
+                          <SelectItem value="__wallet_header__" disabled>Dompet</SelectItem>
+                          {walletsList.map((w) => (
+                            <SelectItem key={w.id} value={w.id}>{w.name} ({w.banks?.name || w.cash_accounts?.name || "-"})</SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">

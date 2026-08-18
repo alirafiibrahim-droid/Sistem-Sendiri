@@ -6,7 +6,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Division, Fakultas, Jurusan } from "@/lib/types/database";
 
 type FormErrors = Record<string, string>;
@@ -191,16 +191,20 @@ export default function NewMemberPage() {
                   Divisi
                 </label>
                 <Select
-                  id="division"
-                  value={divisionId}
-                  onChange={(e) => setDivisionId(e.target.value)}
+                  value={divisionId === "" ? "__none__" : divisionId}
+                  onValueChange={(value) => setDivisionId(value === "__none__" ? "" : value)}
                 >
-                  <option value="">Pilih divisi</option>
-                  {divisions.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
+                  <SelectTrigger id="division">
+                    <SelectValue placeholder="Pilih divisi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Pilih divisi</SelectItem>
+                    {divisions.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </div>
@@ -211,14 +215,18 @@ export default function NewMemberPage() {
                   Fakultas
                 </label>
                 <Select
-                  id="fakultas"
-                  value={fakultasId}
-                  onChange={(e) => { setFakultasId(e.target.value); setJurusanId(""); }}
+                  value={fakultasId === "" ? "__none__" : fakultasId}
+                  onValueChange={(value) => { setFakultasId(value === "__none__" ? "" : value); setJurusanId(""); }}
                 >
-                  <option value="">Pilih fakultas</option>
-                  {fakultasList.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))}
+                  <SelectTrigger id="fakultas">
+                    <SelectValue placeholder="Pilih fakultas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Pilih fakultas</SelectItem>
+                    {fakultasList.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
@@ -226,14 +234,18 @@ export default function NewMemberPage() {
                   Jurusan
                 </label>
                 <Select
-                  id="jurusan"
-                  value={jurusanId}
-                  onChange={(e) => setJurusanId(e.target.value)}
+                  value={jurusanId === "" ? "__none__" : jurusanId}
+                  onValueChange={(value) => setJurusanId(value === "__none__" ? "" : value)}
                 >
-                  <option value="">Pilih jurusan</option>
-                  {filteredJurusan.map((j) => (
-                    <option key={j.id} value={j.id}>{j.name}</option>
-                  ))}
+                  <SelectTrigger id="jurusan">
+                    <SelectValue placeholder="Pilih jurusan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Pilih jurusan</SelectItem>
+                    {filteredJurusan.map((j) => (
+                      <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </div>

@@ -1,7 +1,13 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { PeriodOption } from "@/lib/dashboard";
 
 interface PeriodFilterProps {
@@ -26,16 +32,19 @@ export function PeriodFilter({ periods, selected }: PeriodFilterProps) {
       <span className="hidden sm:inline">Periode</span>
       <Select
         value={selected}
-        onChange={(e) => handleChange(e.target.value)}
-        className="w-auto min-w-48"
-        aria-label="Pilih periode"
+        onValueChange={handleChange}
       >
-        {periods.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.label}
-          </option>
-        ))}
-        <option value="all">Semua Periode</option>
+        <SelectTrigger className="w-auto min-w-48" aria-label="Pilih periode">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {periods.map((p) => (
+            <SelectItem key={p.id} value={p.id}>
+              {p.label}
+            </SelectItem>
+          ))}
+          <SelectItem value="all">Semua Periode</SelectItem>
+        </SelectContent>
       </Select>
     </label>
   );

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateRangeFilter } from "@/components/ui/date-range-filter";
 import {
   Table,
@@ -615,25 +615,33 @@ function AttendanceInner() {
                   <label className="text-sm font-medium">Jenis Kehadiran</label>
                   <Select
                     value={typeFilter}
-                    onChange={(e) => setTypeFilter(e.target.value)}
-                    className="w-48"
+                    onValueChange={(value) => setTypeFilter(value)}
                   >
-                    <option value="all">Semua Jenis</option>
-                    <option value="program">Sesi Program Kerja</option>
-                    <option value="training">Sesi Latihan</option>
-                    <option value="project">Sesi Proyek Insidental</option>
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Jenis</SelectItem>
+                      <SelectItem value="program">Sesi Program Kerja</SelectItem>
+                      <SelectItem value="training">Sesi Latihan</SelectItem>
+                      <SelectItem value="project">Sesi Proyek Insidental</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Mode Absen</label>
                   <Select
                     value={methodFilter}
-                    onChange={(e) => setMethodFilter(e.target.value)}
-                    className="w-40"
+                    onValueChange={(value) => setMethodFilter(value)}
                   >
-                    <option value="all">Semua Mode</option>
-                    <option value="MANUAL">Manual</option>
-                    <option value="QR">QR Code</option>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Mode</SelectItem>
+                      <SelectItem value="MANUAL">Manual</SelectItem>
+                      <SelectItem value="QR">QR Code</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -256,13 +256,18 @@ export default function BudgetManager({ type, entityId, canEdit }: BudgetManager
                 <Select
                   value={formType}
                   disabled={editingHasChildren}
-                  onChange={(e) => {
-                    setFormType(e.target.value as "induk" | "anak");
+                  onValueChange={(value) => {
+                    setFormType(value as "induk" | "anak");
                     setFormParentId("");
                   }}
                 >
-                  <option value="induk">Induk Pos</option>
-                  <option value="anak">Anak Pos</option>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="induk">Induk Pos</SelectItem>
+                    <SelectItem value="anak">Anak Pos</SelectItem>
+                  </SelectContent>
                 </Select>
                 {editingHasChildren && (
                   <p className="text-xs text-muted-foreground">
@@ -276,13 +281,18 @@ export default function BudgetManager({ type, entityId, canEdit }: BudgetManager
                   <label className="text-sm font-medium">
                     Induk Pos <span className="text-red-500">*</span>
                   </label>
-                  <Select value={formParentId} onChange={(e) => setFormParentId(e.target.value)}>
-                    <option value="">Pilih induk pos...</option>
-                    {availableParents.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
+                  <Select value={formParentId === "" ? "__none__" : formParentId} onValueChange={(value) => setFormParentId(value === "__none__" ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih induk pos..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Pilih induk pos...</SelectItem>
+                      {availableParents.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                   {availableParents.length === 0 && (
                     <p className="text-xs text-muted-foreground">

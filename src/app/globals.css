@@ -1,10 +1,13 @@
 @import "tailwindcss";
 
 :root {
+  --radius: 0.625rem;
   --background: #fae3cf;
   --foreground: #0a0f24;
   --card: #ffffff;
   --card-foreground: #0a0f24;
+  --popover: #ffffff;
+  --popover-foreground: #0a0f24;
   --primary: #bb2233;
   --primary-foreground: #ffffff;
   --secondary: color-mix(in srgb, #0a0f24 6%, #fae3cf);
@@ -19,18 +22,31 @@
   --input: color-mix(in srgb, #0a0f24 24%, #fae3cf);
   --ring: #bb2233;
   --success: #16a34a;
+  --success-foreground: #ffffff;
   --warning: #fa8603;
-  --sidebar-bg: #7c0a02;
+  --warning-foreground: #0a0f24;
+  --chart-1: #bb2233;
+  --chart-2: #fa8603;
+  --chart-3: #16a34a;
+  --chart-4: #3b82f6;
+  --chart-5: #8b5cf6;
+  --sidebar: #7c0a02;
   --sidebar-foreground: #ffffff;
   --sidebar-accent: #5c0802;
   --sidebar-border: color-mix(in srgb, #ffffff 14%, #7c0a02);
 }
 
 @theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -45,7 +61,15 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar-bg);
   --color-sidebar-bg: var(--sidebar-bg);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
@@ -63,6 +87,8 @@
     --foreground: #fae3cf;
     --card: color-mix(in srgb, #fae3cf 6%, #0a0f24);
     --card-foreground: #fae3cf;
+    --popover: color-mix(in srgb, #fae3cf 6%, #0a0f24);
+    --popover-foreground: #fae3cf;
     --primary: #bb2233;
     --primary-foreground: #ffffff;
     --secondary: color-mix(in srgb, #fae3cf 10%, #0a0f24);
@@ -77,7 +103,9 @@
     --input: color-mix(in srgb, #fae3cf 22%, #0a0f24);
     --ring: #fa8603;
     --success: #22c55e;
+    --success-foreground: #ffffff;
     --warning: #fa8603;
+    --warning-foreground: #0a0f24;
     --sidebar-bg: #7c0a02;
     --sidebar-foreground: #ffffff;
     --sidebar-accent: #5c0802;
