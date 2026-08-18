@@ -218,11 +218,11 @@ function FinanceSection({ data }: { data: DashboardData["finances"] }) {
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div>
+        <div className="min-w-0">
           <h4 className="mb-2 text-sm font-semibold text-muted-foreground">Arus Kas 6 Bulan Terakhir</h4>
           <CashflowChart data={data.monthly} />
         </div>
-        <div>
+        <div className="min-w-0">
           <h4 className="mb-2 text-sm font-semibold text-muted-foreground">Transaksi Terbaru</h4>
           {data.recent.length === 0 ? (
             <EmptyState />

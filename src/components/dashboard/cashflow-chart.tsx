@@ -7,6 +7,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  ResponsiveContainer,
 } from "recharts";
 
 export interface CashflowPoint {
@@ -51,30 +52,30 @@ export function CashflowChart({ data, height = 220 }: CashflowChartProps) {
 
   return (
     <div>
-      <RechartsBarChart
-        width={640}
-        height={height}
-        data={data}
-        margin={{ top: 18, right: 8, bottom: 4, left: 0 }}
-      >
-        <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
-        <XAxis
-          dataKey="month"
-          tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          tickFormatter={formatAxis}
-          tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-          width={40}
-        />
-        <Tooltip content={<CustomTooltip />} cursor={false} />
-        <Bar dataKey="income" fill={INCOME_COLOR} radius={[3, 3, 0, 0]} fillOpacity={0.9} maxBarSize={28} />
-        <Bar dataKey="expense" fill={EXPENSE_COLOR} radius={[3, 3, 0, 0]} fillOpacity={0.9} maxBarSize={28} />
-      </RechartsBarChart>
+      <ResponsiveContainer width="100%" height={height}>
+        <RechartsBarChart
+          data={data}
+          margin={{ top: 18, right: 8, bottom: 4, left: 0 }}
+        >
+          <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
+          <XAxis
+            dataKey="month"
+            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tickFormatter={formatAxis}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            width={40}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={false} />
+          <Bar dataKey="income" fill={INCOME_COLOR} radius={[3, 3, 0, 0]} fillOpacity={0.9} maxBarSize={28} />
+          <Bar dataKey="expense" fill={EXPENSE_COLOR} radius={[3, 3, 0, 0]} fillOpacity={0.9} maxBarSize={28} />
+        </RechartsBarChart>
+      </ResponsiveContainer>
       <div className="mt-2 flex justify-center gap-4 text-xs font-medium">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: INCOME_COLOR }} />
