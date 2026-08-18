@@ -76,10 +76,10 @@ export default function LineChart({
   ).sort((a, b) => a.localeCompare(b));
 
   const chartData = dates.map((date) => {
-    const row: Record<string, string | number> = { date };
+    const row: Record<string, string | number | null> = { date };
     for (const s of series) {
       const pt = s.points.find((p) => p.date === date);
-      if (pt) row[s.category] = pt.value;
+      row[s.category] = pt ? pt.value : null;
     }
     return row;
   });
@@ -118,6 +118,7 @@ export default function LineChart({
             strokeWidth={2}
             dot={{ r: 4, fill: "white", strokeWidth: 2, stroke: PALETTE[i % PALETTE.length] }}
             activeDot={{ r: 6 }}
+            connectNulls
           />
         ))}
       </RechartsLineChart>
