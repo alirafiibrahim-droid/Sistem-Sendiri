@@ -59,9 +59,9 @@ export default function SpiderChart({
         width={size}
         height={size}
         data={chartData}
-        cx="50%"
-        cy="50%"
-        outerRadius="70%"
+        cx={size / 2}
+        cy={size / 2}
+        outerRadius={size * 0.35}
       >
         <PolarGrid stroke="var(--border)" />
         <PolarAngleAxis
