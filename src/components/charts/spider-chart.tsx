@@ -6,7 +6,6 @@ import {
   PolarAngleAxis,
   Radar,
   Tooltip,
-  ResponsiveContainer,
 } from "recharts";
 
 interface SpiderChartProps {
@@ -44,6 +43,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
 export default function SpiderChart({
   data,
   maxScore = 10,
+  size = 300,
   className,
 }: SpiderChartProps) {
   if (data.length === 0) return null;
@@ -54,25 +54,30 @@ export default function SpiderChart({
   }));
 
   return (
-    <div className={className}>
-      <ResponsiveContainer width="100%" height={320}>
-        <RadarChart data={chartData} cx="50%" cy="50%" outerRadius="70%">
-          <PolarGrid stroke="var(--border)" />
-          <PolarAngleAxis
-            dataKey="label"
-            tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 }}
-          />
-          <Radar
-            dataKey="value"
-            stroke="var(--primary)"
-            fill="var(--primary)"
-            fillOpacity={0.15}
-            strokeWidth={2}
-            dot={{ r: 4, fill: "var(--primary)", stroke: "white", strokeWidth: 2 }}
-          />
-          <Tooltip content={<CustomTooltip />} />
-        </RadarChart>
-      </ResponsiveContainer>
+    <div className={className} style={{ width: size, height: size }}>
+      <RadarChart
+        width={size}
+        height={size}
+        data={chartData}
+        cx="50%"
+        cy="50%"
+        outerRadius="70%"
+      >
+        <PolarGrid stroke="var(--border)" />
+        <PolarAngleAxis
+          dataKey="label"
+          tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 }}
+        />
+        <Radar
+          dataKey="value"
+          stroke="var(--primary)"
+          fill="var(--primary)"
+          fillOpacity={0.15}
+          strokeWidth={2}
+          dot={{ r: 4, fill: "var(--primary)", stroke: "white", strokeWidth: 2 }}
+        />
+        <Tooltip content={<CustomTooltip />} />
+      </RadarChart>
     </div>
   );
 }

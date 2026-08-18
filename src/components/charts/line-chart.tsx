@@ -7,8 +7,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  Legend,
 } from "recharts";
 
 export interface LineChartPoint {
@@ -88,41 +86,41 @@ export default function LineChart({
 
   return (
     <div className={className}>
-      <ResponsiveContainer width="100%" height={height}>
-        <RechartsLineChart
-          data={chartData}
-          margin={{ top: 20, right: 28, bottom: 4, left: 0 }}
-        >
-          <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
-          <XAxis
-            dataKey="date"
-            tickFormatter={formatShortDate}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            interval="preserveStartEnd"
+      <RechartsLineChart
+        width={640}
+        height={height}
+        data={chartData}
+        margin={{ top: 20, right: 28, bottom: 4, left: 0 }}
+      >
+        <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tickFormatter={formatShortDate}
+          tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          interval="preserveStartEnd"
+        />
+        <YAxis
+          domain={[0, maxScore]}
+          tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          width={32}
+        />
+        <Tooltip content={<CustomTooltip />} />
+        {series.map((s, i) => (
+          <Line
+            key={s.category}
+            type="monotone"
+            dataKey={s.category}
+            stroke={PALETTE[i % PALETTE.length]}
+            strokeWidth={2}
+            dot={{ r: 4, fill: "white", strokeWidth: 2, stroke: PALETTE[i % PALETTE.length] }}
+            activeDot={{ r: 6 }}
           />
-          <YAxis
-            domain={[0, maxScore]}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            width={32}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          {series.map((s, i) => (
-            <Line
-              key={s.category}
-              type="monotone"
-              dataKey={s.category}
-              stroke={PALETTE[i % PALETTE.length]}
-              strokeWidth={2}
-              dot={{ r: 4, fill: "white", strokeWidth: 2, stroke: PALETTE[i % PALETTE.length] }}
-              activeDot={{ r: 6 }}
-            />
-          ))}
-        </RechartsLineChart>
-      </ResponsiveContainer>
+        ))}
+      </RechartsLineChart>
       <div className="flex justify-center gap-4 mt-2">
         {series.map((s, i) => (
           <span

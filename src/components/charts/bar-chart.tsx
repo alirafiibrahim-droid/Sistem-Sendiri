@@ -7,7 +7,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   Cell,
 } from "recharts";
 
@@ -44,33 +43,33 @@ export default function BarChart({
 }: BarChartProps) {
   return (
     <div className={className}>
-      <ResponsiveContainer width="100%" height={height}>
-        <RechartsBarChart
-          data={data}
-          margin={{ top: 20, right: 8, bottom: 4, left: 0 }}
-        >
-          <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
-          <XAxis
-            dataKey="label"
-            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            domain={[0, maxScore]}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            width={32}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={false} />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48}>
-            {data.map((entry, i) => (
-              <Cell key={i} fill={barColor(entry.value)} fillOpacity={0.9} />
-            ))}
-          </Bar>
-        </RechartsBarChart>
-      </ResponsiveContainer>
+      <RechartsBarChart
+        width={640}
+        height={height}
+        data={data}
+        margin={{ top: 20, right: 8, bottom: 4, left: 0 }}
+      >
+        <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
+        <XAxis
+          dataKey="label"
+          tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          domain={[0, maxScore]}
+          tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          width={32}
+        />
+        <Tooltip content={<CustomTooltip />} cursor={false} />
+        <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48}>
+          {data.map((entry, i) => (
+            <Cell key={i} fill={barColor(entry.value)} fillOpacity={0.9} />
+          ))}
+        </Bar>
+      </RechartsBarChart>
     </div>
   );
 }

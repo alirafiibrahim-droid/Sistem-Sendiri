@@ -4,7 +4,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  ResponsiveContainer,
   Tooltip,
 } from "recharts";
 
@@ -55,24 +54,22 @@ export function DonutChart({
   return (
     <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              dataKey="value"
-              cx="50%"
-              cy="50%"
-              innerRadius={(size - thickness) / 2}
-              outerRadius={size / 2}
-              strokeWidth={0}
-            >
-              {chartData.map((entry, i) => (
-                <Cell key={i} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-          </PieChart>
-        </ResponsiveContainer>
+        <PieChart width={size} height={size}>
+          <Pie
+            data={chartData}
+            dataKey="value"
+            cx="50%"
+            cy="50%"
+            innerRadius={(size - thickness) / 2}
+            outerRadius={size / 2}
+            strokeWidth={0}
+          >
+            {chartData.map((entry, i) => (
+              <Cell key={i} fill={entry.color} />
+            ))}
+          </Pie>
+          <Tooltip content={<CustomTooltip />} />
+        </PieChart>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <span className="text-stat-sm font-bold text-foreground">
             {centerValue ?? (total ? String(total) : "0")}
