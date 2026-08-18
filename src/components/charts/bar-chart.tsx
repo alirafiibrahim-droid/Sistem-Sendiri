@@ -1,5 +1,16 @@
 "use client";
 
+import {
+  BarChart as RechartsBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+
 interface BarChartProps {
   data: Array<{ label: string; value: number }>;
   maxScore?: number;
@@ -13,97 +24,53 @@ function barColor(value: number) {
   return "#dc2626";
 }
 
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border bg-background/95 px-2.5 py-1.5 text-xs shadow-lg">
+      <p className="font-semibold">{label}</p>
+      <p className="font-bold" style={{ color: barColor(payload[0].value) }}>
+        Nilai: {payload[0].value}
+      </p>
+    </div>
+  );
+}
+
 export default function BarChart({
   data,
   maxScore = 10,
   height = 220,
   className,
 }: BarChartProps) {
-  const W = 640;
-  const H = height;
-  const pad = { top: 20, right: 8, bottom: 44, left: 40 };
-  const plotW = W - pad.left - pad.right;
-  const plotH = H - pad.top - pad.bottom;
-  const n = Math.max(data.length, 1);
-  const barSlot = plotW / n;
-  const barWidth = Math.min(barSlot * 0.55, 48);
-
-  const yAt = (value: number) =>
-    pad.top + plotH * (1 - Math.min(Math.max(value, 0), maxScore) / maxScore);
-
-  const gridValues = [0, 2, 4, 6, 8, 10].filter((v) => v <= maxScore);
-
   return (
     <div className={className}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        width="100%"
-        height={H}
-        role="img"
-        aria-label="Grafik batang nilai per kategori"
-      >
-        {gridValues.map((v) => (
-          <g key={v}>
-            <line
-              x1={pad.left}
-              x2={W - pad.right}
-              y1={yAt(v)}
-              y2={yAt(v)}
-              stroke="currentColor"
-              className="text-border"
-              strokeWidth={1}
-              strokeDasharray="4 4"
-            />
-            <text
-              x={pad.left - 8}
-              y={yAt(v)}
-              textAnchor="end"
-              dominantBaseline="central"
-              className="fill-muted-foreground text-[10px]"
-            >
-              {v}
-            </text>
-          </g>
-        ))}
-
-        {data.map((d, i) => {
-          const x = pad.left + i * barSlot + (barSlot - barWidth) / 2;
-          const y = yAt(d.value);
-          const barH = pad.top + plotH - y;
-          const color = barColor(d.value);
-          return (
-            <g key={d.label}>
-              <rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={Math.max(barH, 0)}
-                rx={4}
-                fill={color}
-                opacity={0.9}
-              />
-              {d.value > 0 && (
-                <text
-                  x={x + barWidth / 2}
-                  y={y - 6}
-                  textAnchor="middle"
-                  className="fill-muted-foreground text-[10px] font-medium"
-                >
-                  {d.value}
-                </text>
-              )}
-              <text
-                x={x + barWidth / 2}
-                y={H - 14}
-                textAnchor="middle"
-                className="fill-muted-foreground text-[10px]"
-              >
-                {d.label}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+      <ResponsiveContainer width="100%" height={height}>
+        <RechartsBarChart
+          data={data}
+          margin={{ top: 20, right: 8, bottom: 4, left: 0 }}
+        >
+          <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            domain={[0, maxScore]}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            width={32}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={false} />
+          <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48}>
+            {data.map((entry, i) => (
+              <Cell key={i} fill={barColor(entry.value)} fillOpacity={0.9} />
+            ))}
+          </Bar>
+        </RechartsBarChart>
+      </ResponsiveContainer>
     </div>
   );
 }

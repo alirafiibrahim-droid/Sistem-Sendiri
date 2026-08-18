@@ -1,5 +1,16 @@
 "use client";
 
+import {
+  LineChart as RechartsLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+
 export interface LineChartPoint {
   date: string;
   value: number;
@@ -40,121 +51,78 @@ function formatShortDate(dateStr: string) {
   return d.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit" });
 }
 
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; dataKey: string }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border bg-background/95 px-2.5 py-1.5 text-xs shadow-lg">
+      <p className="mb-1 font-semibold">{label ? formatShortDate(label) : ""}</p>
+      {payload.map((p, i) => (
+        <p key={i} className="font-medium" style={{ color: PALETTE[i % PALETTE.length] }}>
+          {CATEGORY_LABELS[p.dataKey] || p.dataKey}: {p.value}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export default function LineChart({
   series,
   maxScore = 10,
   height = 280,
   className,
 }: LineChartProps) {
-  const W = 640;
-  const H = height;
-  const pad = { top: 20, right: 28, bottom: 44, left: 40 };
+  if (series.length === 0) return null;
 
-  // Sumbu X = tanggal (satu titik per kategori per hari karena penilaian
-  // variabel yang sama pada hari yang sama sudah dirata-ratakan di API).
   const dates = Array.from(
     new Set(series.flatMap((s) => s.points.map((p) => p.date)))
   ).sort((a, b) => a.localeCompare(b));
-  const n = Math.max(dates.length, 2);
-  const plotW = W - pad.left - pad.right;
-  const plotH = H - pad.top - pad.bottom;
 
-  const xAt = (date: string) =>
-    pad.left + (dates.indexOf(date) / (n - 1)) * plotW;
-  const yAt = (value: number) =>
-    pad.top +
-    plotH *
-      (1 - Math.min(Math.max(value, 0), maxScore) / maxScore);
-
-  const gridValues = [0, 2, 4, 6, 8, 10].filter((v) => v <= maxScore);
-  const labelStep = Math.max(1, Math.ceil(dates.length / 6));
+  const chartData = dates.map((date) => {
+    const row: Record<string, string | number> = { date };
+    for (const s of series) {
+      const pt = s.points.find((p) => p.date === date);
+      if (pt) row[s.category] = pt.value;
+    }
+    return row;
+  });
 
   return (
     <div className={className}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        width="100%"
-        height={H}
-        role="img"
-        aria-label="Grafik progres nilai performa"
-      >
-        {gridValues.map((v) => (
-          <g key={v}>
-            <line
-              x1={pad.left}
-              x2={W - pad.right}
-              y1={yAt(v)}
-              y2={yAt(v)}
-              stroke="currentColor"
-              className="text-border"
-              strokeWidth={1}
-              strokeDasharray="4 4"
+      <ResponsiveContainer width="100%" height={height}>
+        <RechartsLineChart
+          data={chartData}
+          margin={{ top: 20, right: 28, bottom: 4, left: 0 }}
+        >
+          <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tickFormatter={formatShortDate}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            domain={[0, maxScore]}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            width={32}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          {series.map((s, i) => (
+            <Line
+              key={s.category}
+              type="monotone"
+              dataKey={s.category}
+              stroke={PALETTE[i % PALETTE.length]}
+              strokeWidth={2}
+              dot={{ r: 4, fill: "white", strokeWidth: 2, stroke: PALETTE[i % PALETTE.length] }}
+              activeDot={{ r: 6 }}
             />
-            <text
-              x={pad.left - 8}
-              y={yAt(v)}
-              textAnchor="end"
-              dominantBaseline="central"
-              className="fill-muted-foreground text-[10px]"
-            >
-              {v}
-            </text>
-          </g>
-        ))}
-
-        {dates.map((d, i) =>
-          i % labelStep === 0 ? (
-            <text
-              key={d}
-              x={xAt(d)}
-              y={H - 14}
-              textAnchor="middle"
-              className="fill-muted-foreground text-[10px]"
-            >
-              {formatShortDate(d)}
-            </text>
-          ) : null
-        )}
-
-        {series.map((s, si) => {
-          const color = PALETTE[si % PALETTE.length];
-          const pts = s.points.map((p) => ({ x: xAt(p.date), y: yAt(p.value), p }));
-          const line = pts.map((pt) => `${pt.x},${pt.y}`).join(" ");
-          return (
-            <g key={s.category}>
-              <polyline
-                points={line}
-                fill="none"
-                stroke={color}
-                strokeWidth={2}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-              {pts.map((pt, i) => (
-                <g key={i}>
-                  <circle
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={4}
-                    fill="white"
-                    stroke={color}
-                    strokeWidth={2}
-                  />
-                  <text
-                    x={pt.x}
-                    y={pt.y - 9}
-                    textAnchor="middle"
-                    className="fill-muted-foreground text-[9px] font-medium"
-                  >
-                    {pt.p.value}
-                  </text>
-                </g>
-              ))}
-            </g>
-          );
-        })}
-      </svg>
-
+          ))}
+        </RechartsLineChart>
+      </ResponsiveContainer>
       <div className="flex justify-center gap-4 mt-2">
         {series.map((s, i) => (
           <span

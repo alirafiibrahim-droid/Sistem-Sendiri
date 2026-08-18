@@ -1,6 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import {
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 interface SpiderChartProps {
   data: Array<{ category: string; value: number }>;
@@ -21,162 +28,51 @@ const CATEGORY_LABELS: Record<string, string> = {
   GAME_INTELLIGENCE: "Game Intelligence",
 };
 
-function polarToCartesian(
-  cx: number,
-  cy: number,
-  r: number,
-  angleDeg: number
-): { x: number; y: number } {
-  const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { category: string; value: number } }> }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-md border bg-background/95 px-2.5 py-1.5 text-xs shadow-lg">
+      <p className="font-semibold">
+        {CATEGORY_LABELS[d.category] || d.category}
+      </p>
+      <p className="font-bold text-primary">Nilai: {d.value}</p>
+    </div>
+  );
 }
 
 export default function SpiderChart({
   data,
   maxScore = 10,
-  size = 300,
   className,
 }: SpiderChartProps) {
-  const [hovered, setHovered] = useState<number | null>(null);
+  if (data.length === 0) return null;
 
-  const cx = size / 2;
-  const cy = size / 2;
-  const radius = (size / 2) * 0.7;
-  const n = data.length;
-  if (n === 0) return null;
-
-  const angleStep = 360 / Math.max(n, 3);
-  const levels = 5;
-
-  // Grid polygons (spider-web)
-  const gridLevels = Array.from({ length: levels }, (_, i) => {
-    const r = (radius * (i + 1)) / levels;
-    const points = Array.from({ length: n }, (_, j) => {
-      const p = polarToCartesian(cx, cy, r, j * angleStep);
-      return `${p.x},${p.y}`;
-    }).join(" ");
-    return points;
-  });
-
-  // Axis lines
-  const axes = Array.from({ length: n }, (_, j) => {
-    const end = polarToCartesian(cx, cy, radius, j * angleStep);
-    return { x1: cx, y1: cy, x2: end.x, y2: end.y };
-  });
-
-  // Data polygon
-  const dataPoints = data.map((d, j) => {
-    const r = (Math.min(d.value, maxScore) / maxScore) * radius;
-    return polarToCartesian(cx, cy, r, j * angleStep);
-  });
-  const dataPolygon = dataPoints.map((p) => `${p.x},${p.y}`).join(" ");
-
-  // Labels
-  const labels = data.map((d, j) => {
-    const labelR = radius + 28;
-    const p = polarToCartesian(cx, cy, labelR, j * angleStep);
-    return { ...d, ...p, label: CATEGORY_LABELS[d.category] || d.category };
-  });
-
-  // Tooltip overlay position (clamped inside chart bounds)
-  let tooltipStyle: React.CSSProperties | null = null;
-  if (hovered !== null) {
-    const p = dataPoints[hovered];
-    const width = 132;
-    const height = 48;
-    const pad = 8;
-    let left = p.x + 12;
-    let top = p.y - height - 8;
-    if (left + width > size - pad) left = p.x - width - 12;
-    if (top < pad) top = p.y + 14;
-    tooltipStyle = { left, top, width };
-  }
+  const chartData = data.map((d) => ({
+    ...d,
+    label: CATEGORY_LABELS[d.category] || d.category,
+  }));
 
   return (
-    <div className={`relative ${className || ""}`}>
-      <svg
-        viewBox={`0 0 ${size} ${size}`}
-        width={size}
-        height={size}
-        className="mx-auto"
-      >
-        {/* Grid */}
-        {gridLevels.map((pts, i) => (
-          <polygon
-            key={i}
-            points={pts}
-            fill="none"
-            stroke="currentColor"
-            className="text-border"
-            strokeWidth={1}
+    <div className={className}>
+      <ResponsiveContainer width="100%" height={320}>
+        <RadarChart data={chartData} cx="50%" cy="50%" outerRadius="70%">
+          <PolarGrid stroke="var(--border)" />
+          <PolarAngleAxis
+            dataKey="label"
+            tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 }}
           />
-        ))}
-
-        {/* Axes */}
-        {axes.map((a, i) => (
-          <line
-            key={i}
-            x1={a.x1}
-            y1={a.y1}
-            x2={a.x2}
-            y2={a.y2}
-            stroke="currentColor"
-            className="text-border"
-            strokeWidth={1}
-          />
-        ))}
-
-        {/* Data area */}
-        <polygon
-          points={dataPolygon}
-          fill="hsl(var(--primary) / 0.15)"
-          stroke="hsl(var(--primary))"
-          strokeWidth={2}
-        />
-
-        {/* Data dots with hover tooltip */}
-        {dataPoints.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r={hovered === i ? 6 : 4}
-            fill="hsl(var(--primary))"
-            stroke="white"
+          <Radar
+            dataKey="value"
+            stroke="var(--primary)"
+            fill="var(--primary)"
+            fillOpacity={0.15}
             strokeWidth={2}
-            className="cursor-pointer transition-all"
-            onMouseEnter={() => setHovered(i)}
-            onMouseLeave={() => setHovered(null)}
+            dot={{ r: 4, fill: "var(--primary)", stroke: "white", strokeWidth: 2 }}
           />
-        ))}
-
-        {/* Labels */}
-        {labels.map((l, i) => (
-          <text
-            key={i}
-            x={l.x}
-            y={l.y}
-            textAnchor="middle"
-            dominantBaseline="central"
-            className="fill-muted-foreground text-[11px] font-medium"
-          >
-            {l.label}
-          </text>
-        ))}
-      </svg>
-
-      {/* Tooltip overlay */}
-      {hovered !== null && tooltipStyle && (
-        <div
-          className="pointer-events-none absolute z-10 rounded-md border bg-background/95 px-2.5 py-1.5 text-xs shadow-lg"
-          style={tooltipStyle}
-        >
-          <p className="font-semibold">
-            {CATEGORY_LABELS[data[hovered].category] || data[hovered].category}
-          </p>
-          <p className="font-bold text-primary">Nilai: {data[hovered].value}</p>
-        </div>
-      )}
+          <Tooltip content={<CustomTooltip />} />
+        </RadarChart>
+      </ResponsiveContainer>
     </div>
   );
 }

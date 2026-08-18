@@ -1,3 +1,13 @@
+"use client";
+
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+
 export interface DonutDatum {
   label: string;
   value: number;
@@ -14,6 +24,19 @@ interface DonutChartProps {
 
 const FALLBACK_COLORS = ["#bb2233", "#fa8603", "#0a0f24", "#e8848f", "#f7b46b", "#4a5266", "#c0505d", "#e8a24f"];
 
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: DonutDatum }> }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-md border bg-background/95 px-2.5 py-1.5 text-xs shadow-lg">
+      <p className="font-semibold">{d.label}</p>
+      <p className="font-bold" style={{ color: d.color || "var(--primary)" }}>
+        {d.value}
+      </p>
+    </div>
+  );
+}
+
 export function DonutChart({
   data,
   size = 160,
@@ -21,84 +44,46 @@ export function DonutChart({
   centerLabel,
   centerValue,
 }: DonutChartProps) {
-  const radius = (size - thickness) / 2;
-  const circumference = 2 * Math.PI * radius;
   const total = data.reduce((s, d) => s + d.value, 0);
+  const filtered = data.filter((d) => d.value > 0);
 
-  const segments = data
-    .filter((d) => d.value > 0)
-    .reduce<{ color: string; dash: number; gap: number; offset: number }[]>(
-      (acc, d, i) => {
-        const fraction = total > 0 ? d.value / total : 0;
-        const dash = fraction * circumference;
-        const prevOffset = acc.length ? acc[acc.length - 1].offset + acc[acc.length - 1].dash : 0;
-        acc.push({
-          color: d.color || FALLBACK_COLORS[i % FALLBACK_COLORS.length],
-          dash,
-          gap: Math.max(circumference - dash, 0),
-          offset: prevOffset,
-        });
-        return acc;
-      },
-      []
-    );
-
-  const center = size / 2;
+  const chartData = filtered.map((d, i) => ({
+    ...d,
+    color: d.color || FALLBACK_COLORS[i % FALLBACK_COLORS.length],
+  }));
 
   return (
     <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-      <svg
-        viewBox={`0 0 ${size} ${size}`}
-        width={size}
-        height={size}
-        role="img"
-        aria-label="Diagram donat distribusi data"
-        className="shrink-0"
-      >
-        <circle
-          cx={center}
-          cy={center}
-          r={radius}
-          fill="none"
-          stroke="var(--border, #e2e8f0)"
-          strokeWidth={thickness}
-        />
-        {segments.map((seg, i) => (
-          <circle
-            key={i}
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth={thickness}
-            strokeDasharray={`${seg.dash} ${seg.gap}`}
-            strokeDashoffset={-seg.offset}
-            transform={`rotate(-90 ${center} ${center})`}
-            className="transition-all duration-500"
-          />
-        ))}
-        <text
-          x={center}
-          y={center - (centerValue ? 4 : 0)}
-          textAnchor="middle"
-          dominantBaseline="central"
-          className="fill-foreground text-stat-sm font-bold"
-        >
-          {centerValue ?? (total ? String(total) : "0")}
-        </text>
-        {centerLabel && (
-          <text
-            x={center}
-            y={center + 16}
-            textAnchor="middle"
-            dominantBaseline="central"
-            className="fill-muted-foreground text-[10px]"
-          >
-            {centerLabel}
-          </text>
-        )}
-      </svg>
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartData}
+              dataKey="value"
+              cx="50%"
+              cy="50%"
+              innerRadius={(size - thickness) / 2}
+              outerRadius={size / 2}
+              strokeWidth={0}
+            >
+              {chartData.map((entry, i) => (
+                <Cell key={i} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-stat-sm font-bold text-foreground">
+            {centerValue ?? (total ? String(total) : "0")}
+          </span>
+          {centerLabel && (
+            <span className="text-[10px] text-muted-foreground">
+              {centerLabel}
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="min-w-0 space-y-1.5">
         {data.map((d, i) => (
