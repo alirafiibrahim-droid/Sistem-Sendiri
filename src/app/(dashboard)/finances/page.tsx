@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { financeFormSchema } from "@/lib/validations/finance";
-import CameraCapture from "@/components/camera-capture";
 import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount, IncidentalProject, UserRole, HandoverWithCreator } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
 
@@ -140,8 +138,6 @@ export default function FinancesPage() {
   );
   const [formSubjectId, setFormSubjectId] = useState("");
   const [formReceiptUrls, setFormReceiptUrls] = useState<string[]>([]);
-  const [receiptUploading, setReceiptUploading] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
   const [formWalletId, setFormWalletId] = useState("");
   const [formHandoverId, setFormHandoverId] = useState("");
 
@@ -325,7 +321,6 @@ export default function FinancesPage() {
     setFormDate(new Date().toISOString().split("T")[0]);
     setFormSubjectId("");
     setFormReceiptUrls([]);
-    setReceiptUploading(false);
     setFormWalletId("");
     setFormHandoverId(activeHandoverId);
     setErrors({});
@@ -357,33 +352,6 @@ export default function FinancesPage() {
   };
 
   const addReceiptUrl = () => setFormReceiptUrls([...formReceiptUrls, ""]);
-
-  // Simpan hasil capture kamera ke storage (bucket: receipts) lalu tambah ke bukti
-  const handleCaptureBlob = async (blob: Blob) => {
-    setReceiptUploading(true);
-    setErrors((prev) => ({ ...prev, _form: "" }));
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const filePath = `receipts/${user?.id || "anon"}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 10)}.jpg`;
-    const { error } = await supabase.storage
-      .from("receipts")
-      .upload(filePath, blob, { upsert: false, contentType: "image/jpeg" });
-    if (error) {
-      setErrors((prev) => ({
-        ...prev,
-        _form: "Gagal menyimpan foto nota: " + error.message,
-      }));
-      setReceiptUploading(false);
-      return;
-    }
-    const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(filePath);
-    setFormReceiptUrls((prev) => [...prev, urlData.publicUrl]);
-    setReceiptUploading(false);
-    setCameraOpen(false);
-  };
 
   const updateReceiptUrl = (index: number, value: string) => {
     const updated = [...formReceiptUrls];
@@ -1195,7 +1163,7 @@ export default function FinancesPage() {
                           <Input
                             id={i === 0 ? "receipt" : undefined}
                             type="url"
-                            placeholder="https://..."
+                            placeholder="https://drive.google.com/..."
                             value={url}
                             onChange={(e) => updateReceiptUrl(i, e.target.value)}
                             className="flex-1"
@@ -1212,19 +1180,6 @@ export default function FinancesPage() {
                       ))}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={receiptUploading}
-                        onClick={() => {
-                          setCameraOpen(true);
-                          setErrors((prev) => ({ ...prev, _form: "" }));
-                        }}
-                      >
-                        <Camera className="mr-1.5 h-4 w-4" />
-                        {receiptUploading ? "Menyimpan..." : "Capture"}
-                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -1266,13 +1221,6 @@ export default function FinancesPage() {
           </div>
         </div>
       )}
-
-      {/* Camera Capture Nota */}
-      <CameraCapture
-        open={cameraOpen}
-        onClose={() => setCameraOpen(false)}
-        onCapture={handleCaptureBlob}
-      />
 
       {/* Modal Konfirmasi Hapus Transaksi */}
       {confirmDelete && (
