@@ -90,10 +90,11 @@ export async function POST(
       return apiBadRequest(msg);
     }
 
-    const { quantity, amount, date, wallet_id, bank_id, cash_account_id, description } =
+    const { quantity, amount, other_cost, date, wallet_id, bank_id, cash_account_id, description } =
       parsed.data;
 
-    const subtotal = Number(quantity) * Number(amount);
+    const extraCost = Number(other_cost ?? 0);
+    const subtotal = Number(quantity) * Number(amount) + extraCost;
 
     const supabase = await createSupabaseServer();
 
@@ -137,6 +138,7 @@ export async function POST(
         item_id: id,
         quantity,
         amount,
+        other_cost: extraCost,
         subtotal,
         date,
         wallet_id: wallet_id || null,
@@ -188,6 +190,7 @@ export async function POST(
         item_id: id,
         quantity,
         amount,
+        other_cost: extraCost,
         subtotal,
         date,
         wallet_id: wallet_id || null,

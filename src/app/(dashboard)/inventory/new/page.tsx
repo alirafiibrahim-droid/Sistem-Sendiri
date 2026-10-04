@@ -12,12 +12,21 @@ import type { WalletWithOwner, Bank, CashAccount } from "@/lib/types/database";
 
 type FormErrors = Record<string, string>;
 
+// Terima "10.000", "10 000", "Rp 10.000", atau "10000.50" tanpa menghasilkan NaN
+const parseNumber = (value: string): number => {
+  const cleaned = value.trim().replace(/\s/g, "").replace(/^rp/i, "");
+  if (cleaned === "") return 0;
+  if (/^\d{1,3}(\.\d{3})+$/.test(cleaned)) return Number(cleaned.replace(/\./g, ""));
+  return Number(cleaned.replace(",", "."));
+};
+
 export default function NewInventoryItemPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [createdItemId, setCreatedItemId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("OTHER");
@@ -38,7 +47,10 @@ export default function NewInventoryItemPage() {
   const [banksList, setBanksList] = useState<Pick<Bank, "id" | "name" | "account_number">[]>([]);
   const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
 
-  const purchaseTotal = (Number(stock) || 0) * (Number(purchaseUnitPrice) || 0) + (Number(purchaseOtherCost) || 0);
+  const purchaseQty = parseNumber(stock);
+  const purchaseUnitPriceValue = parseNumber(purchaseUnitPrice);
+  const purchaseOtherCostValue = parseNumber(purchaseOtherCost);
+  const purchaseTotal = purchaseQty * purchaseUnitPriceValue + purchaseOtherCostValue;
 
   useEffect(() => {
     Promise.all([fetch("/api/wallets"), fetch("/api/banks"), fetch("/api/cash")])
@@ -66,7 +78,7 @@ export default function NewInventoryItemPage() {
     const result = inventoryItemFormSchema.safeParse({
       name,
       category,
-      stock: Number(stock),
+      stock: parseNumber(stock),
       condition,
       location,
       description: description || undefined,
@@ -81,6 +93,22 @@ export default function NewInventoryItemPage() {
       }
       setErrors(fieldErrors);
       return false;
+    }
+
+    if (includePurchase) {
+      const purchaseErrors: FormErrors = {};
+      if (!purchaseDate) purchaseErrors.purchaseDate = "Tanggal pembelian wajib diisi.";
+      if (purchaseQty < 1)
+        purchaseErrors.purchaseUnitPrice = "Jumlah barang harus minimal 1 unit.";
+      if (purchaseUnitPriceValue <= 0)
+        purchaseErrors.purchaseUnitPrice = "Harga satuan harus lebih dari 0.";
+      if (!Number.isFinite(purchaseUnitPriceValue) || !Number.isFinite(purchaseOtherCostValue))
+        purchaseErrors.purchaseOtherCost = "Nominal harus berupa angka.";
+      if (!purchaseSource) purchaseErrors.purchaseSource = "Sumber dana wajib dipilih.";
+      if (Object.keys(purchaseErrors).length > 0) {
+        setErrors(purchaseErrors);
+        return false;
+      }
     }
 
     setErrors({});
@@ -101,13 +129,14 @@ export default function NewInventoryItemPage() {
     }
 
     // Create inventory item
+    // Stok awal 0 bila pembelian disertakan, karena stok akan ditambah oleh API pembelian
     const { data: newItem, error: insertError } = await supabase
       .from("inventory_items")
       .insert({
         name,
         category,
-        stock: Number(stock),
-        unit_price: purchaseUnitPrice === "" ? 0 : Number(purchaseUnitPrice),
+        stock: includePurchase ? 0 : parseNumber(stock),
+        unit_price: purchaseUnitPriceValue,
         condition,
         location,
         description: description || "",
@@ -124,7 +153,7 @@ export default function NewInventoryItemPage() {
     }
 
     // If purchase data is provided, create purchase record
-    if (includePurchase && purchaseDate && purchaseUnitPrice && purchaseSource && purchaseTotal > 0) {
+    if (includePurchase) {
       let walletId = "";
       let bankId = "";
       let cashAccountId = "";
@@ -140,7 +169,10 @@ export default function NewInventoryItemPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: purchaseTotal,
+          quantity: purchaseQty,
+          amount: purchaseUnitPriceValue,
+          other_cost: purchaseOtherCostValue,
+          subtotal: purchaseTotal,
           date: purchaseDate,
           wallet_id: walletId || undefined,
           bank_id: bankId || undefined,
@@ -150,8 +182,14 @@ export default function NewInventoryItemPage() {
       });
 
       if (!purchaseRes.ok) {
-        const purchaseJson = await purchaseRes.json();
-        setErrors({ _form: "Barang berhasil dibuat, tapi gagal menyimpan pembelian: " + (purchaseJson.error?.message || "Unknown error") });
+        const purchaseJson = await purchaseRes.json().catch(() => null);
+        setCreatedItemId(newItem.id);
+        setErrors({
+          _form:
+            "Barang berhasil dibuat, tetapi data pembelian gagal disimpan: " +
+            (purchaseJson?.error?.message || "Unknown error") +
+            ". Klik 'Lanjut ke Detail Barang' untuk mencatat pembelian secara manual.",
+        });
         setLoading(false);
         return;
       }
@@ -319,6 +357,9 @@ export default function NewInventoryItemPage() {
                       value={purchaseDate}
                       onChange={(e) => setPurchaseDate(e.target.value)}
                     />
+                    {errors.purchaseDate && (
+                      <p className="text-sm text-red-500">{errors.purchaseDate}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium" htmlFor="purchase-unit-price">
@@ -332,6 +373,9 @@ export default function NewInventoryItemPage() {
                       value={purchaseUnitPrice}
                       onChange={(e) => setPurchaseUnitPrice(e.target.value)}
                     />
+                    {errors.purchaseUnitPrice && (
+                      <p className="text-sm text-red-500">{errors.purchaseUnitPrice}</p>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -347,6 +391,9 @@ export default function NewInventoryItemPage() {
                       value={purchaseOtherCost}
                       onChange={(e) => setPurchaseOtherCost(e.target.value)}
                     />
+                    {errors.purchaseOtherCost && (
+                      <p className="text-sm text-red-500">{errors.purchaseOtherCost}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
@@ -396,6 +443,9 @@ export default function NewInventoryItemPage() {
                       )}
                     </SelectContent>
                   </Select>
+                  {errors.purchaseSource && (
+                    <p className="text-sm text-red-500">{errors.purchaseSource}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="purchase-desc">
@@ -416,9 +466,19 @@ export default function NewInventoryItemPage() {
             )}
 
             <div className="flex gap-3 pt-2">
-              <Button type="submit" disabled={loading}>
-                {loading ? "Menyimpan..." : includePurchase ? "Simpan Barang & Pembelian" : "Simpan Barang"}
-              </Button>
+              {createdItemId ? (
+                <Button type="button" onClick={() => router.push(`/inventory/${createdItemId}`)}>
+                  Lanjut ke Detail Barang
+                </Button>
+              ) : (
+                <Button type="submit" disabled={loading}>
+                  {loading
+                    ? "Menyimpan..."
+                    : includePurchase
+                      ? "Simpan Barang & Pembelian"
+                      : "Simpan Barang"}
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"

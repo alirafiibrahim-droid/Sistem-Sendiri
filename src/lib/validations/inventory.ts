@@ -89,6 +89,11 @@ export const inventoryPurchaseFormSchema = z
       .number()
       .positive("Nominal harus lebih dari 0.")
       .max(999999999999, "Nominal terlalu besar."),
+    other_cost: z.coerce
+      .number()
+      .min(0, "Biaya lain tidak boleh negatif.")
+      .max(999999999999, "Biaya lain terlalu besar.")
+      .optional(),
     subtotal: z.coerce
       .number()
       .positive("Subtotal harus lebih dari 0.")
