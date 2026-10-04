@@ -19,6 +19,7 @@ import {
 import { financeFormSchema } from "@/lib/validations/finance";
 import type { FinanceWithDetails, Program, WalletWithOwner, Bank, CashAccount, IncidentalProject, UserRole, HandoverWithCreator } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
+import { ImportButton } from "@/components/import/import-dialog";
 
 type FormErrors = Record<string, string>;
 
@@ -476,7 +477,16 @@ export default function FinancesPage() {
             Jurnal transaksi keuangan organisasi
           </p>
         </div>
-        <Button onClick={openModal}>+ Catat Transaksi</Button>
+        <div className="flex gap-2">
+          <ImportButton
+            module="finances"
+            onImported={() => {
+              void fetchTransactions();
+              void fetchDashboard();
+            }}
+          />
+          <Button onClick={openModal}>+ Catat Transaksi</Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

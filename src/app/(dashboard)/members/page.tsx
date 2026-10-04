@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Division, Fakultas, Jurusan, ProfileWithDivision } from "@/lib/types/database";
+import { ImportButton } from "@/components/import/import-dialog";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
@@ -160,9 +161,12 @@ export default function MembersPage() {
           <h2 className="text-2xl font-bold tracking-tight">Anggota</h2>
           <p className="text-muted-foreground">Manajemen data anggota organisasi</p>
         </div>
-        <Link href="/members/new">
-          <Button>+ Tambah Anggota</Button>
-        </Link>
+        <div className="flex gap-2">
+          <ImportButton module="members" onImported={fetchMembers} />
+          <Link href="/members/new">
+            <Button>+ Tambah Anggota</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

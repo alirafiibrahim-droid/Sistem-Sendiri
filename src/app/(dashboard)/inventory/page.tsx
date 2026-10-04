@@ -22,6 +22,7 @@ import type {
   InventoryDisposal,
   InventoryDisposalWithDetails,
 } from "@/lib/types/database";
+import { ImportButton } from "@/components/import/import-dialog";
 
 const categoryLabel: Record<string, string> = {
   ELECTRONICS: "Elektronik",
@@ -211,6 +212,7 @@ export default function InventoryPage() {
           <Button variant="destructive" onClick={() => setShowDisposalModal(true)}>
             Hapus Inventaris
           </Button>
+          <ImportButton module="inventory" onImported={fetchItems} />
           <Link href="/inventory/new">
             <Button>+ Barang Baru</Button>
           </Link>

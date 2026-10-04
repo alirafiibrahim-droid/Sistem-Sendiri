@@ -19,6 +19,7 @@ import { letterFormSchema } from "@/lib/validations/letter";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import type { LetterWithCreator } from "@/lib/types/database";
 import type { ApiMeta } from "@/lib/types/api";
+import { ImportButton } from "@/components/import/import-dialog";
 
 type FormErrors = Record<string, string>;
 
@@ -266,7 +267,10 @@ export default function LettersPage() {
           <h2 className="text-2xl font-bold tracking-tight">Persuratan</h2>
           <p className="text-muted-foreground">Arsip surat masuk dan keluar</p>
         </div>
-        <Button onClick={openModal}>+ Arsipkan Surat</Button>
+        <div className="flex gap-2">
+          <ImportButton module="letters" onImported={fetchLetters} />
+          <Button onClick={openModal}>+ Arsipkan Surat</Button>
+        </div>
       </div>
 
       {/* Filters */}
