@@ -60,20 +60,33 @@ function LoginForm() {
     setLoading(true);
     setError("");
 
-    const supabase = createSupabaseClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const json = await res.json();
 
-    if (authError) {
-      setError(authError.message);
+      if (!json.success) {
+        setError(json.error?.message || "Email/Nama atau password salah.");
+        setLoading(false);
+        return;
+      }
+
+      // Sinkronkan session ke client Supabase agar cookie & state konsisten
+      const supabase = createSupabaseClient();
+      await supabase.auth.setSession({
+        access_token: json.data.session.access_token,
+        refresh_token: json.data.session.refresh_token,
+      });
+
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Gagal terhubung ke server.");
       setLoading(false);
-      return;
     }
-
-    router.push("/");
-    router.refresh();
   };
 
   const handleForgotSubmit = async (e: React.FormEvent) => {
