@@ -112,9 +112,11 @@ export default function ProgramDetailPage() {
 
   const [attendeeSessionId, setAttendeeSessionId] = useState<string | null>(null);
   const [attendeeSessionDate, setAttendeeSessionDate] = useState("");
-  const [attendees, setAttendees] = useState<Array<{id: string; method: string; scanned_at: string | null; score: number | null; notes: string | null; created_at: string; profiles: {id: string; full_name: string; nim: string; avatar_url: string | null} | null}>>([]);
+  const [attendees, setAttendees] = useState<Array<{id: string; method: string; scanned_at: string | null; score: number | null; notes: string | null; created_at: string; parameter_scores?: Record<string, number>; profiles: {id: string; full_name: string; nim: string; avatar_url: string | null} | null}>>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
-  const [scoreDrafts, setScoreDrafts] = useState<Record<string, string>>({});
+  const [assessmentParameters, setAssessmentParameters] = useState<Array<{ id: string; name: string; description: string }>>([]);
+  // [attendeeId][parameterId] = nilai sementara
+  const [scoreDrafts, setScoreDrafts] = useState<Record<string, Record<string, string>>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [savingScores, setSavingScores] = useState(false);
   const [scoreMessage, setScoreMessage] = useState<{type: "success" | "error"; text: string} | null>(null);
@@ -274,6 +276,35 @@ export default function ProgramDetailPage() {
     setLoadingQr(false);
   };
 
+  // Membangun draft nilai per parameter dari respons API absensi.
+  const buildDrafts = (
+    rows: Array<{
+      id: string;
+      score: number | null;
+      notes: string | null;
+      parameter_scores?: Record<string, number>;
+    }>
+  ) => {
+    const drafts: Record<string, Record<string, string>> = {};
+    const notes: Record<string, string> = {};
+    for (const a of rows) {
+      const perParameter: Record<string, string> = {};
+      if (assessmentParameters.length === 0) {
+        perParameter.__single__ = a.score != null ? String(a.score) : "";
+      } else {
+        const stored = a.parameter_scores || {};
+        for (const pid of Object.keys(stored)) perParameter[pid] = String(stored[pid]);
+        // Parameter yang belum dinilai tetap muncul sebagai kolom kosong.
+        for (const p of assessmentParameters) {
+          if (perParameter[p.id] === undefined) perParameter[p.id] = "";
+        }
+      }
+      drafts[a.id] = perParameter;
+      notes[a.id] = a.notes ?? "";
+    }
+    return { drafts, notes };
+  };
+
   const handleViewAttendees = async (sessionId: string, date: string) => {
     setAttendeeSessionId(sessionId);
     setAttendeeSessionDate(date);
@@ -283,16 +314,19 @@ export default function ProgramDetailPage() {
     setScoreMessage(null);
     setLoadingAttendees(true);
     try {
-      const res = await fetch(`/api/programs/${id}/sessions/${sessionId}/attendance`);
+      const [res, paramRes] = await Promise.all([
+        fetch(`/api/programs/${id}/sessions/${sessionId}/attendance`),
+        fetch("/api/parameters"),
+      ]);
+      const paramJson = await paramRes.json();
+      const parameters: Array<{ id: string; name: string; description: string }> =
+        paramJson.success ? paramJson.data : [];
+      setAssessmentParameters(parameters);
+
       const json = await res.json();
       if (json.success) {
         setAttendees(json.data);
-        const drafts: Record<string, string> = {};
-        const notes: Record<string, string> = {};
-        for (const a of json.data) {
-          drafts[a.id] = a.score != null ? String(a.score) : "";
-          notes[a.id] = a.notes ?? "";
-        }
+        const { drafts, notes } = buildDrafts(json.data);
         setScoreDrafts(drafts);
         setNoteDrafts(notes);
       }
@@ -300,24 +334,49 @@ export default function ProgramDetailPage() {
     setLoadingAttendees(false);
   };
 
+  // Rata-rata nilai sementara satu peserta (hanya nilai yang terisi).
+  const draftAverage = (attendeeId: string) => {
+    const drafts = scoreDrafts[attendeeId] || {};
+    const filled = assessmentParameters
+      .map((p) => (drafts[p.id] ?? "").trim())
+      .filter((v) => v !== "")
+      .map(Number)
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 10);
+    if (filled.length === 0) return null;
+    return Math.round(filled.reduce((sum, n) => sum + n, 0) / filled.length);
+  };
+
   const handleSaveScores = async () => {
     if (!attendeeSessionId) return;
     setSavingScores(true);
     setScoreMessage(null);
 
-    const scores = attendees
-      .map((a) => {
-        const raw = scoreDrafts[a.id]?.trim() ?? "";
-        if (raw === "") return { attendee_id: a.id, score: null, notes: noteDrafts[a.id] ?? "" };
-        const value = Number(raw);
-        if (!Number.isInteger(value) || value < 1 || value > 10) return null;
-        return { attendee_id: a.id, score: value, notes: noteDrafts[a.id] ?? "" };
-      })
-      .filter(
-        (s): s is { attendee_id: string; score: number | null; notes: string } => s !== null
-      );
+    const scores = attendees.map((a) => {
+      const drafts = scoreDrafts[a.id] || {};
+      const notes = noteDrafts[a.id] ?? "";
 
-    const invalid = scores.some((s) => s.score === null);
+      // Tanpa parameter master: kembali ke mode nilai tunggal (1-10).
+      if (assessmentParameters.length === 0) {
+        const raw = (drafts["__single__"] ?? "").trim();
+        return { attendee_id: a.id, score: raw === "" ? null : Number(raw), notes };
+      }
+
+      const parameter_scores = assessmentParameters.map((p) => {
+        const raw = (drafts[p.id] ?? "").trim();
+        return { parameter_id: p.id, score: raw === "" ? null : Number(raw) };
+      });
+      return { attendee_id: a.id, parameter_scores, notes };
+    });
+
+    const invalid = scores.some((s) => {
+      if ("score" in s) {
+        const single = s.score ?? null;
+        return single !== null && (!Number.isInteger(single) || single < 1 || single > 10);
+      }
+      return s.parameter_scores.some(
+        (p) => p.score !== null && (!Number.isInteger(p.score) || p.score < 1 || p.score > 10)
+      );
+    });
     if (invalid) {
       setScoreMessage({ type: "error", text: "Nilai harus berupa angka bulat 1-10 atau dikosongkan." });
       setSavingScores(false);
@@ -337,12 +396,7 @@ export default function ProgramDetailPage() {
         return;
       }
       setAttendees(json.data);
-      const drafts: Record<string, string> = {};
-      const notes: Record<string, string> = {};
-      for (const a of json.data) {
-        drafts[a.id] = a.score != null ? String(a.score) : "";
-        notes[a.id] = a.notes ?? "";
-      }
+      const { drafts, notes } = buildDrafts(json.data);
       setScoreDrafts(drafts);
       setNoteDrafts(notes);
       setScoreMessage({ type: "success", text: "Nilai berhasil disimpan." });
@@ -1224,25 +1278,69 @@ export default function ProgramDetailPage() {
                               </div>
                               {canManageScores && !isLocked && (
                                 <div className="flex flex-col gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-3 py-2">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span className="text-xs font-medium text-muted-foreground">
-                                      Nilai (1-10)
-                                    </span>
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      max={10}
-                                      value={scoreDrafts[a.id] ?? ""}
-                                      onChange={(e) =>
-                                        setScoreDrafts({
-                                          ...scoreDrafts,
-                                          [a.id]: e.target.value,
-                                        })
-                                      }
-                                      placeholder="-"
-                                      className="h-8 w-16 text-center text-sm"
-                                    />
-                                  </div>
+                                  {assessmentParameters.length === 0 ? (
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="text-xs font-medium text-muted-foreground">
+                                        Nilai (1-10)
+                                      </span>
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        max={10}
+                                        value={(scoreDrafts[a.id] || {})["__single__"] ?? ""}
+                                        onChange={(e) =>
+                                          setScoreDrafts({
+                                            ...scoreDrafts,
+                                            [a.id]: {
+                                              ...(scoreDrafts[a.id] || {}),
+                                              __single__: e.target.value,
+                                            },
+                                          })
+                                        }
+                                        placeholder="-"
+                                        className="h-8 w-16 text-center text-sm"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {assessmentParameters.map((p) => (
+                                        <div
+                                          key={p.id}
+                                          className="flex items-center justify-between gap-3"
+                                          title={p.description || undefined}
+                                        >
+                                          <span className="truncate text-xs font-medium text-muted-foreground">
+                                            {p.name}
+                                          </span>
+                                          <Input
+                                            type="number"
+                                            min={1}
+                                            max={10}
+                                            value={(scoreDrafts[a.id] || {})[p.id] ?? ""}
+                                            onChange={(e) =>
+                                              setScoreDrafts({
+                                                ...scoreDrafts,
+                                                [a.id]: {
+                                                  ...(scoreDrafts[a.id] || {}),
+                                                  [p.id]: e.target.value,
+                                                },
+                                              })
+                                            }
+                                            placeholder="-"
+                                            className="h-8 w-16 text-center text-sm"
+                                          />
+                                        </div>
+                                      ))}
+                                      <div className="flex items-center justify-between gap-3 border-t border-primary/20 pt-2">
+                                        <span className="text-xs font-semibold">
+                                          Rata-rata
+                                        </span>
+                                        <span className="text-sm font-bold text-primary">
+                                          {draftAverage(a.id) ?? "-"}
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
                                   <div className="flex flex-col gap-1">
                                     <span className="text-xs font-medium text-muted-foreground">
                                       Catatan

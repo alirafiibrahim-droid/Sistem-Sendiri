@@ -28,6 +28,32 @@ CREATE POLICY "fakultas_select_all" ON public.fakultas FOR SELECT TO authenticat
 DROP POLICY IF EXISTS "jurusan_select_all" ON public.jurusan;
 CREATE POLICY "jurusan_select_all" ON public.jurusan FOR SELECT TO authenticated USING (true);
 
+-- 0a-2. parameters-program-assessment
+-- Rincian lengkap (index, trigger, RLS) ada di
+-- supabase-parameters-program-assessment.sql
+CREATE TABLE IF NOT EXISTS public.parameters (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.program_session_attendant_scores (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    attendant_id UUID NOT NULL REFERENCES public.program_session_attendants(id) ON DELETE CASCADE,
+    parameter_id UUID NOT NULL REFERENCES public.parameters(id) ON DELETE CASCADE,
+    score        INTEGER NOT NULL CHECK (score >= 1 AND score <= 10),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT program_session_attendant_scores_unique UNIQUE (attendant_id, parameter_id)
+);
+ALTER TABLE public.parameters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.program_session_attendant_scores ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "parameters_select_all" ON public.parameters;
+CREATE POLICY "parameters_select_all" ON public.parameters FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "psas_select_all" ON public.program_session_attendant_scores;
+CREATE POLICY "psas_select_all" ON public.program_session_attendant_scores FOR SELECT TO authenticated USING (true);
+
 -- 0b. banks-cash-wallets (tabel)
 CREATE TABLE IF NOT EXISTS public.banks (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -405,3 +405,13 @@ export interface UpdateJurusanRequest {
   description?: string;
   fakultas_id?: string;
 }
+
+export interface CreateParameterRequest {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateParameterRequest {
+  name?: string;
+  description?: string;
+}

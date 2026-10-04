@@ -16,6 +16,11 @@ export const jurusanFormSchema = z.object({
   fakultas_id: z.string().uuid("ID fakultas tidak valid.").optional().or(z.literal("")),
 });
 
+export const parameterFormSchema = z.object({
+  name: z.string().min(2, "Nama parameter minimal 2 karakter.").max(100, "Nama parameter maksimal 100 karakter."),
+  description: z.string().max(250, "Deskripsi maksimal 250 karakter.").optional(),
+});
+
 export const bankFormSchema = z.object({
   name: z.string().min(2, "Nama bank minimal 2 karakter.").max(100, "Nama bank maksimal 100 karakter."),
   account_number: z.string().min(1, "Nomor rekening wajib diisi.").max(50, "Nomor rekening maksimal 50 karakter."),

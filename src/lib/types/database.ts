@@ -106,6 +106,14 @@ export interface ReportFile {
   created_at: string;
 }
 
+export interface Faculty {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Fakultas {
   id: string;
   name: string;
@@ -119,6 +127,23 @@ export interface Jurusan {
   name: string;
   description: string;
   fakultas_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Parameter {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgramSessionAttendantScore {
+  id: string;
+  attendant_id: string;
+  parameter_id: string;
+  score: number;
   created_at: string;
   updated_at: string;
 }
@@ -618,6 +643,7 @@ export interface InventoryPurchase {
   item_id: string;
   quantity: number;
   amount: number;
+  other_cost: number;
   subtotal: number;
   date: string;
   wallet_id: string | null;

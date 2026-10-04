@@ -33,8 +33,9 @@ export type AccessModule =
   | "settings-organization"
   | "settings-divisions"
   | "settings-fakultas-jurusan"
-  |   "settings-cash-bank"
+| "settings-cash-bank"
   | "settings-wallets"
+  | "settings-parameters"
   | "finances"
   // Fitur "Lihat Detail" per modul (baris 'Lihat Detail' pada file Hak Akses)
   | "programs-detail"
@@ -246,6 +247,14 @@ export const ACCESS_RULES: Record<AccessModule, AccessRule> = {
     ["ADMIN", "BENDAHARA", "SEKRETARIS", "PENGURUS_INTI", "WAKIL_KETUA", "KETUA_UMUM"],
     ["ADMIN", "WAKIL_KETUA", "KETUA_UMUM"],
     ["ADMIN", "BENDAHARA", "SEKRETARIS", "PENGURUS_INTI", "WAKIL_KETUA", "KETUA_UMUM"],
+    ["ADMIN", "WAKIL_KETUA", "KETUA_UMUM"]
+  ),
+
+  // Sheet 13: Pengaturan — Parameter (master parameter penilaian Program Kerja)
+  "settings-parameters": rule(
+    ["ADMIN", "BENDAHARA", "SEKRETARIS", "PENGURUS_INTI", "KABID", "WAKIL_KETUA", "KETUA_UMUM"],
+    ["ADMIN", "WAKIL_KETUA", "KETUA_UMUM"],
+    ["ADMIN", "WAKIL_KETUA", "KETUA_UMUM"],
     ["ADMIN", "WAKIL_KETUA", "KETUA_UMUM"]
   ),
 

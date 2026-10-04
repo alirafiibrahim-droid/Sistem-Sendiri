@@ -97,6 +97,20 @@ CREATE TABLE public.divisions (
 COMMENT ON TABLE public.divisions IS 'Daftar divisi/bidang dalam organisasi (A5, A6)';
 
 -- ----------------------------------------------------------------------------
+-- A5 & A6: PARAMETERS (Master parameter penilaian Program Kerja)
+-- Lihat juga: supabase-parameters-program-assessment.sql
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.parameters (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.parameters IS 'Master parameter penilaian anggota pada sesi Program Kerja';
+
+-- ----------------------------------------------------------------------------
 -- A2 & A5: PROFILES (Profil pengguna, terhubung ke auth.users via trigger)
 -- ----------------------------------------------------------------------------
 CREATE TABLE public.profiles (
@@ -692,6 +706,7 @@ CREATE TABLE public.inventory_purchases (
     item_id         UUID NOT NULL REFERENCES public.inventory_items(id) ON DELETE CASCADE,
     quantity        INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
     amount          NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    other_cost      NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (other_cost >= 0),
     subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
     date            DATE NOT NULL,
     wallet_id       UUID REFERENCES public.wallets(id) ON DELETE SET NULL,
@@ -1658,6 +1673,11 @@ CREATE TRIGGER set_updated_at_handovers
 
 CREATE TRIGGER set_updated_at_divisions
     BEFORE UPDATE ON public.divisions
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER set_updated_at_parameters
+    BEFORE UPDATE ON public.parameters
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
 

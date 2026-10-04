@@ -28,10 +28,9 @@ interface AttendeeRow {
   created_at: string;
 }
 
-async function attachProfiles(
-  rows: AttendeeRow[],
-  supabase: Awaited<ReturnType<typeof createSupabaseServer>>
-) {
+type SupabaseClient = Awaited<ReturnType<typeof createSupabaseServer>>;
+
+async function attachProfiles(rows: AttendeeRow[], supabase: SupabaseClient) {
   const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
   if (userIds.length === 0) return rows;
 
@@ -48,6 +47,28 @@ async function attachProfiles(
     ...r,
     profiles: r.user_id ? profileMap.get(r.user_id) || null : null,
   }));
+}
+
+// Menyisipkan nilai per parameter (parameter_id -> score) pada setiap peserta.
+async function attachParameterScores<T extends { id: string }>(rows: T[], supabase: SupabaseClient) {
+  if (rows.length === 0) return rows;
+
+  const { data: scores } = await supabase
+    .from("program_session_attendant_scores")
+    .select("attendant_id, parameter_id, score")
+    .in(
+      "attendant_id",
+      rows.map((r) => r.id)
+    );
+
+  const byAttendant = new Map<string, Record<string, number>>();
+  for (const s of scores || []) {
+    const bucket = byAttendant.get(s.attendant_id) || {};
+    bucket[s.parameter_id] = s.score;
+    byAttendant.set(s.attendant_id, bucket);
+  }
+
+  return rows.map((r) => ({ ...r, parameter_scores: byAttendant.get(r.id) || {} }));
 }
 
 export async function POST(
@@ -148,7 +169,9 @@ export async function GET(
       .order("created_at", { ascending: false });
 
     if (error) return apiInternalError();
-    return apiOk(await attachProfiles((data || []) as AttendeeRow[], supabase));
+    return apiOk(
+      await attachParameterScores(await attachProfiles((data || []) as AttendeeRow[], supabase), supabase)
+    );
   } catch {
     return apiInternalError();
   }
@@ -169,7 +192,12 @@ export async function PATCH(
     const { id, sessionId } = await params;
     const body = await request.json();
     const { scores } = body as {
-      scores?: Array<{ attendee_id?: string; score?: number | null; notes?: string | null }>;
+      scores?: Array<{
+        attendee_id?: string;
+        score?: number | null;
+        notes?: string | null;
+        parameter_scores?: Array<{ parameter_id?: string; score?: number | null }>;
+      }>;
     };
 
     if (!Array.isArray(scores) || scores.length === 0) {
@@ -190,26 +218,94 @@ export async function PATCH(
 
     if (!session) return apiNotFound("Sesi tidak ditemukan.");
 
-    const updates: { attendee_id: string; score: number | null; notes: string | null }[] = [];
+    // Pastikan seluruh attendee_id memang peserta pada sesi ini.
+    const { data: sessionAttendees } = await supabase
+      .from("program_session_attendants")
+      .select("id")
+      .eq("session_id", sessionId);
+
+    const validAttendeeIds = new Set((sessionAttendees || []).map((a) => a.id));
+
+    const updates: { attendee_id: string; parameter_count: number }[] = [];
 
     for (const item of scores) {
       if (!item.attendee_id) return apiBadRequest("attendee_id wajib diisi.");
-      const score = item.score ?? null;
-      if (score !== null && (!Number.isInteger(score) || score < 1 || score > 10)) {
-        return apiBadRequest("Nilai harus berupa angka bulat 1-10.");
+      if (!validAttendeeIds.has(item.attendee_id)) {
+        return apiBadRequest("Peserta tidak ditemukan pada sesi ini.");
       }
       const notes = item.notes == null ? null : String(item.notes).trim() || null;
-      updates.push({ attendee_id: item.attendee_id, score, notes });
-    }
 
-    for (const u of updates) {
-      const { error } = await supabase
-        .from("program_session_attendants")
-        .update({ score: u.score, notes: u.notes })
-        .eq("id", u.attendee_id)
-        .eq("session_id", sessionId);
+      if (Array.isArray(item.parameter_scores)) {
+        const seen = new Set<string>();
+        const upserts: { attendant_id: string; parameter_id: string; score: number }[] = [];
+        const removals: string[] = [];
 
-      if (error) return apiInternalError(error.message);
+        for (const ps of item.parameter_scores) {
+          if (!ps.parameter_id) return apiBadRequest("parameter_id wajib diisi.");
+          if (seen.has(ps.parameter_id)) {
+            return apiBadRequest("Parameter penilaian terduplikasi.");
+          }
+          seen.add(ps.parameter_id);
+
+          const value = ps.score ?? null;
+          if (value !== null && (!Number.isInteger(value) || value < 1 || value > 10)) {
+            return apiBadRequest("Nilai harus berupa angka bulat 1-10.");
+          }
+          if (value === null) removals.push(ps.parameter_id);
+          else upserts.push({ attendant_id: item.attendee_id, parameter_id: ps.parameter_id, score: value });
+        }
+
+        if (upserts.length > 0) {
+          const { error } = await supabase
+            .from("program_session_attendant_scores")
+            .upsert(upserts, { onConflict: "attendant_id,parameter_id" });
+          if (error) return apiInternalError(error.message);
+        }
+
+        if (removals.length > 0) {
+          const { error } = await supabase
+            .from("program_session_attendant_scores")
+            .delete()
+            .eq("attendant_id", item.attendee_id)
+            .in("parameter_id", removals);
+          if (error) return apiInternalError(error.message);
+        }
+
+        // Kolom score pada attendant = rata-rata seluruh nilai parameter.
+        const { data: stored, error: sErr } = await supabase
+          .from("program_session_attendant_scores")
+          .select("score")
+          .eq("attendant_id", item.attendee_id);
+        if (sErr) return apiInternalError(sErr.message);
+
+        const filled = (stored || []).map((r) => r.score as number);
+        const average =
+          filled.length > 0
+            ? Math.round(filled.reduce((sum, n) => sum + n, 0) / filled.length)
+            : null;
+
+        const { error } = await supabase
+          .from("program_session_attendants")
+          .update({ score: average, notes })
+          .eq("id", item.attendee_id)
+          .eq("session_id", sessionId);
+        if (error) return apiInternalError(error.message);
+
+        updates.push({ attendee_id: item.attendee_id, parameter_count: upserts.length });
+      } else {
+        const score = item.score ?? null;
+        if (score !== null && (!Number.isInteger(score) || score < 1 || score > 10)) {
+          return apiBadRequest("Nilai harus berupa angka bulat 1-10.");
+        }
+        const { error } = await supabase
+          .from("program_session_attendants")
+          .update({ score, notes })
+          .eq("id", item.attendee_id)
+          .eq("session_id", sessionId);
+        if (error) return apiInternalError(error.message);
+
+        updates.push({ attendee_id: item.attendee_id, parameter_count: 0 });
+      }
     }
 
     await writeAuditLog({
@@ -226,7 +322,12 @@ export async function PATCH(
       .eq("session_id", sessionId)
       .order("created_at", { ascending: false });
 
-    return apiOk(await attachProfiles((refreshed || []) as AttendeeRow[], supabase));
+    return apiOk(
+      await attachParameterScores(
+        await attachProfiles((refreshed || []) as AttendeeRow[], supabase),
+        supabase
+      )
+    );
   } catch (e) {
     console.error("SESSION SCORES PATCH ERROR:", e);
     return apiInternalError();

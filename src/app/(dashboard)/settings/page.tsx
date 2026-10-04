@@ -16,8 +16,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
-import type { OrganizationSettings, Division, Fakultas, Jurusan, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
+import { profileFormSchema, orgSettingsFormSchema, divisionFormSchema, fakultasFormSchema, jurusanFormSchema, parameterFormSchema, bankFormSchema, cashAccountFormSchema, walletFormSchema } from "@/lib/validations/settings";
+import type { OrganizationSettings, Division, Fakultas, Jurusan, Parameter, ProfileWithDivision, UserRole, Bank, CashAccount, WalletWithOwner } from "@/lib/types/database";
 import { THEMES, getContrastText, type ThemeKey } from "@/lib/themes";
 import { useTheme } from "@/components/layout/theme-provider";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,7 @@ import SpiderChart from "@/components/charts/spider-chart";
 import BarChart from "@/components/charts/bar-chart";
 import LineChart from "@/components/charts/line-chart";
 type FormErrors = Record<string, string>;
-type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "fakultas-jurusan" | "kas-bank" | "dompet";
+type TabId = "profile" | "pengaturan-user" | "organization" | "divisions" | "parameter" | "fakultas-jurusan" | "kas-bank" | "dompet";
 
 type SessionScoreData = {
   average: number;
@@ -51,6 +51,7 @@ const allTabs: { id: TabId; label: string; adminOnly?: boolean }[] = [
   { id: "pengaturan-user", label: "Pengaturan User", adminOnly: true },
   { id: "organization", label: "Organisasi", adminOnly: true },
   { id: "divisions", label: "Divisi" },
+  { id: "parameter", label: "Parameter" },
   { id: "fakultas-jurusan", label: "Fakultas & Jurusan" },
   { id: "kas-bank", label: "Kas & Bank" },
   { id: "dompet", label: "Dompet" },
@@ -116,6 +117,15 @@ export default function SettingsPage() {
   const [divDesc, setDivDesc] = useState("");
   const [divErrors, setDivErrors] = useState<FormErrors>({});
   const [divLoading, setDivLoading] = useState(false);
+
+  // ─── Parameter Tab ───
+  const [parameters, setParameters] = useState<Parameter[]>([]);
+  const [showParamModal, setShowParamModal] = useState(false);
+  const [paramEditId, setParamEditId] = useState<string | null>(null);
+  const [paramName, setParamName] = useState("");
+  const [paramDesc, setParamDesc] = useState("");
+  const [paramErrors, setParamErrors] = useState<FormErrors>({});
+  const [paramLoading, setParamLoading] = useState(false);
 
   // ─── Fakultas & Jurusan Tab ───
   const [fakultasList, setFakultasList] = useState<Fakultas[]>([]);
@@ -303,6 +313,15 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => { fetchDivisions(); }, [fetchDivisions]);
+
+  // ─── Fetch Parameters ───
+  const fetchParameters = useCallback(async () => {
+    const res = await fetch("/api/parameters");
+    const json = await res.json();
+    if (json.success) setParameters(json.data);
+  }, []);
+
+  useEffect(() => { fetchParameters(); }, [fetchParameters]);
 
   // ─── Fetch Fakultas & Jurusan ───
   const fetchFakultas = useCallback(async () => {
@@ -712,6 +731,21 @@ export default function SettingsPage() {
     setShowDivModal(true);
   };
 
+  // ─── Parameter: Open Modal ───
+  const openParamModal = (param?: Parameter) => {
+    if (param) {
+      setParamEditId(param.id);
+      setParamName(param.name);
+      setParamDesc(param.description);
+    } else {
+      setParamEditId(null);
+      setParamName("");
+      setParamDesc("");
+    }
+    setParamErrors({});
+    setShowParamModal(true);
+  };
+
   // ─── Division: Submit ───
   const handleDivSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -745,6 +779,48 @@ export default function SettingsPage() {
     }
     setShowDivModal(false);
     fetchDivisions();
+  };
+
+  // ─── Parameter: Submit ───
+  const handleParamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = parameterFormSchema.safeParse({
+      name: paramName,
+      description: paramDesc || undefined,
+    });
+    if (!parsed.success) {
+      const fieldErrors: FormErrors = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0] as string;
+        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setParamErrors(fieldErrors);
+      return;
+    }
+    setParamErrors({});
+    setParamLoading(true);
+    const url = paramEditId ? `/api/parameters/${paramEditId}` : "/api/parameters";
+    const method = paramEditId ? "PATCH" : "POST";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    const json = await res.json();
+    setParamLoading(false);
+    if (!json.success) {
+      setParamErrors({ _form: json.error?.message || "Gagal menyimpan." });
+      return;
+    }
+    setShowParamModal(false);
+    fetchParameters();
+  };
+
+  // ─── Parameter: Delete ───
+  const deleteParameter = async (id: string) => {
+    if (!confirm("Hapus parameter ini? Nilai penilaian yang memakai parameter ini juga akan terhapus.")) return;
+    await fetch(`/api/parameters/${id}`, { method: "DELETE" });
+    fetchParameters();
   };
 
   // ─── Division: Delete ───
@@ -1492,7 +1568,61 @@ export default function SettingsPage() {
       )}
 
       {/* ════════════════════════════════════════════════
-           TAB 4: FAKULTAS & JURUSAN
+           TAB 4: PARAMETER
+           ════════════════════════════════════════════════ */}
+      {activeTab === "parameter" && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Parameter</CardTitle>
+                <CardDescription>
+                  Parameter penilaian anggota yang hadir di Program Kerja. Setiap parameter menjadi satu kolom nilai pada form penilaian.
+                </CardDescription>
+              </div>
+              <Button size="sm" onClick={() => openParamModal()}>+ Tambah Parameter</Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">No</TableHead>
+                  <TableHead>Nama Parameter</TableHead>
+                  <TableHead>Deskripsi</TableHead>
+                  <TableHead className="w-24 text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {parameters.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      Belum ada parameter penilaian.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  parameters.map((p, idx) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{p.description || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="sm" onClick={() => openParamModal(p)}>Edit</Button>
+                          <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteParameter(p.id)}>Hapus</Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           TAB 5: FAKULTAS & JURUSAN
            ════════════════════════════════════════════════ */}
       {activeTab === "fakultas-jurusan" && (
         <div className="space-y-4">
@@ -1803,6 +1933,52 @@ export default function SettingsPage() {
                   {(showDivModal ? divLoading : fjLoading) ? "Menyimpan..." : "Simpan"}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => { setShowDivModal(false); setShowFjModal(false); }}>Batal</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           MODAL: Parameter
+           ════════════════════════════════════════════════ */}
+      {showParamModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowParamModal(false)} />
+          <div className="relative bg-card text-foreground rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-bold">
+                  {paramEditId ? "Edit Parameter" : "Tambah Parameter"}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Parameter ini akan muncul sebagai kolom nilai pada form penilaian anggota Program Kerja.
+                </p>
+              </div>
+              <button onClick={() => setShowParamModal(false)} className="p-1 hover:bg-muted rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleParamSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nama <span className="text-red-500">*</span></label>
+                <Input value={paramName} onChange={(e) => setParamName(e.target.value)} placeholder="Contoh: Sikap, Disiplin, Kontribusi" />
+                {paramErrors.name && <p className="text-sm text-red-500">{paramErrors.name}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Deskripsi</label>
+                <Input value={paramDesc} onChange={(e) => setParamDesc(e.target.value)} placeholder="Penjelasan singkat parameter (opsional)" />
+                {paramErrors.description && <p className="text-sm text-red-500">{paramErrors.description}</p>}
+              </div>
+              {paramErrors._form && (
+                <p className="text-sm text-red-500 text-center">{paramErrors._form}</p>
+              )}
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" disabled={paramLoading} className="flex-1">
+                  {paramLoading ? "Menyimpan..." : "Simpan"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowParamModal(false)}>Batal</Button>
               </div>
             </form>
           </div>
