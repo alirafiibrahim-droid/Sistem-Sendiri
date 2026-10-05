@@ -115,8 +115,10 @@ export default function ProgramDetailPage() {
   const [attendees, setAttendees] = useState<Array<{id: string; method: string; scanned_at: string | null; score: number | null; notes: string | null; created_at: string; parameter_scores?: Record<string, number>; profiles: {id: string; full_name: string; nim: string; avatar_url: string | null} | null}>>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
   const [assessmentParameters, setAssessmentParameters] = useState<Array<{ id: string; name: string; description: string }>>([]);
-  // [attendeeId][parameterId] = nilai sementara
-  const [scoreDrafts, setScoreDrafts] = useState<Record<string, Record<string, string>>>({});
+  // Parameter yang sedang dinilai pada sesi ini (satu parameter aktif).
+  const [selectedParameterId, setSelectedParameterId] = useState("");
+  // [attendeeId] = nilai sementara untuk parameter aktif
+  const [scoreDrafts, setScoreDrafts] = useState<Record<string, string>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [savingScores, setSavingScores] = useState(false);
   const [scoreMessage, setScoreMessage] = useState<{type: "success" | "error"; text: string} | null>(null);
@@ -276,33 +278,44 @@ export default function ProgramDetailPage() {
     setLoadingQr(false);
   };
 
-  // Membangun draft nilai per parameter dari respons API absensi.
-  const buildDrafts = (
-    rows: Array<{
-      id: string;
-      score: number | null;
-      notes: string | null;
-      parameter_scores?: Record<string, number>;
-    }>
-  ) => {
-    const drafts: Record<string, Record<string, string>> = {};
-    const notes: Record<string, string> = {};
-    for (const a of rows) {
-      const perParameter: Record<string, string> = {};
-      if (assessmentParameters.length === 0) {
-        perParameter.__single__ = a.score != null ? String(a.score) : "";
-      } else {
-        const stored = a.parameter_scores || {};
-        for (const pid of Object.keys(stored)) perParameter[pid] = String(stored[pid]);
-        // Parameter yang belum dinilai tetap muncul sebagai kolom kosong.
-        for (const p of assessmentParameters) {
-          if (perParameter[p.id] === undefined) perParameter[p.id] = "";
-        }
-      }
-      drafts[a.id] = perParameter;
-      notes[a.id] = a.notes ?? "";
+  // Nilai yang tersimpan pada satu peserta untuk parameter tertentu.
+  const storedScore = (attendeeId: string, parameterId: string) => {
+    if (!parameterId) return undefined;
+    const row = attendees.find((a) => a.id === attendeeId);
+    return row?.parameter_scores?.[parameterId];
+  };
+
+  // Nilai yang tampil pada input: draft bila ada, jika tidak nilai tersimpan.
+  const scoreInputValue = (attendeeId: string) => {
+    const draft = scoreDrafts[attendeeId];
+    if (draft !== undefined) return draft;
+    // Belum ada master parameter: mode nilai tunggal lawas.
+    if (assessmentParameters.length === 0) {
+      const row = attendees.find((a) => a.id === attendeeId);
+      return row?.score != null ? String(row.score) : "";
     }
-    return { drafts, notes };
+    const saved = storedScore(attendeeId, selectedParameterId);
+    return saved != null ? String(saved) : "";
+  };
+
+  const selectedParameter = assessmentParameters.find((p) => p.id === selectedParameterId) || null;
+
+  // Jumlah parameter yang sudah dinilai pada satu peserta.
+  const storedParameterCount = (attendeeId: string) =>
+    Object.keys(attendees.find((a) => a.id === attendeeId)?.parameter_scores || {}).length;
+
+  // Rata-rata seluruh nilai parameter yang sudah tersimpan pada satu peserta.
+  const storedAverage = (attendeeId: string) => {
+    const values = Object.values(attendees.find((a) => a.id === attendeeId)?.parameter_scores || {});
+    if (values.length === 0) return null;
+    return Math.round(values.reduce((sum, n) => sum + n, 0) / values.length);
+  };
+
+  const handleSelectParameter = (parameterId: string) => {
+    setSelectedParameterId(parameterId === "__none__" ? "" : parameterId);
+    // Kosongkan draft agar input kembali memakai nilai tersimpan.
+    setScoreDrafts({});
+    setScoreMessage(null);
   };
 
   const handleViewAttendees = async (sessionId: string, date: string) => {
@@ -311,6 +324,7 @@ export default function ProgramDetailPage() {
     setAttendees([]);
     setScoreDrafts({});
     setNoteDrafts({});
+    setSelectedParameterId("");
     setScoreMessage(null);
     setLoadingAttendees(true);
     try {
@@ -326,46 +340,40 @@ export default function ProgramDetailPage() {
       const json = await res.json();
       if (json.success) {
         setAttendees(json.data);
-        const { drafts, notes } = buildDrafts(json.data);
-        setScoreDrafts(drafts);
+        const notes: Record<string, string> = {};
+        for (const a of json.data) notes[a.id] = a.notes ?? "";
         setNoteDrafts(notes);
       }
     } catch {}
     setLoadingAttendees(false);
   };
 
-  // Rata-rata nilai sementara satu peserta (hanya nilai yang terisi).
-  const draftAverage = (attendeeId: string) => {
-    const drafts = scoreDrafts[attendeeId] || {};
-    const filled = assessmentParameters
-      .map((p) => (drafts[p.id] ?? "").trim())
-      .filter((v) => v !== "")
-      .map(Number)
-      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 10);
-    if (filled.length === 0) return null;
-    return Math.round(filled.reduce((sum, n) => sum + n, 0) / filled.length);
-  };
-
   const handleSaveScores = async () => {
     if (!attendeeSessionId) return;
+    if (assessmentParameters.length > 0 && !selectedParameterId) {
+      setScoreMessage({ type: "error", text: "Pilih parameter penilaian terlebih dahulu." });
+      return;
+    }
     setSavingScores(true);
     setScoreMessage(null);
 
     const scores = attendees.map((a) => {
-      const drafts = scoreDrafts[a.id] || {};
+      const raw = scoreInputValue(a.id).trim();
       const notes = noteDrafts[a.id] ?? "";
 
-      // Tanpa parameter master: kembali ke mode nilai tunggal (1-10).
+      // Tanpa master parameter: kembali ke mode nilai tunggal (1-10).
       if (assessmentParameters.length === 0) {
-        const raw = (drafts["__single__"] ?? "").trim();
         return { attendee_id: a.id, score: raw === "" ? null : Number(raw), notes };
       }
 
-      const parameter_scores = assessmentParameters.map((p) => {
-        const raw = (drafts[p.id] ?? "").trim();
-        return { parameter_id: p.id, score: raw === "" ? null : Number(raw) };
-      });
-      return { attendee_id: a.id, parameter_scores, notes };
+      // Hanya parameter aktif yang dikirim; nilai parameter lain tidak tersentuh.
+      return {
+        attendee_id: a.id,
+        parameter_scores: [
+          { parameter_id: selectedParameterId, score: raw === "" ? null : Number(raw) },
+        ],
+        notes,
+      };
     });
 
     const invalid = scores.some((s) => {
@@ -396,11 +404,16 @@ export default function ProgramDetailPage() {
         return;
       }
       setAttendees(json.data);
-      const { drafts, notes } = buildDrafts(json.data);
-      setScoreDrafts(drafts);
+      setScoreDrafts({});
+      const notes: Record<string, string> = {};
+      for (const a of json.data) notes[a.id] = a.notes ?? "";
       setNoteDrafts(notes);
-      setScoreMessage({ type: "success", text: "Nilai berhasil disimpan." });
-    } catch {
+      setScoreMessage({
+        type: "success",
+        text: selectedParameter
+          ? `Nilai "${selectedParameter.name}" berhasil disimpan.`
+          : "Nilai berhasil disimpan.",
+      });    } catch {
       setScoreMessage({ type: "error", text: "Gagal terhubung ke server." });
     }
     setSavingScores(false);
@@ -412,6 +425,8 @@ export default function ProgramDetailPage() {
     setAttendees([]);
     setScoreDrafts({});
     setNoteDrafts({});
+    setSelectedParameterId("");
+    setAssessmentParameters([]);
     setScoreMessage(null);
   };
 
@@ -1220,6 +1235,39 @@ export default function ProgramDetailPage() {
                           {loadingAttendees ? "Memuat..." : `${attendees.length} peserta hadir`}
                         </span>
                       </div>
+
+                      {canManageScores && !isLocked && !loadingAttendees && attendees.length > 0 && (
+                        <div className="mt-3 rounded-xl bg-white/10 p-3">
+                          <label className="text-xs font-medium text-white/80">
+                            Parameter Penilaian
+                          </label>
+                          <Select
+                            value={selectedParameterId === "" ? "__none__" : selectedParameterId}
+                            onValueChange={handleSelectParameter}
+                          >
+                            <SelectTrigger className="mt-1.5 bg-white text-foreground">
+                              <SelectValue placeholder="Pilih parameter penilaian" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Pilih parameter penilaian</SelectItem>
+                              {assessmentParameters.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {assessmentParameters.length === 0 ? (
+                            <p className="mt-2 text-[11px] text-white/70">
+                              Belum ada parameter penilaian. Tambahkan di Pengaturan &gt; Parameter.
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-[11px] text-white/70">
+                              Nilai hanya untuk parameter yang dipilih. Ganti parameter untuk menilai aspek lain.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex-1 space-y-3 overflow-y-auto p-5">
@@ -1278,69 +1326,37 @@ export default function ProgramDetailPage() {
                               </div>
                               {canManageScores && !isLocked && (
                                 <div className="flex flex-col gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-3 py-2">
-                                  {assessmentParameters.length === 0 ? (
-                                    <div className="flex items-center justify-between gap-3">
-                                      <span className="text-xs font-medium text-muted-foreground">
-                                        Nilai (1-10)
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <span className="block text-xs font-medium text-muted-foreground">
+                                        {selectedParameter
+                                          ? selectedParameter.name
+                                          : "Nilai (1-10)"}
                                       </span>
-                                      <Input
-                                        type="number"
-                                        min={1}
-                                        max={10}
-                                        value={(scoreDrafts[a.id] || {})["__single__"] ?? ""}
-                                        onChange={(e) =>
-                                          setScoreDrafts({
-                                            ...scoreDrafts,
-                                            [a.id]: {
-                                              ...(scoreDrafts[a.id] || {}),
-                                              __single__: e.target.value,
-                                            },
-                                          })
-                                        }
-                                        placeholder="-"
-                                        className="h-8 w-16 text-center text-sm"
-                                      />
+                                      <span className="block text-[11px] text-muted-foreground">
+                                        {storedParameterCount(a.id) > 0
+                                          ? `${storedParameterCount(a.id)} parameter terisi · rata-rata ${
+                                              storedAverage(a.id) ?? "-"
+                                            }`
+                                          : "Belum ada nilai"}
+                                      </span>
                                     </div>
-                                  ) : (
-                                    <>
-                                      {assessmentParameters.map((p) => (
-                                        <div
-                                          key={p.id}
-                                          className="flex items-center justify-between gap-3"
-                                          title={p.description || undefined}
-                                        >
-                                          <span className="truncate text-xs font-medium text-muted-foreground">
-                                            {p.name}
-                                          </span>
-                                          <Input
-                                            type="number"
-                                            min={1}
-                                            max={10}
-                                            value={(scoreDrafts[a.id] || {})[p.id] ?? ""}
-                                            onChange={(e) =>
-                                              setScoreDrafts({
-                                                ...scoreDrafts,
-                                                [a.id]: {
-                                                  ...(scoreDrafts[a.id] || {}),
-                                                  [p.id]: e.target.value,
-                                                },
-                                              })
-                                            }
-                                            placeholder="-"
-                                            className="h-8 w-16 text-center text-sm"
-                                          />
-                                        </div>
-                                      ))}
-                                      <div className="flex items-center justify-between gap-3 border-t border-primary/20 pt-2">
-                                        <span className="text-xs font-semibold">
-                                          Rata-rata
-                                        </span>
-                                        <span className="text-sm font-bold text-primary">
-                                          {draftAverage(a.id) ?? "-"}
-                                        </span>
-                                      </div>
-                                    </>
-                                  )}
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      max={10}
+                                      value={scoreInputValue(a.id)}
+                                      onChange={(e) =>
+                                        setScoreDrafts({
+                                          ...scoreDrafts,
+                                          [a.id]: e.target.value,
+                                        })
+                                      }
+                                      placeholder="-"
+                                      disabled={assessmentParameters.length > 0 && !selectedParameterId}
+                                      className="h-8 w-16 text-center text-sm"
+                                    />
+                                  </div>
                                   <div className="flex flex-col gap-1">
                                     <span className="text-xs font-medium text-muted-foreground">
                                       Catatan
@@ -1377,8 +1393,16 @@ export default function ProgramDetailPage() {
                             {scoreMessage.text}
                           </p>
                         )}
-                        <Button className="w-full" disabled={savingScores} onClick={handleSaveScores}>
-                          {savingScores ? "Menyimpan..." : "Simpan Nilai"}
+                        <Button
+                          className="w-full"
+                          disabled={savingScores || (assessmentParameters.length > 0 && !selectedParameterId)}
+                          onClick={handleSaveScores}
+                        >
+                          {savingScores
+                            ? "Menyimpan..."
+                            : selectedParameter
+                              ? `Simpan Nilai ${selectedParameter.name}`
+                              : "Simpan Nilai"}
                         </Button>
                       </div>
                     )}
