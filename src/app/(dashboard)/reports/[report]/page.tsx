@@ -422,14 +422,16 @@ export default function ReportConfigPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
-                  <Table>
+                  <Table className="w-full table-fixed text-xs">
                     <TableHeader>
                       <TableRow>
                         {data.columns.map((col) => (
                           <TableHead
                             key={col.key}
                             className={
-                              col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""
+                              `whitespace-normal break-words px-2 py-2 ${
+                                col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""
+                              }`
                             }
                           >
                             {col.label}
@@ -444,11 +446,13 @@ export default function ReportConfigPage() {
                             <TableCell
                               key={col.key}
                               className={
-                                col.align === "right"
-                                  ? "text-right"
-                                  : col.align === "center"
-                                    ? "text-center"
-                                    : ""
+                                `whitespace-normal break-words px-2 py-1.5 align-top ${
+                                  col.align === "right"
+                                    ? "text-right"
+                                    : col.align === "center"
+                                      ? "text-center"
+                                      : ""
+                                }`
                               }
                             >
                               {cellValue(row, col.key)}

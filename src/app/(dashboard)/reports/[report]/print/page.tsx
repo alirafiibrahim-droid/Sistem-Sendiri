@@ -135,7 +135,7 @@ function ReportPrintContent() {
 
   return (
     <div className="min-h-screen bg-muted/40 py-6 print:bg-white print:p-0">
-      <div className="mx-auto max-w-[794px] bg-white p-8 shadow print:max-w-none print:shadow-none print:p-10">
+      <div className="mx-auto max-w-[794px] bg-white p-6 shadow print:max-w-none print:shadow-none print:p-0">
         <Button
           size="sm"
           variant="outline"
@@ -146,21 +146,21 @@ function ReportPrintContent() {
         </Button>
 
         {/* KOP */}
-        <header className="border-b-2 border-black pb-4 text-center">
-          <div className="flex flex-col items-center gap-2">
+        <header className="border-b-2 border-black pb-3 text-center">
+          <div className="flex flex-col items-center gap-1.5">
             {org?.org_logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={org.org_logo_url}
                 alt="Logo"
-                className="h-16 w-16 object-contain"
+                className="h-12 w-12 object-contain"
               />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground">
                 {orgInitial}
               </div>
             )}
-            <h1 className="text-xl font-bold uppercase tracking-wide">
+            <h1 className="text-lg font-bold uppercase tracking-wide">
               {org?.org_name || "SIORG"}
             </h1>
             {org?.org_description && (
@@ -172,11 +172,11 @@ function ReportPrintContent() {
                 .join(" · ")}
             </p>
           </div>
-          <div className="mt-3 border-t-4 border-double border-black" aria-hidden />
+          <div className="mt-2 border-t-4 border-double border-black" aria-hidden />
         </header>
 
         {/* Judul laporan */}
-        <div className="mt-6 text-center">
+        <div className="mt-4 text-center">
           <h2 className="text-base font-bold uppercase">{data.title}</h2>
           {data.subtitle && <p className="mt-1 text-sm">{data.subtitle}</p>}
           <p className="mt-1 text-xs text-muted-foreground">
@@ -186,27 +186,27 @@ function ReportPrintContent() {
 
         {/* Ringkasan */}
         {data.summary.length > 0 && (
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {data.summary.map((s) => (
-              <div key={s.label} className="rounded border border-gray-300 px-3 py-2 text-center">
+              <div key={s.label} className="rounded border border-gray-300 px-2 py-1.5 text-center">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   {s.label}
                 </p>
-                <p className="mt-1 truncate text-sm font-bold">{s.value}</p>
+                <p className="mt-0.5 break-words text-sm font-bold">{s.value}</p>
               </div>
             ))}
           </div>
         )}
 
         {/* Tabel */}
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full border-collapse text-xs">
+        <div className="mt-4 w-full overflow-visible">
+          <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
             <thead>
               <tr>
                 {data.columns.map((col) => (
                   <th
                     key={col.key}
-                    className="border border-gray-400 bg-gray-100 px-2 py-1.5 font-semibold"
+                    className="break-words border border-gray-400 bg-gray-100 px-1.5 py-1 font-semibold"
                     style={{
                       textAlign: col.align === "right" ? "right" : col.align === "center" ? "center" : "left",
                     }}
@@ -222,7 +222,7 @@ function ReportPrintContent() {
                   {data.columns.map((col) => (
                     <td
                       key={col.key}
-                      className="border border-gray-400 px-2 py-1"
+                      className="break-words border border-gray-400 px-1.5 py-1 align-top"
                       style={{
                         textAlign: col.align === "right" ? "right" : col.align === "center" ? "center" : "left",
                       }}
@@ -242,17 +242,17 @@ function ReportPrintContent() {
         </div>
 
         {/* Tanda tangan */}
-        <div className="mt-12 grid grid-cols-2 gap-8 text-sm">
+        <div className="mt-8 grid grid-cols-2 gap-6 text-xs">
           <div className="text-center">
             <p>Mengetahui,</p>
             <p className="font-medium">Ketua Umum</p>
-            <div className="h-24" aria-hidden />
+            <div className="h-16" aria-hidden />
             <p className="font-semibold underline">(……………………………………)</p>
           </div>
           <div className="text-center">
             <p>{now}</p>
             <p className="font-medium">Penyusun</p>
-            <div className="h-24" aria-hidden />
+            <div className="h-16" aria-hidden />
             <p className="font-semibold underline">{userEmail || "(……………………………………)"}</p>
           </div>
         </div>
