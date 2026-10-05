@@ -90,7 +90,7 @@ export async function POST(
       return apiBadRequest(msg);
     }
 
-    const { quantity, amount, other_cost, date, wallet_id, bank_id, cash_account_id, description } =
+    const { quantity, amount, other_cost, date, wallet_id, bank_id, cash_account_id, handover_id, description } =
       parsed.data;
 
     const extraCost = Number(other_cost ?? 0);
@@ -107,6 +107,21 @@ export async function POST(
 
     if (itemError || !item) return apiNotFound("Barang tidak ditemukan.");
 
+    // Tentukan periode Sertijab: gunakan pilihan user dari form;
+    // fallback ke periode yang sedang berjalan (status != COMPLETED)
+    // agar transaksi muncul di filter default "Periode Berjalan" modul Keuangan.
+    let financeHandoverId = handover_id || null;
+    if (!financeHandoverId) {
+      const { data: activeHandover } = await supabase
+        .from("handovers")
+        .select("id")
+        .neq("status", "COMPLETED")
+        .order("period_to", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      financeHandoverId = activeHandover?.id || null;
+    }
+
     // Create finance entry (EXPENSE) — nominal biaya yang dibayarkan = subtotal
     const financeDesc = `Pembelian ${item.name} (${item.code})${description ? " - " + description : ""}`;
     const { data: finance, error: financeError } = await supabase
@@ -117,6 +132,7 @@ export async function POST(
         description: financeDesc,
         date,
         receipt_url: "",
+        handover_id: financeHandoverId,
         wallet_id: wallet_id || null,
         bank_id: bank_id || null,
         cash_account_id: cash_account_id || null,

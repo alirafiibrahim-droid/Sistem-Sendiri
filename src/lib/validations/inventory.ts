@@ -102,6 +102,7 @@ export const inventoryPurchaseFormSchema = z
     wallet_id: z.string().uuid("ID dompet tidak valid.").optional().or(z.literal("")),
     bank_id: z.string().uuid("ID bank tidak valid.").optional().or(z.literal("")),
     cash_account_id: z.string().uuid("ID kas tidak valid.").optional().or(z.literal("")),
+    handover_id: z.string().uuid("ID periode tidak valid.").optional().or(z.literal("")),
     description: z.string().max(500, "Deskripsi maksimal 500 karakter.").optional(),
   })
   .refine((data) => data.wallet_id || data.bank_id || data.cash_account_id, {

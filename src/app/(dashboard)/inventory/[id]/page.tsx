@@ -26,6 +26,7 @@ import type {
   WalletWithOwner,
   Bank,
   CashAccount,
+  Handover,
 } from "@/lib/types/database";
 
 const categoryLabel: Record<string, string> = {
@@ -127,11 +128,13 @@ export default function InventoryDetailPage() {
   const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
   const [banksList, setBanksList] = useState<Pick<Bank, "id" | "name" | "account_number">[]>([]);
   const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
+  const [handoversList, setHandoversList] = useState<Pick<Handover, "id" | "period_to" | "status">[]>([]);
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [purchaseDate, setPurchaseDate] = useState("");
   const [purchaseQty, setPurchaseQty] = useState("1");
   const [purchaseAmount, setPurchaseAmount] = useState("");
   const [purchaseSource, setPurchaseSource] = useState("");
+  const [purchaseHandoverId, setPurchaseHandoverId] = useState("");
   const [purchaseDesc, setPurchaseDesc] = useState("");
   const [purchaseLoading, setPurchaseLoading] = useState(false);
 
@@ -214,12 +217,24 @@ export default function InventoryDetailPage() {
     if (cJson.success) setCashList(cJson.data);
   }, []);
 
+  // Ambil periode Sertijab yang sedang berjalan untuk dropdown "Periode"
+  const fetchHandovers = useCallback(async () => {
+    const res = await fetch("/api/handovers/active");
+    const json = await res.json();
+    if (json.success) {
+      const list = json.data as Pick<Handover, "id" | "period_to" | "status">[];
+      setHandoversList(list);
+      if (list.length > 0) setPurchaseHandoverId((prev) => prev || list[0].id);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
     fetchPurchases();
     fetchWallets();
     fetchBanksCash();
-  }, [fetchData, fetchPurchases, fetchWallets, fetchBanksCash]);
+    fetchHandovers();
+  }, [fetchData, fetchPurchases, fetchWallets, fetchBanksCash, fetchHandovers]);
 
   const bankIdsWithWallet = new Set(
     walletsList.filter((w) => w.bank_id).map((w) => w.bank_id as string)
@@ -344,6 +359,7 @@ export default function InventoryDetailPage() {
         wallet_id: walletId || undefined,
         bank_id: bankId || undefined,
         cash_account_id: cashAccountId || undefined,
+        handover_id: purchaseHandoverId || undefined,
         description: purchaseDesc || undefined,
       }),
     });
@@ -354,6 +370,7 @@ export default function InventoryDetailPage() {
       setPurchaseQty("1");
       setPurchaseAmount("");
       setPurchaseSource("");
+      setPurchaseHandoverId(handoversList[0]?.id || "");
       setPurchaseDesc("");
       fetchPurchases();
       fetchData();
@@ -772,6 +789,22 @@ export default function InventoryDetailPage() {
                             ))}
                           </>
                         )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Periode
+                      <span className="text-muted-foreground text-xs font-normal ml-1">(dari modul Sertijab, untuk pencatatan Keuangan)</span>
+                    </label>
+                    <Select value={purchaseHandoverId} onValueChange={(value) => setPurchaseHandoverId(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih periode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {handoversList.map((h) => (
+                          <SelectItem key={h.id} value={h.id}>Periode {h.period_to}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { inventoryItemFormSchema } from "@/lib/validations/inventory";
-import type { WalletWithOwner, Bank, CashAccount } from "@/lib/types/database";
+import type { WalletWithOwner, Bank, CashAccount, Handover } from "@/lib/types/database";
 
 type FormErrors = Record<string, string>;
 
@@ -42,10 +42,12 @@ export default function NewInventoryItemPage() {
   const [purchaseUnitPrice, setPurchaseUnitPrice] = useState("");
   const [purchaseOtherCost, setPurchaseOtherCost] = useState("");
   const [purchaseSource, setPurchaseSource] = useState("");
+  const [purchaseHandoverId, setPurchaseHandoverId] = useState("");
   const [purchaseDesc, setPurchaseDesc] = useState("");
   const [walletsList, setWalletsList] = useState<WalletWithOwner[]>([]);
   const [banksList, setBanksList] = useState<Pick<Bank, "id" | "name" | "account_number">[]>([]);
   const [cashList, setCashList] = useState<Pick<CashAccount, "id" | "name">[]>([]);
+  const [handoversList, setHandoversList] = useState<Pick<Handover, "id" | "period_to" | "status">[]>([]);
 
   const purchaseQty = parseNumber(stock);
   const purchaseUnitPriceValue = parseNumber(purchaseUnitPrice);
@@ -63,6 +65,16 @@ export default function NewInventoryItemPage() {
           }
         )
       );
+    // Ambil periode Sertijab yang sedang berjalan untuk dropdown "Periode"
+    fetch("/api/handovers/active")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          const list = json.data as Pick<Handover, "id" | "period_to" | "status">[];
+          setHandoversList(list);
+          if (list.length > 0) setPurchaseHandoverId(list[0].id);
+        }
+      });
   }, []);
 
   const bankIdsWithWallet = new Set(
@@ -177,6 +189,7 @@ export default function NewInventoryItemPage() {
           wallet_id: walletId || undefined,
           bank_id: bankId || undefined,
           cash_account_id: cashAccountId || undefined,
+          handover_id: purchaseHandoverId || undefined,
           description: purchaseDesc || undefined,
         }),
       });
@@ -446,6 +459,22 @@ export default function NewInventoryItemPage() {
                   {errors.purchaseSource && (
                     <p className="text-sm text-red-500">{errors.purchaseSource}</p>
                   )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="purchase-handover">
+                    Periode
+                    <span className="text-muted-foreground text-xs font-normal ml-1">(dari modul Sertijab, untuk pencatatan Keuangan)</span>
+                  </label>
+                  <Select value={purchaseHandoverId} onValueChange={(value) => setPurchaseHandoverId(value)}>
+                    <SelectTrigger id="purchase-handover">
+                      <SelectValue placeholder="Pilih periode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {handoversList.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>Periode {h.period_to}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="purchase-desc">
